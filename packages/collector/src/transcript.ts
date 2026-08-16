@@ -25,6 +25,9 @@ export interface TranscriptToolCall {
   id: string;
   name: string;
   input: Record<string, unknown>;
+  /** The matching tool_result's text, if one arrived — undefined while pending. */
+  output?: string;
+  isError?: boolean;
 }
 
 /**
@@ -116,7 +119,15 @@ function extractText(content: unknown): string {
     .trim();
 }
 
-function extractToolCalls(content: unknown): TranscriptToolCall[] {
+interface ToolResultInfo {
+  text: string;
+  isError: boolean;
+}
+
+function extractToolCalls(
+  content: unknown,
+  results: Map<string, ToolResultInfo>
+): TranscriptToolCall[] {
   if (!Array.isArray(content)) return [];
 
   return content
@@ -128,12 +139,47 @@ function extractToolCalls(content: unknown): TranscriptToolCall[] {
     )
     .map((block) => {
       const b = block as { id?: string; name?: string; input?: unknown };
+      const result = b.id ? results.get(b.id) : undefined;
       return {
         id: b.id ?? "",
         name: b.name ?? "unknown",
         input: (b.input as Record<string, unknown>) ?? {},
+        output: result?.text,
+        isError: result?.isError,
       };
     });
+}
+
+/**
+ * tool_result blocks live on the *next* `user` record, keyed by
+ * `tool_use_id` rather than nested under the tool call itself. Scanned once
+ * up front so each tool_use can look its own result up by id.
+ */
+function extractToolResults(raws: RawRecord[]): Map<string, ToolResultInfo> {
+  const map = new Map<string, ToolResultInfo>();
+
+  for (const raw of raws) {
+    if (raw.type !== "user") continue;
+    const content = raw.message?.content;
+    if (!Array.isArray(content)) continue;
+
+    for (const block of content) {
+      if (!block || typeof block !== "object") continue;
+      const b = block as {
+        type?: string;
+        tool_use_id?: string;
+        content?: unknown;
+        is_error?: boolean;
+      };
+      if (b.type !== "tool_result" || !b.tool_use_id) continue;
+      map.set(b.tool_use_id, {
+        text: extractText(b.content),
+        isError: !!b.is_error,
+      });
+    }
+  }
+
+  return map;
 }
 
 /**
@@ -161,14 +207,17 @@ function rawText(raw: RawRecord): string {
   return typeof content === "string" ? content : "";
 }
 
-function toMessage(raw: RawRecord): TranscriptMessage | null {
+function toMessage(
+  raw: RawRecord,
+  results: Map<string, ToolResultInfo>
+): TranscriptMessage | null {
   if (raw.type !== "user" && raw.type !== "assistant") return null;
 
   const content = raw.message?.content;
   if (raw.type === "user" && isToolResultOnly(content)) return null;
 
   const text = extractText(content);
-  const toolCalls = extractToolCalls(content);
+  const toolCalls = extractToolCalls(content, results);
   if (!text && toolCalls.length === 0) return null;
 
   const usage = raw.message?.usage;
@@ -202,12 +251,13 @@ function parseLines(lines: string[]): TranscriptMessage[] {
     }
   }
 
+  const results = extractToolResults(raws);
   const messages: TranscriptMessage[] = [];
 
   for (let i = 0; i < raws.length; i++) {
     const raw = raws[i];
     if (raw.type !== "user") {
-      const message = toMessage(raw);
+      const message = toMessage(raw, results);
       if (message) messages.push(message);
       continue;
     }
@@ -244,7 +294,7 @@ function parseLines(lines: string[]): TranscriptMessage[] {
       }
     }
 
-    const message = toMessage(raw);
+    const message = toMessage(raw, results);
     if (message) messages.push(message);
   }
 

@@ -6,6 +6,8 @@ interface ToolCall {
   id: string;
   name: string;
   input: Record<string, unknown>;
+  output?: string;
+  isError?: boolean;
 }
 
 interface Message {
@@ -51,6 +53,13 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+/** Truncated defensively — a tool result can be megabytes (full file reads, huge diffs). */
+const MAX_OUTPUT_CHARS = 6000;
+
+function formatInputValue(v: unknown): string {
+  return typeof v === "string" ? v : JSON.stringify(v, null, 2);
+}
+
 /**
  * The session's real conversation, read from Claude Code's transcript.
  *
@@ -76,6 +85,24 @@ export function TranscriptView({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "Expand all" sets a default; individual clicks override it per call,
+  // like Claude Code's own transcript view. Toggling the default clears
+  // overrides so it always means what it says.
+  const [expandAll, setExpandAll] = useState(false);
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+
+  function isExpanded(id: string): boolean {
+    return overrides[id] ?? expandAll;
+  }
+
+  function toggleCall(id: string) {
+    setOverrides((prev) => ({ ...prev, [id]: !isExpanded(id) }));
+  }
+
+  function toggleExpandAll() {
+    setExpandAll((v) => !v);
+    setOverrides({});
+  }
 
   const load = useCallback(async () => {
     try {
@@ -173,6 +200,21 @@ export function TranscriptView({
         <span>{formatTokens(page.outputTokens)} output</span>
         <span>{formatTokens(page.contextTokens)} context</span>
         <span style={{ flex: 1 }} />
+        <button
+          onClick={toggleExpandAll}
+          style={{
+            background: "none",
+            border: `1px solid ${theme.edge}`,
+            borderRadius: 4,
+            padding: "3px 8px",
+            cursor: "pointer",
+            fontFamily: theme.mono,
+            fontSize: 10.5,
+            color: expandAll ? theme.text : theme.faint,
+          }}
+        >
+          {expandAll ? "▾ collapse all" : "▸ expand all"}
+        </button>
         {page.hasMore && (
           <button
             onClick={() => setLimit((n) => n + PAGE)}
@@ -261,24 +303,84 @@ export function TranscriptView({
                 )
               )}
 
-              {/* Collapsed to one line each: the feed is a conversation, and
-                  full tool payloads would bury it. */}
-              {m.toolCalls.map((call) => (
-                <div
-                  key={call.id}
-                  style={{
-                    fontFamily: theme.mono,
-                    fontSize: 10.5,
-                    color: theme.faint,
-                    marginTop: 5,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  ⟩ {describeToolCall(call)}
-                </div>
-              ))}
+              {/* Collapsed to one line by default — the feed is a
+                  conversation, and full tool payloads would bury it. Click
+                  a call, or "expand all", to see it the way Claude Code's
+                  own transcript shows it: full input and result. */}
+              {m.toolCalls.map((call) => {
+                const expanded = isExpanded(call.id);
+                return (
+                  <div key={call.id} style={{ marginTop: 5 }}>
+                    <div
+                      onClick={() => toggleCall(call.id)}
+                      style={{
+                        fontFamily: theme.mono,
+                        fontSize: 10.5,
+                        color: theme.faint,
+                        cursor: "pointer",
+                        userSelect: "none",
+                        overflow: expanded ? "visible" : "hidden",
+                        textOverflow: expanded ? "clip" : "ellipsis",
+                        whiteSpace: expanded ? "normal" : "nowrap",
+                      }}
+                    >
+                      {expanded ? "⌄" : "⟩"}{" "}
+                      {expanded ? call.name : describeToolCall(call)}
+                    </div>
+                    {expanded && (
+                      <div
+                        style={{
+                          fontFamily: theme.mono,
+                          fontSize: 11,
+                          color: theme.dim,
+                          background: theme.ground,
+                          border: `1px solid ${theme.edgeSoft}`,
+                          borderRadius: 6,
+                          padding: "9px 11px",
+                          marginTop: 4,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          maxHeight: 420,
+                          overflowY: "auto",
+                        }}
+                      >
+                        {Object.entries(call.input).map(([key, value]) => (
+                          <div key={key} style={{ marginBottom: 6 }}>
+                            <span style={{ color: theme.faint }}>{key}: </span>
+                            {formatInputValue(value)}
+                          </div>
+                        ))}
+                        {call.output ? (
+                          <div
+                            style={{
+                              marginTop: 8,
+                              paddingTop: 8,
+                              borderTop: `1px solid ${theme.edgeSoft}`,
+                              color: call.isError ? theme.waiting : theme.faint,
+                            }}
+                          >
+                            {call.output.length > MAX_OUTPUT_CHARS
+                              ? `${call.output.slice(0, MAX_OUTPUT_CHARS)}\n… truncated`
+                              : call.output}
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              marginTop: 8,
+                              paddingTop: 8,
+                              borderTop: `1px solid ${theme.edgeSoft}`,
+                              color: theme.faint,
+                              fontStyle: "italic",
+                            }}
+                          >
+                            no result captured
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           );
         })}
