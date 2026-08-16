@@ -31,22 +31,19 @@ console.log(`[store] Initialized SQLite at ${DB_PATH}`);
 const wsBroadcast = createWsServer(WS_PORT);
 console.log(`[ws] Listening on ws://localhost:${WS_PORT}`);
 
-// Load the project registry (Phase 1) — must happen before the server starts
-// accepting hooks, since SessionStart needs the projects table populated to
-// route sessions by cwd. Ensures "scratch" always exists as a fallback.
+// Bootstrap projects before the server accepts hooks — SessionStart needs
+// the projects table populated to route sessions by cwd.
+//
+// SQLite is authoritative; TOML only seeds an empty database (and can be
+// re-imported explicitly via POST /api/projects/import). The file is
+// deliberately not watched: watching would imply an authority it no longer
+// has, and would clobber edits made through the UI.
 const registry = new ProjectsRegistry(store.db, PROJECTS_PATH);
-const projects = await registry.load();
-console.log(`[registry] Loaded ${projects.length} project(s) from ${PROJECTS_PATH}`);
-registry
-  .startWatching((updated) => {
-    console.log(`[registry] Reloaded ${updated.length} project(s)`);
-    wsBroadcast({
-      type: "projects:updated",
-      payload: updated,
-      timestamp: new Date().toISOString(),
-    });
-  })
-  .catch((err) => console.error("[registry] Watcher stopped unexpectedly:", err));
+const projects = await registry.bootstrap();
+console.log(
+  `[registry] ${projects.length} project(s) available (SQLite is authoritative; ` +
+    `seed file: ${PROJECTS_PATH})`
+);
 
 // Load and watch project knowledge (Phase 2.5)
 const knowledgeSync = new KnowledgeSync(store.db, KNOWLEDGE_DIR, EMBEDDING_PROVIDER);
@@ -60,7 +57,13 @@ if (!EMBEDDING_PROVIDER) {
 }
 
 // Create HTTP server for Claude Code hooks
-const server = createServer(store, wsBroadcast, EMBEDDING_PROVIDER, knowledgeSync);
+const server = createServer(
+  store,
+  wsBroadcast,
+  EMBEDDING_PROVIDER,
+  knowledgeSync,
+  registry
+);
 
 export default {
   port: COLLECTOR_PORT,

@@ -17,6 +17,11 @@ interface ConsoleProps {
   onResolveAsk: (askId: string, answer: string) => Promise<void>;
   onSteer: (sessionId: string, body: string) => Promise<void>;
   onLaunch: (projectId: string, task: string) => Promise<{ error?: string }>;
+  onSaveProject: (
+    id: string | null,
+    patch: Partial<Project>
+  ) => Promise<{ error?: string }>;
+  onDeleteProject: (id: string) => Promise<{ error?: string }>;
 }
 
 export function Console({
@@ -28,6 +33,8 @@ export function Console({
   onResolveAsk,
   onSteer,
   onLaunch,
+  onSaveProject,
+  onDeleteProject,
 }: ConsoleProps) {
   const [view, setView] = useState<View>("feed");
 
@@ -166,6 +173,8 @@ export function Console({
             projects={projects}
             sessions={sessions}
             checkpoints={checkpoints}
+            onSaveProject={onSaveProject}
+            onDeleteProject={onDeleteProject}
           />
         )}
       </div>

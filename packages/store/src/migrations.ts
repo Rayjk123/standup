@@ -133,6 +133,17 @@ const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS idx_launches_project ON launches(project_id);
   CREATE INDEX IF NOT EXISTS idx_launches_worktree ON launches(worktree_path);
   `,
+
+  // Migration 003: projects.setup
+  //
+  // The Project type always declared `setup`, and projects.toml documented
+  // it, but the column never existed — upsertProject silently dropped it.
+  // Phase 4 reads project.setup to run a project's setup command in a fresh
+  // worktree, so without this it silently skipped that step for every
+  // project.
+  `
+  ALTER TABLE projects ADD COLUMN setup TEXT;
+  `,
 ];
 
 export function runMigrations(db: Database): void {

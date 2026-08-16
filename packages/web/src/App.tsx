@@ -113,6 +113,32 @@ export default function App() {
           body: JSON.stringify({ body }),
         });
       }}
+      onSaveProject={async (id, patch) => {
+        // Projects are broadcast back over the WebSocket on every mutation,
+        // so there's no local state update here — the server is the source
+        // of truth and pushes the new list to every connected client.
+        const res = await fetch(id ? `/api/projects/${id}` : "/api/projects", {
+          method: id ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          return { error: data.error ?? `Save failed (${res.status})` };
+        }
+        return {};
+      }}
+      onDeleteProject={async (id) => {
+        const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          return { error: data.error ?? `Delete failed (${res.status})` };
+        }
+        fetch("/api/sessions")
+          .then((r) => r.json())
+          .then(setSessions);
+        return {};
+      }}
       onLaunch={async (projectId, task) => {
         const res = await fetch(`/api/projects/${projectId}/launch`, {
           method: "POST",

@@ -220,6 +220,39 @@ bun run eval:expert
 The multi-hop pass rate is the number that matters — those are the
 cross-domain questions a topic-partitioned index would lose.
 
+### Proactive Nudging (opt-in)
+
+When an agent looks stuck, Standup can add one line to its context telling it
+an expert exists. It never injects the *answer* — a false positive then costs
+a single ignorable sentence instead of derailing an agent that was fine.
+
+Off by default. Check what it would do on your real sessions first:
+
+```bash
+bun run nudge:report
+```
+
+Every firing in that report is a sentence that would have been injected into
+a working agent. If any look like normal work rather than being stuck, raise
+the relevant threshold in `STUCKNESS` (`packages/shared/src/constants.ts`)
+before enabling. Then:
+
+```bash
+STANDUP_NUDGE=1 bun run dev
+```
+
+Heuristics are cheap and computed from the stored event stream — no model
+call is involved in detection. They cover: the same search repeatedly
+returning nothing, consecutive failing shell commands, a long chain of tool
+calls with no edit, and the same file read over and over.
+
+Protections against the failure modes in the design's risk table:
+- **Cooldown** per session *per topic* (default 15 min), so a nudge about
+  failing tests doesn't mute one about search
+- **Cap** of 2 nudges per turn as a runaway backstop
+- Standup's own MCP tools are excluded from detection, so an `ask_expert`
+  round trip can't trigger the nudge that caused it
+
 ### Checkpoints
 
 Two sources feed the checkpoint feed, per the design's "structural is the floor,
@@ -256,6 +289,7 @@ if you're self-hosting. Unset `NTFY_TOPIC` and push is a no-op.
 | `EMBEDDING_PROVIDER` | unset (text-only) | `ollama` \| `voyage` \| `openai` |
 | `NTFY_TOPIC` | unset (push disabled) | ntfy.sh topic for ask push notifications |
 | `NTFY_URL` | `https://ntfy.sh` | ntfy server, for self-hosting |
+| `STANDUP_NUDGE` | unset (off) | Set to `1` to enable proactive nudging |
 
 ## Documentation
 

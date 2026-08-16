@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "bun run scripts/dev.ts",
     "eval:expert": "bun run packages/collector/src/expert.eval.ts",
+    "nudge:report": "bun run scripts/nudge-report.ts",
+    "test": "bun test",
     "build": "bun run --filter '*' build",
     "typecheck": "bun run --filter '*' typecheck",
     "lint": "bun run --filter '*' lint"

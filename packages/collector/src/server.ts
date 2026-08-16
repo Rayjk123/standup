@@ -14,6 +14,9 @@ import {
   insertEvent,
   getSilenceTicks,
   getProjects,
+  getProject,
+  upsertProject,
+  deleteProject,
   findProjectByCwd,
   getPendingAsks,
   createAsk,
@@ -30,7 +33,14 @@ import {
   getRecentExpertExchanges,
 } from "@standup/store";
 import { searchKnowledge, type EmbeddingProvider } from "@standup/knowledge";
-import type { HookPayload, Session, ToolUsePayload, WsMessage } from "@standup/shared";
+import type {
+  HookPayload,
+  Project,
+  Session,
+  ToolUsePayload,
+  WsMessage,
+} from "@standup/shared";
+import type { ProjectsRegistry } from "./projects-registry.js";
 import { runRipgrep } from "./ripgrep.js";
 import { waitForAskResolution } from "./asks.js";
 import { pushNotification } from "./push.js";
@@ -38,6 +48,19 @@ import { checkpointCompletedTodos, clearTodoCheckpointState } from "./todo-check
 import { takeSteerContext } from "./steers.js";
 import { launchSession, cleanupLaunch } from "./launcher.js";
 import { askExpert, loadRegions } from "./expert.js";
+import {
+  maybeNudge,
+  isNudgingEnabled,
+  resetTurnNudges,
+  clearNudgeState,
+} from "./nudge.js";
+
+/** Standup's own MCP tools — nudging on these would feed back on itself. */
+function isExpertTool(toolName: string): boolean {
+  return /(^|__)(ask_expert|search_knowledge|ripgrep|checkpoint|ask_human)$/.test(
+    toolName ?? ""
+  );
+}
 import type { KnowledgeSync } from "./knowledge-sync.js";
 
 type WsBroadcast = (message: WsMessage) => void;
@@ -46,9 +69,20 @@ export function createServer(
   store: Store,
   broadcast: WsBroadcast,
   embeddingProvider: EmbeddingProvider | null = null,
-  knowledgeSync?: KnowledgeSync
+  knowledgeSync?: KnowledgeSync,
+  registry?: ProjectsRegistry
 ) {
   const app = new Hono();
+
+  // Projects are edited from the UI now, so every mutation has to push the
+  // new list to all connected clients.
+  function broadcastProjects(): void {
+    broadcast({
+      type: "projects:updated",
+      payload: getProjects(store.db),
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   // CORS for local development
   app.use("/*", cors({ origin: "http://localhost:5173" }));
@@ -79,10 +113,92 @@ export function createServer(
   // REST API for the UI
   // ============================================================================
 
-  // Projects
+  // Projects — SQLite is authoritative; see ProjectsRegistry for why TOML
+  // is only a seed/import path.
   app.get("/api/projects", (c) => {
     const projects = getProjects(store.db);
     return c.json(projects);
+  });
+
+  app.post("/api/projects", async (c) => {
+    const body = await c.req.json<Partial<Project>>();
+
+    const id = body.id?.trim();
+    if (!id) return c.json({ error: "id is required" }, 400);
+    if (!/^[a-z0-9][a-z0-9-]*$/i.test(id)) {
+      return c.json(
+        { error: "id must be alphanumeric with hyphens (it is used in paths and branch names)" },
+        400
+      );
+    }
+    if (getProject(store.db, id)) {
+      return c.json({ error: `Project "${id}" already exists` }, 409);
+    }
+
+    const project: Project = {
+      id,
+      name: body.name?.trim() || id,
+      emoji: body.emoji || undefined,
+      repos: body.repos ?? [],
+      setup: body.setup || undefined,
+      expert: body.expert || undefined,
+      branch: body.branch || "main",
+    };
+
+    upsertProject(store.db, project);
+    broadcastProjects();
+    return c.json(project, 201);
+  });
+
+  app.patch("/api/projects/:id", async (c) => {
+    const id = c.req.param("id");
+    const existing = getProject(store.db, id);
+    if (!existing) return c.json({ error: "Not found" }, 404);
+
+    const body = await c.req.json<Partial<Project>>();
+    // id is intentionally immutable: launches and sessions reference it, and
+    // worktree paths are derived from it.
+    const updated: Project = {
+      ...existing,
+      name: body.name?.trim() || existing.name,
+      emoji: body.emoji !== undefined ? body.emoji || undefined : existing.emoji,
+      repos: body.repos ?? existing.repos,
+      setup: body.setup !== undefined ? body.setup || undefined : existing.setup,
+      expert: body.expert !== undefined ? body.expert || undefined : existing.expert,
+      branch: body.branch || existing.branch,
+    };
+
+    upsertProject(store.db, updated);
+    broadcastProjects();
+    return c.json(updated);
+  });
+
+  app.delete("/api/projects/:id", (c) => {
+    const id = c.req.param("id");
+    if (id === "scratch") {
+      return c.json(
+        { error: "scratch cannot be deleted — unmatched sessions fall back to it" },
+        400
+      );
+    }
+    if (!getProject(store.db, id)) return c.json({ error: "Not found" }, 404);
+
+    deleteProject(store.db, id);
+    broadcastProjects();
+    return c.json({ ok: true });
+  });
+
+  // TOML remains available for dotfile portability, but only on request.
+  app.post("/api/projects/import", async (c) => {
+    if (!registry) return c.json({ error: "Registry unavailable" }, 503);
+    const result = await registry.importFromToml();
+    broadcastProjects();
+    return c.json(result);
+  });
+
+  app.get("/api/projects/export", (c) => {
+    if (!registry) return c.json({ error: "Registry unavailable" }, 503);
+    return c.text(registry.exportToToml(), 200, { "Content-Type": "text/plain" });
   });
 
   // Sessions
@@ -491,6 +607,7 @@ function handleHookEvent(
     case "SessionEnd": {
       endSession(store.db, session_id);
       clearTodoCheckpointState(session_id);
+      clearNudgeState(session_id);
       broadcast({
         type: "session:end",
         payload: { sessionId: session_id },
@@ -505,6 +622,7 @@ function handleHookEvent(
       updateSessionTitle(store.db, session_id, p.prompt.slice(0, 100));
       // A new turn is starting — the session is no longer idle/waiting.
       updateSessionStatus(store.db, session_id, "running");
+      resetTurnNudges(session_id);
       broadcast({
         type: "session:status",
         payload: { sessionId: session_id, status: "running" },
@@ -556,6 +674,45 @@ function handleHookEvent(
         payload: { sessionId: session_id, type: hook_event_name },
         timestamp: new Date().toISOString(),
       });
+
+      // Phase 6 — proactive nudging. Off unless STANDUP_NUDGE=1.
+      //
+      // Deliberately does not fire for the agent's own expert calls: an
+      // ask_expert round trip generates PostToolUse events, and nudging on
+      // those is precisely the chime-in feedback loop the design warns
+      // about. The event is still recorded below either way.
+      if (isNudgingEnabled() && !isExpertTool(p.tool_name)) {
+        // insertEvent runs at the end of this function, so the event that
+        // triggered this check isn't in the window yet. That's fine — it
+        // makes detection lag by exactly one tool call rather than miss
+        // anything.
+        const nudge = maybeNudge(store.db, session_id);
+        if (nudge) {
+          console.log(
+            `[nudge] ${session_id.slice(0, 8)} — ${nudge.signal.reason}`
+          );
+
+          // Visible to the human too: the design says the only way to tune
+          // the false-positive rate is to watch it happen.
+          broadcast({
+            type: "stall:detected",
+            payload: {
+              sessionId: session_id,
+              reason: nudge.signal.reason,
+              topic: nudge.signal.topic,
+              nudged: true,
+            },
+            timestamp: new Date().toISOString(),
+          });
+
+          hookOutput = {
+            hookSpecificOutput: {
+              hookEventName: "PostToolUse",
+              additionalContext: nudge.text,
+            },
+          };
+        }
+      }
       break;
     }
 

@@ -13,9 +13,23 @@ The design is in `high-level-design.md`.
 | 2 — Checkpoints & feed | ✅ Core verified live | `checkpoint` MCP tool called for real and appeared in the feed. Structural sources (`SubagentStop`, `TodoWrite`) and ntfy push are built but not yet exercised live. |
 | 2.5 — Project knowledge | ✅ Verified live | `search_knowledge` and `ripgrep` both called for real with correct session correlation and results. Knowledge docs now lazily resync per-search (mtime-checked), no restart needed for doc changes. |
 | 3 — Write path | ✅ Verified live | `ask_human` genuinely blocked this conversation and resumed with the real answer. **Steer delivery now works**: queued steers are claimed atomically and injected at the next `UserPromptSubmit` as `hookSpecificOutput.additionalContext` — verified end-to-end with a marker-code round trip (queued → delivered → marked delivered → no longer pending). Second delivery point (steers returned alongside a `checkpoint` call) is built but not yet exercised live, since it needs a fresh session to pick up the MCP change. |
-| 4 — Launching | 🟡 Built, **launch path unverified** | Worktree checkout, setup-command execution, detached tmux spawn, `/api/projects/:id/launch`, cleanup endpoint, and the composer UI are all in. Error paths verified (no repos / unknown project / empty task all fail cleanly with no side effects). **A successful launch has never been run** — it spawns a real Claude Code session and consumes tokens, so it was deliberately not tested unattended. See runbook for how to try it. |
-| 5 — Experts | ✅ Built & eval-verified | Real retrieval over one shared corpus (knowledge docs + code), region attribution, exchanges recorded and rendered in the feed as their own tier. Eval suite passes **8/8, multi-hop 4/4**. |
-| 6 — Proactive nudging | ⬜ Not started | |
+| 4 — Launching | ✅ Verified live | A real launch created a worktree on its own branch, ran the setup command, started a tmux session, and the agent registered as `project=standup` (not `scratch`) — confirming worktree→project resolution. Cleanup endpoint verified too. |
+| 5 — Experts | ✅ Built & eval-verified | Real retrieval over one shared corpus (knowledge docs + code), region attribution, exchanges recorded and rendered in the feed as their own tier. Eval suite passes **8/8, multi-hop 4/4**. Ad-hoc quality is merely okay — see caveat below. |
+| 6 — Proactive nudging | 🟡 Built & unit-tested, **live loop unverified** | Four heuristics over the stored event stream, nudge-only delivery via `PostToolUse` `additionalContext`, per-session-per-topic cooldown, per-turn cap, and self-exclusion of Standup's own tools. 7/7 unit tests (4 confirm firing, 3 confirm quiet on healthy work). Demo report shows 0/3 false positives on real sessions. **Not yet observed delivering a nudge to a live agent** — needs a collector restart with `STANDUP_NUDGE=1`. |
+
+**Projects are now configured in SQLite, not TOML.** The design specified
+`projects.toml` as authoritative for dotfile portability, but that fights
+in-app editing: a continuous TOML→DB reload silently discards UI changes.
+TOML is now a seed (empty DB only) plus explicit
+import/export endpoints, and the file is no longer watched. Full CRUD lives
+at `/api/projects` with a config UI in the Projects tab.
+
+**Phase 5 quality caveat.** The eval passes 8/8, but an ad-hoc question
+("how does the launcher decide which project a session belongs to?") failed
+to surface `launcher.ts` or `findLaunchByCwd` in the top 6 — it returned
+tangentially related files. The architecture is right (one shared corpus,
+attribute-don't-route); ranking is mediocre for some phrasings. Adding cases
+like this to the eval is the way to fix it, not hand-tuning.
 
 **All 5 MCP tools are now verified live**: `checkpoint`, `ripgrep`,
 `search_knowledge`, `ask_human`, `ask_expert`.

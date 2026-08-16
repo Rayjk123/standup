@@ -133,6 +133,18 @@ export async function launchSession(
     throw new Error(`Repo path does not exist: ${repoPath}`);
   }
 
+  // Check every precondition before creating anything. These used to be
+  // checked inline, which meant a missing tmux surfaced only *after* the
+  // worktree was created and the setup command had run — leaving an
+  // orphaned worktree and branch behind for a failure that was knowable up
+  // front.
+  if (!tmuxAvailable()) {
+    throw new Error(
+      "tmux is not installed — launches need it to host the session. " +
+        "Run `bun run scripts/check-deps.ts` (installs it via Homebrew), then retry."
+    );
+  }
+
   const launch = createLaunch(db, {
     id: randomUUID(),
     projectId: project.id,
@@ -175,13 +187,6 @@ export async function launchSession(
       if (!setup.ok) {
         log.push("[warn] setup command failed — starting the session anyway");
       }
-    }
-
-    if (!tmuxAvailable()) {
-      throw new Error(
-        "tmux is not installed. Run `bun run scripts/check-deps.ts`, or attach to the worktree manually: " +
-          worktreePath
-      );
     }
 
     // Pass the task as the initial prompt so the agent starts on it, and so

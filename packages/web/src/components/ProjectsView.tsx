@@ -2,21 +2,31 @@ import { useState } from "react";
 import type { Project, Session, Checkpoint } from "@standup/shared";
 import { theme, statusColors } from "./theme";
 import { SilenceStrip } from "./SilenceStrip";
+import { ProjectEditor } from "./ProjectEditor";
 
 interface ProjectsViewProps {
   projects: Project[];
   sessions: Session[];
   checkpoints: Checkpoint[];
+  onSaveProject: (
+    id: string | null,
+    patch: Partial<Project>
+  ) => Promise<{ error?: string }>;
+  onDeleteProject: (id: string) => Promise<{ error?: string }>;
 }
 
 export function ProjectsView({
   projects,
   sessions,
   checkpoints,
+  onSaveProject,
+  onDeleteProject,
 }: ProjectsViewProps) {
   const [selectedSession, setSelectedSession] = useState<string | null>(
     sessions[0]?.id ?? null
   );
+  // null = not editing; "" = creating a new project; otherwise a project id.
+  const [editing, setEditing] = useState<string | null>(null);
 
   const getSessionsByProject = (projectId: string) =>
     sessions.filter((s) => s.projectId === projectId);
@@ -91,6 +101,22 @@ export function ProjectsView({
                     {alertCount}
                   </span>
                 )}
+                <span style={{ flex: 1 }} />
+                <button
+                  onClick={() => setEditing(project.id)}
+                  title={`Configure ${project.name}`}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: theme.faint,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    padding: "0 2px",
+                    lineHeight: 1,
+                  }}
+                >
+                  ⚙
+                </button>
               </div>
 
               {/* Expert indicator */}
@@ -179,11 +205,49 @@ export function ProjectsView({
             </div>
           );
         })}
+
+        <button
+          onClick={() => setEditing("")}
+          style={{
+            width: "100%",
+            textAlign: "left",
+            background: "none",
+            border: "none",
+            borderTop: `1px solid ${theme.edgeSoft}`,
+            padding: "12px 14px",
+            marginTop: 6,
+            cursor: "pointer",
+            fontSize: 12.5,
+            color: theme.faint,
+          }}
+        >
+          + New project
+        </button>
+        <div style={{ height: 20 }} />
       </div>
 
-      {/* Session detail */}
+      {/* Detail pane — the editor takes over when configuring a project */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {selected ? (
+        {editing !== null ? (
+          <ProjectEditor
+            project={editing ? projects.find((p) => p.id === editing) : undefined}
+            onSave={async (patch) => {
+              const result = await onSaveProject(editing || null, patch);
+              if (!result.error) setEditing(null);
+              return result;
+            }}
+            onDelete={
+              editing
+                ? async () => {
+                    const result = await onDeleteProject(editing);
+                    if (!result.error) setEditing(null);
+                    return result;
+                  }
+                : undefined
+            }
+            onCancel={() => setEditing(null)}
+          />
+        ) : selected ? (
           <>
             <div
               style={{
