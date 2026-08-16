@@ -206,17 +206,35 @@ export async function askExpert({
   if (terms.length > 0) {
     try {
       const pattern = terms.join("|");
-      const result = await runRipgrep(pattern, cwd, ".", [
-        "-i",
-        "--max-count",
-        "3",
-        // Eval fixtures contain the question text by construction, so they
-        // match everything they are meant to measure. Leaving them in the
-        // corpus makes retrieval look better than it is on exactly the
-        // queries being scored.
-        "--glob",
-        "!*.eval.ts",
-      ]);
+      const result = await runRipgrep(
+        pattern,
+        cwd,
+        ".",
+        [
+          "-i",
+          // Per-file cap. This is the ceiling on how many *distinct* query
+          // terms a file can be observed to contain, because `hits` is built
+          // from the returned lines: at 3, a file could never demonstrate
+          // more than 3 terms, so coverage on a 7-term question maxed out at
+          // 0.43 while a filename match alone was worth 0.6 — a single common
+          // word in a well-named file beat a file matching three concepts.
+          // 10 lets coverage span its full range. Tuned with the name bonus
+          // below; see the plateau note there.
+          "--max-count",
+          "10",
+          // Eval fixtures contain the question text by construction, so they
+          // match everything they are meant to measure. Leaving them in the
+          // corpus makes retrieval look better than it is on exactly the
+          // queries being scored.
+          "--glob",
+          "!*.eval.ts",
+        ],
+        // Well above observed volume (~300-600 lines for a typical question
+        // on this repo at --max-count 10). The default 200 would truncate in
+        // traversal order and decide file eligibility by path position — see
+        // the maxMatches note in ripgrep.ts.
+        4000
+      );
 
       // Rank files by how many distinct query terms they contain, so a file
       // matching several concepts outranks one matching a single common word.
@@ -243,9 +261,30 @@ export async function askExpert({
         // mention many terms in passing outrank the file actually named
         // after the subject — "how do steers get delivered" returned
         // plan/*.md above steers.ts until this was added.
+        //
+        // It is a tiebreaker, not a verdict. At the original 0.6 it exceeded
+        // the coverage a file could achieve at all, so `config/experts.
+        // example.toml` outranked every real source on "how does the feed
+        // receive new expert exchanges in real time?" for containing the word
+        // "expert" once. Too low is equally wrong: at 0.35 the store-schema
+        // question loses `launches.ts` to four design docs tied on coverage.
+        //
+        // 0.45 is the middle of the passing band, swept against the eval
+        // jointly with --max-count and with the region bias applied (that
+        // bias matters — `plan/` at 1.3 nearly cancels the 0.7 prose damping,
+        // so prose competes with code far more closely than the damping alone
+        // suggests). Passing band is 0.45 at --max-count 8..10; 0.6 fails the
+        // feed question at every cap, 0.35 fails the schema one.
+        //
+        // An IDF-weighted coverage was tried here — weighting rare query
+        // terms above common ones — and measured no better than this at
+        // --max-count 8..10 and worse at 12. Not worth the complexity.
+        //
+        // Re-run `bun run eval:expert` before changing either number; they
+        // are tuned as a pair.
         const name = file.split("/").pop()?.toLowerCase() ?? "";
         const nameHits = terms.filter((t) => name.includes(t)).length;
-        const nameBonus = nameHits > 0 ? 0.6 + 0.2 * (nameHits - 1) : 0;
+        const nameBonus = nameHits > 0 ? 0.45 + 0.18 * (nameHits - 1) : 0;
 
         // Mild penalty for prose. Markdown legitimately matches more terms
         // per document than code does, which is length bias rather than

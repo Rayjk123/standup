@@ -17,7 +17,7 @@ The design is in `high-level-design.md`.
 | 5 — Experts | ✅ Built & eval-verified | Real retrieval over one shared corpus (knowledge docs + code), region attribution, exchanges recorded and rendered in the feed as their own tier. Eval suite passes **8/8, multi-hop 4/4**. Ad-hoc quality is merely okay — see caveat below. |
 | Launched-session control | ✅ Verified live | Blocked detection, live pane rendering, and answering are confirmed end to end: an `idle_prompt` Notification was reconciled into an ask, Blocked showed the actual dialog, `2` was sent via `send-keys`, the dialog cleared and the agent resumed. |
 | 6 — Proactive nudging | ✅ Verified live | Four heuristics over the stored event stream, nudge-only delivery via `PostToolUse` `additionalContext`, per-session-per-topic cooldown, per-turn cap, and self-exclusion of Standup's own tools. 9/9 unit tests. Confirmed end to end: five deliberately failing shell commands triggered the heuristic and the nudge arrived in the agent's context. |
-| 7 — Knowledge bootstrap | ⬜ Not started | Designed only (Component 4.6). Blocked behind closing Phase 5's ranking gap — adding generated text to a corpus whose ranking is already imperfect makes that harder to diagnose. |
+| 7 — Knowledge bootstrap | 🔨 Step 0 done | Planned in full — see [phase-7.md](phase-7.md). **Step 0 (ranking gap) is closed: the eval is now 12/12 with multi-hop 4/4**, up from a true baseline of 7/8 (the recorded 8/8 had gone stale as the corpus grew). Steps 1–7 not started. |
 
 **Projects are now configured in SQLite, not TOML.** The design specified
 `projects.toml` as authoritative for dotfile portability, but that fights
@@ -26,12 +26,40 @@ TOML is now a seed (empty DB only) plus explicit
 import/export endpoints, and the file is no longer watched. Full CRUD lives
 at `/api/projects` with a config UI in the Projects tab.
 
-**Phase 5 quality caveat.** The eval passes 8/8, but an ad-hoc question
-("how does the launcher decide which project a session belongs to?") failed
-to surface `launcher.ts` or `findLaunchByCwd` in the top 6 — it returned
-tangentially related files. The architecture is right (one shared corpus,
-attribute-don't-route); ranking is mediocre for some phrasings. Adding cases
-like this to the eval is the way to fix it, not hand-tuning.
+**Phase 5 quality caveat — resolved in Phase 7, Step 0.** The eval passed 8/8
+while an ad-hoc question about how a launched session gets matched to its
+owning project failed to surface `launcher.ts` or `findLaunchByCwd` in the top
+6. (Deliberately paraphrased rather than quoted: the eval now covers that
+question, and a doc repeating its exact wording becomes a fixture in the corpus
+it is being scored against — see the `*.eval.ts` note below.) The architecture
+was right (one shared corpus, attribute-don't-route); ranking was mediocre for
+some phrasings.
+
+Adding cases was the fix, not hand-tuning — but **the true baseline was 7/8,
+multi-hop 3/4**, not the recorded 8/8. The corpus had grown since that number
+was taken and nobody re-ran it. Treat a recorded eval score as perishable.
+
+Three real defects, all found by measuring rather than by reading:
+
+- **`--max-count 3` capped observable coverage.** `hits` is built from the
+  returned lines, so a file could never be *seen* to contain more than 3 query
+  terms — coverage on a 7-term question maxed out at 0.43 while a filename
+  match alone was worth 0.6. `config/experts.example.toml` outranked every real
+  source on a question about the feed, for containing "expert" once. Now 10.
+- **`MAX_MATCHES = 200` truncated by line in traversal order**, so which files
+  were eligible for ranking depended on alphabetical path position rather than
+  relevance — `packages/web/` sorts last and was systematically invisible.
+  Latent at `--max-count 3` (real volume was 196–201 lines, sitting right on
+  the cap) and fatal above it, which is why both had to be fixed together.
+  `runRipgrep` now takes a caller-supplied budget; the agent-facing `ripgrep`
+  tool keeps 200.
+- **The name bonus was a verdict rather than a tiebreaker.** Rebalanced
+  0.6 → 0.45, chosen as the middle of the passing band, not a peak score.
+
+An IDF-weighted coverage was tried and measured no better at the chosen
+settings; it is deliberately not in the code. Four ad-hoc cases were added,
+phrased the way a person asks rather than the way the corpus words itself —
+that phrasing mismatch was the entire blind spot.
 
 **All 5 MCP tools are now verified live**: `checkpoint`, `ripgrep`,
 `search_knowledge`, `ask_human`, `ask_expert`.
@@ -260,11 +288,24 @@ This phase requires architectural judgment.
 **Model: Opus 4.5** (the research prompt and the scope rule), **Sonnet 4**
 (everything else)
 
-Not started. See Component 4.6 in the design.
+**The implementable breakdown is in [phase-7.md](phase-7.md)** — steps,
+schema, the research prompt draft, the traps found while reading the code,
+and what to measure. The table below is the summary; that document is what to
+build from.
+
+Three decisions taken while planning, recorded so they aren't relitigated:
+drafts are markdown in a `.drafts/` subdirectory **and** rows in their own
+`knowledge_drafts` table (same file-is-truth/SQLite-is-index split as
+accepted knowledge, but with no FTS and no chunks, so exclusion from search
+is structural); the bootstrap agent delivers through a gated
+`propose_knowledge` MCP tool so the collector stamps provenance rather than
+trusting the agent to; and Phase 5's ranking gap is Step 0 of this phase
+rather than a prerequisite sitting outside it.
 
 | Task | Model | Notes |
 |------|-------|-------|
-| Draft state on knowledge docs (schema + sync) | Sonnet | `status`, `generated_from_sha`, `generated_at`; drafts excluded from search |
+| **Step 0 — close Phase 5's ranking gap** | **Opus** | Gate. Nothing downstream is measurable until the eval covers the ad-hoc phrasings that currently fail |
+| Draft state on knowledge docs (schema + sync) | Sonnet | Separate `knowledge_drafts` table; provenance columns on `knowledge`. Must go in `ensureTables()`, not `migrations.ts` — see the traps section |
 | Bootstrap launch (reuses Phase 4 launcher) | Sonnet | Research prompt into a worktree, writes markdown to the knowledge dir |
 | **The research prompt itself** | **Opus** | The whole phase lives or dies here — see below |
 | Review UI: diff, accept / edit / discard per doc | Sonnet | Make correcting a wrong inference cheap |
@@ -286,22 +327,25 @@ make answers worse. It has to encode:
 - Brevity. A long generated doc is more surface area to go stale and more
   noise in every future retrieval
 
-**Open questions worth resolving before building:**
+**Open questions, and where they landed.** All three are now assigned to
+concrete steps in `phase-7.md` rather than left hanging:
 
-- Does bootstrapped knowledge actually improve `ask_expert` answers, or does
-  it mostly add competing text? The eval suite from Phase 5 is the instrument;
-  extend it with cases whose answers should come from bootstrapped material
-  and check the multi-hop numbers don't regress.
-- Should generated and human-authored knowledge be weighted differently at
-  retrieval time? Probably yes — a human wrote theirs on purpose — but that is
-  a claim to test, not assume.
-- Is per-document review too heavy for a first run that produces six files? A
-  single accept-all with per-doc edit may be the right default.
+- *Does bootstrapped knowledge actually improve `ask_expert` answers?* →
+  Step 7A/7B: run the eval before and after accepting drafts, with new cases
+  answerable only from bootstrapped material. Multi-hop staying 4/4 is the
+  pass condition.
+- *Should generated and human-authored knowledge be weighted differently?* →
+  Step 7C: add a provenance multiplier, measure at 1.0 / 0.85 / 0.7, ship the
+  winner with its numbers in the comment.
+- *Is per-document review too heavy for six files?* → Step 5: per-doc
+  accept/edit/discard **plus** an accept-all. Cheaper to build than either
+  alone and defers the choice.
 
-**Do not start this before Phase 5's ranking gap is closed.** Retrieval
-currently passes its eval but returns tangential files for some ad-hoc
-questions. Adding a pile of generated text to a corpus whose ranking is
-already imperfect will make that harder to diagnose, not easier.
+**Phase 5's ranking gap is Step 0, not an external blocker.** Retrieval
+passes its eval but returns tangential files for some ad-hoc questions.
+Adding generated text to a corpus whose ranking is already imperfect makes a
+regression impossible to attribute — which is exactly why closing it belongs
+inside this phase, as the baseline everything else is measured against.
 
 ---
 

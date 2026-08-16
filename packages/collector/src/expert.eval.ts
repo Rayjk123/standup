@@ -83,6 +83,37 @@ const CASES: EvalCase[] = [
     expectSource: ["high-level-design.md", "implementation.md"],
     expectRegion: "design",
   },
+
+  // Ad-hoc phrasings (Phase 7, Step 0).
+  //
+  // The suite passed 8/8 while ad-hoc questions returned tangential files,
+  // because every original case was worded the way the corpus words itself.
+  // These are deliberately phrased the way a person asks — "my branch", "how
+  // often", "what happens to" — and none of them repeat a filename. They are
+  // the cases that exposed the max-count/name-bonus interaction; keep them
+  // conversational if you add more.
+  {
+    name: "ad-hoc: which project a session belongs to",
+    question: "How does the launcher decide which project a session belongs to?",
+    // findLaunchByCwd lives in the store, not the launcher — the obvious
+    // guess is wrong, which is half the point of this case.
+    expectSource: ["launcher.ts", "launches.ts", "projects-registry.ts"],
+  },
+  {
+    name: "ad-hoc: cleanup semantics, asked as a user would",
+    question: "What happens to my branch when I clean up a launch?",
+    expectSource: ["launcher.ts"],
+  },
+  {
+    name: "ad-hoc: nudge rate limiting",
+    question: "How often can the same agent be nudged about being stuck?",
+    expectSource: ["nudge.ts", "stuckness.ts"],
+  },
+  {
+    name: "ad-hoc: a why question with no shared vocabulary",
+    question: "Why is the sqlite database not stored inside the source tree?",
+    expectSource: ["index.ts", "runbook.md"],
+  },
 ];
 
 interface ExpertResponse {

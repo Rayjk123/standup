@@ -140,18 +140,34 @@ curl -s -X POST http://localhost:7777/api/launches/<launch-id>/cleanup | jq
 bun run eval:expert
 ```
 
-8/8 expected, with multi-hop at 4/4 — that second number is the one that
+12/12 expected, with multi-hop at 4/4 — that second number is the one that
 matters, since multi-hop is what a topic-partitioned index would lose.
 
-Two things to know before touching retrieval scoring:
+**Re-run it before trusting the number written down.** The recorded 8/8 was
+stale by the time Phase 7 started: the corpus had grown and the real score was
+7/8. An eval result is a measurement with a date on it, not a property.
+
+Things to know before touching retrieval scoring:
 
 - **Weights see-saw.** The `design` region weight trades intent questions
   against code-lookup attribution (1.2 fails one, 1.6 fails the other, 1.3
   passes). Always re-run the eval; never hand-tune by feel.
-- **Keep fixtures out of the corpus.** `*.eval.ts` is excluded from code
-  search because it contains every test question verbatim. Any new eval
-  fixture needs the same treatment, or retrieval will score against itself
-  and look better than it is.
+- **`--max-count` and the name bonus are tuned as a pair.** The per-file cap
+  is the ceiling on how many distinct query terms a file can be *observed* to
+  contain, so it bounds coverage; the name bonus is added to coverage. Move
+  one without the other and a single filename match starts outranking a file
+  that matches three more concepts. Current pair: 10 and 0.45.
+- **Region bias nearly cancels prose damping.** Retrieval damps `.md` by 0.7,
+  but `plan/` carries a 1.3 region weight — net 0.91. Design docs compete with
+  code far more closely than the damping alone suggests, and *adding a plan
+  doc changes retrieval results.* Writing `plan/phase-7.md` was enough on its
+  own to knock `launches.ts` out of the top 6 for a schema question.
+- **Keep fixtures out of the corpus — including prose.** `*.eval.ts` is
+  excluded from code search because it contains every test question verbatim.
+  The same trap applies to design docs: `implementation.md` quoted an ad-hoc
+  eval question verbatim as the recorded symptom, so that file and
+  `phase-7.md` outranked every real source for it. The glob exclusion does not
+  catch this. **Paraphrase eval questions in prose, never quote them.**
 
 Ad-hoc query:
 
