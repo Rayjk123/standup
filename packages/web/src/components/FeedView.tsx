@@ -417,12 +417,25 @@ export function FeedView({
                     options={isAsk ? (item.data as Ask).options : undefined}
                     reply={replies[item.data.id]}
                     onReply={async (body) => {
-                      if (isAsk) {
-                        await onResolveAsk(item.data.id, body);
-                      } else {
-                        await onSteer(item.data.sessionId, body);
-                      }
+                      // Optimistic: show the reply the instant it's sent
+                      // rather than leaving the field disabled until the
+                      // round trip completes. Reverted if the send fails.
                       setReplies((prev) => ({ ...prev, [item.data.id]: body }));
+                      try {
+                        if (isAsk) {
+                          const result = await onResolveAsk(item.data.id, body);
+                          if (result?.error) throw new Error(result.error);
+                        } else {
+                          await onSteer(item.data.sessionId, body);
+                        }
+                      } catch (err) {
+                        setReplies((prev) => {
+                          const next = { ...prev };
+                          delete next[item.data.id];
+                          return next;
+                        });
+                        throw err;
+                      }
                     }}
                   />
                 </div>

@@ -27,18 +27,37 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
   const [draft, setDraft] = useState("");
   const [open, setOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function send(body: string) {
     if (!body.trim() || sending) return;
     setSending(true);
+    setError(null);
     try {
       await onReply(body);
       setDraft("");
       setOpen(false);
+    } catch (err) {
+      // Keep the draft so a failed send doesn't lose what was typed.
+      setError((err as Error).message);
     } finally {
       setSending(false);
     }
   }
+
+  const errorNode = error ? (
+    <div
+      style={{
+        fontFamily: theme.mono,
+        fontSize: 11,
+        color: theme.waiting,
+        marginTop: 6,
+        lineHeight: 1.5,
+      }}
+    >
+      {error}
+    </div>
+  ) : null;
 
   if (reply) {
     const isAsk = target === "ask";
@@ -109,32 +128,36 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
             parts needs one answer per line — Shift+Enter for a new line,
             Enter to send.
           </div>
+          {errorNode}
         </div>
       );
     }
 
     return (
-      <div style={{ display: "flex", gap: 7, marginTop: 11, flexWrap: "wrap" }}>
-        {options.map((opt) => (
-          <button
-            key={opt}
-            onClick={() => send(opt)}
-            disabled={sending}
-            style={{
-              fontSize: 12.5,
-              fontWeight: 500,
-              color: theme.text,
-              background: theme.raised,
-              border: `1px solid ${theme.edge}`,
-              borderRadius: 5,
-              padding: "7px 13px",
-              cursor: sending ? "not-allowed" : "pointer",
-              opacity: sending ? 0.6 : 1,
-            }}
-          >
-            {opt}
-          </button>
-        ))}
+      <div style={{ marginTop: 11 }}>
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          {options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => send(opt)}
+              disabled={sending}
+              style={{
+                fontSize: 12.5,
+                fontWeight: 500,
+                color: theme.text,
+                background: theme.raised,
+                border: `1px solid ${theme.edge}`,
+                borderRadius: 5,
+                padding: "7px 13px",
+                cursor: sending ? "not-allowed" : "pointer",
+                opacity: sending ? 0.6 : 1,
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+        {errorNode}
       </div>
     );
   }
@@ -181,6 +204,7 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
           }}
         />
       )}
+      {errorNode}
     </div>
   );
 }
