@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import type { Project, Session, Checkpoint } from "@standup/shared";
 import { theme, statusColors } from "./theme";
 import { SilenceStrip } from "./SilenceStrip";
@@ -25,9 +26,12 @@ export function ProjectsView({
   onDeleteProject,
   onSessionChanged,
 }: ProjectsViewProps) {
-  const [selectedSession, setSelectedSession] = useState<string | null>(
-    sessions[0]?.id ?? null
-  );
+  // Selection comes from the path, not local state, so it survives a refresh
+  // and can be linked to directly.
+  const { sessionId } = useParams();
+  const navigate = useNavigate();
+  const selectedSession = sessionId ?? sessions[0]?.id ?? null;
+  const setSelectedSession = (id: string) => navigate(`/projects/${id}`);
   // null = not editing; "" = creating a new project; otherwise a project id.
   const [editing, setEditing] = useState<string | null>(null);
 

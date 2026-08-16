@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import type { Ask, Session, Project } from "@standup/shared";
 import { theme } from "./theme";
 
@@ -5,7 +6,6 @@ interface AlertStripProps {
   pendingAsks: Ask[];
   sessions: Session[];
   projects: Project[];
-  onGoToBlocked: () => void;
 }
 
 function formatQuiet(seconds: number): string {
@@ -20,8 +20,8 @@ export function AlertStrip({
   pendingAsks,
   sessions,
   projects,
-  onGoToBlocked,
 }: AlertStripProps) {
+  const navigate = useNavigate();
   if (pendingAsks.length === 0) {
     return (
       <div
@@ -67,7 +67,7 @@ export function AlertStrip({
 
   return (
     <button
-      onClick={onGoToBlocked}
+      onClick={() => navigate("/blocked")}
       style={{
         width: "100%",
         display: "flex",

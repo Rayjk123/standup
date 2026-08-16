@@ -1,13 +1,14 @@
 import { useState } from "react";
 import type { Ask, Session, Project } from "@standup/shared";
 import { theme } from "./theme";
+import { Link } from "react-router-dom";
+import { Replier } from "./Replier";
 
 interface BlockedViewProps {
   asks: Ask[];
   sessions: Session[];
   projects: Project[];
-  onResolveAsk: (askId: string, answer: string) => Promise<void>;
-  onGoToFeed: () => void;
+  onResolveAsk: (askId: string, answer: string) => Promise<{ error?: string }>;
 }
 
 export function BlockedView({
@@ -15,9 +16,12 @@ export function BlockedView({
   sessions,
   projects,
   onResolveAsk,
-  onGoToFeed,
 }: BlockedViewProps) {
   const [resolving, setResolving] = useState<string | null>(null);
+  // Resolving can legitimately fail — answering a prompt-ask for a monitored
+  // session is refused, and a launched session's pane may have exited.
+  // Swallowing that made a failed reply look like a dead button.
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const getSession = (sessionId: string) =>
     sessions.find((s) => s.id === sessionId);
@@ -26,8 +30,14 @@ export function BlockedView({
 
   const handleResolve = async (askId: string, answer: string) => {
     setResolving(askId);
+    setErrors((prev) => ({ ...prev, [askId]: "" }));
     try {
-      await onResolveAsk(askId, answer);
+      const result = await onResolveAsk(askId, answer);
+      if (result?.error) {
+        setErrors((prev) => ({ ...prev, [askId]: result.error! }));
+      }
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, [askId]: (err as Error).message }));
     } finally {
       setResolving(null);
     }
@@ -52,21 +62,21 @@ export function BlockedView({
         >
           <div style={{ fontSize: 30, marginBottom: 10 }}>🌤️</div>
           <div style={{ fontSize: 14, color: theme.dim }}>Queue clear.</div>
-          <button
-            onClick={onGoToFeed}
+          <Link
+            to="/feed"
             style={{
+              display: "inline-block",
               marginTop: 12,
-              background: "none",
               border: `1px solid ${theme.edge}`,
               borderRadius: 6,
               padding: "7px 14px",
-              cursor: "pointer",
               fontSize: 12.5,
               color: theme.dim,
+              textDecoration: "none",
             }}
           >
             Back to the feed
-          </button>
+          </Link>
         </div>
       </div>
     );
@@ -156,34 +166,26 @@ export function BlockedView({
                   {ask.question}
                 </div>
 
-                {ask.options && (
+                {/* Shared with the feed so both paths handle option-less
+                    asks identically — this view previously rendered nothing
+                    at all when an ask had no predefined options. */}
+                <Replier
+                  target="ask"
+                  options={ask.options}
+                  onReply={(answer) => handleResolve(ask.id, answer)}
+                />
+
+                {errors[ask.id] && (
                   <div
                     style={{
-                      display: "flex",
-                      gap: 7,
-                      marginTop: 11,
-                      flexWrap: "wrap",
+                      fontFamily: theme.mono,
+                      fontSize: 11,
+                      color: theme.waiting,
+                      marginTop: 9,
+                      lineHeight: 1.5,
                     }}
                   >
-                    {ask.options.map((opt) => (
-                      <button
-                        key={opt}
-                        onClick={() => handleResolve(ask.id, opt)}
-                        disabled={isResolving}
-                        style={{
-                          fontSize: 12.5,
-                          fontWeight: 500,
-                          color: theme.text,
-                          background: theme.raised,
-                          border: `1px solid ${theme.edge}`,
-                          borderRadius: 5,
-                          padding: "7px 13px",
-                          cursor: isResolving ? "not-allowed" : "pointer",
-                        }}
-                      >
-                        {opt}
-                      </button>
-                    ))}
+                    {errors[ask.id]}
                   </div>
                 )}
               </div>

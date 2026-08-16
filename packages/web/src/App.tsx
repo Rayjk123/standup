@@ -137,11 +137,20 @@ export default function App() {
         refreshSessions();
       }}
       onResolveAsk={async (askId, answer) => {
-        await fetch(`/api/asks/${askId}/resolve`, {
+        // Resolving genuinely fails sometimes — a prompt-ask on a monitored
+        // session is refused, and a launched session's pane may have exited.
+        // Returning the reason is what makes the button feel alive.
+        const res = await fetch(`/api/asks/${askId}/resolve`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ answer }),
         });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          return { error: data.error ?? `Reply failed (${res.status})` };
+        }
+        setAsks((prev) => prev.filter((a) => a.id !== askId));
+        return {};
       }}
       onSteer={async (sessionId, body) => {
         await fetch(`/api/sessions/${sessionId}/steer`, {

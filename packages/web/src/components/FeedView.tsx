@@ -148,7 +148,7 @@ interface FeedViewProps {
   sessions: Session[];
   projects: Project[];
   onSteer: (sessionId: string, body: string) => Promise<void>;
-  onResolveAsk: (askId: string, answer: string) => Promise<void>;
+  onResolveAsk: (askId: string, answer: string) => Promise<{ error?: string }>;
   onLaunch: (projectId: string, task: string) => Promise<{ error?: string }>;
   onLaunchChanged: () => void;
 }

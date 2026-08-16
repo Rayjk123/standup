@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Routes, Route, Navigate, NavLink, useLocation } from "react-router-dom";
 import type {
   Session,
   Project,
@@ -13,7 +13,7 @@ import { ProjectsView } from "./ProjectsView";
 import { AlertStrip } from "./AlertStrip";
 import { theme } from "./theme";
 
-type View = "feed" | "blocked" | "projects";
+const VIEWS = ["feed", "blocked", "projects"] as const;
 
 interface ConsoleProps {
   projects: Project[];
@@ -22,7 +22,7 @@ interface ConsoleProps {
   asks: Ask[];
   expertExchanges: ExpertExchange[];
   launches: Launch[];
-  onResolveAsk: (askId: string, answer: string) => Promise<void>;
+  onResolveAsk: (askId: string, answer: string) => Promise<{ error?: string }>;
   onSteer: (sessionId: string, body: string) => Promise<void>;
   onLaunch: (projectId: string, task: string) => Promise<{ error?: string }>;
   onSaveProject: (
@@ -49,7 +49,9 @@ export function Console({
   onLaunchChanged,
   onSessionChanged,
 }: ConsoleProps) {
-  const [view, setView] = useState<View>("feed");
+  // The alert strip is hidden on Blocked, which is the one place it would be
+  // redundant. Read from the route rather than tracked separately.
+  const onBlockedView = useLocation().pathname.startsWith("/blocked");
 
   const pendingAsks = asks.filter((a) => a.status === "pending");
   const stalledSessions = sessions.filter((s) => s.status === "stalled");
@@ -108,24 +110,23 @@ export function Console({
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 2 }}>
-          {(["feed", "blocked", "projects"] as View[]).map((v) => (
-            <button
+          {VIEWS.map((v) => (
+            <NavLink
               key={v}
-              onClick={() => setView(v)}
-              style={{
+              to={`/${v}`}
+              style={({ isActive }) => ({
                 fontSize: 12.5,
                 fontWeight: 600,
                 padding: "5px 12px",
                 borderRadius: 5,
-                border: "none",
-                cursor: "pointer",
-                background: view === v ? theme.raised : "transparent",
-                color: view === v ? theme.text : theme.faint,
+                textDecoration: "none",
+                background: isActive ? theme.raised : "transparent",
+                color: isActive ? theme.text : theme.faint,
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
                 textTransform: "capitalize",
-              }}
+              })}
             >
               {v}
               {v === "blocked" && pendingAsks.length > 0 && (
@@ -143,56 +144,69 @@ export function Console({
                   {pendingAsks.length}
                 </span>
               )}
-            </button>
+            </NavLink>
           ))}
         </div>
       </div>
 
-      {/* Alert strip (not shown on blocked view) */}
-      {view !== "blocked" && (
+      {/* Redundant on Blocked, which already lists everything it summarizes */}
+      {!onBlockedView && (
         <AlertStrip
           pendingAsks={pendingAsks}
           sessions={sessions}
           projects={projects}
-          onGoToBlocked={() => setView("blocked")}
         />
       )}
 
       {/* Main content */}
       <div style={{ flex: 1, overflow: "hidden" }}>
-        {view === "feed" && (
-          <FeedView
-            checkpoints={checkpoints}
-            asks={asks}
-            expertExchanges={expertExchanges}
-            launches={launches}
-            sessions={sessions}
-            projects={projects}
-            onSteer={onSteer}
-            onResolveAsk={onResolveAsk}
-            onLaunch={onLaunch}
-            onLaunchChanged={onLaunchChanged}
+        <Routes>
+          <Route path="/" element={<Navigate to="/feed" replace />} />
+          <Route
+            path="/feed"
+            element={
+              <FeedView
+                checkpoints={checkpoints}
+                asks={asks}
+                expertExchanges={expertExchanges}
+                launches={launches}
+                sessions={sessions}
+                projects={projects}
+                onSteer={onSteer}
+                onResolveAsk={onResolveAsk}
+                onLaunch={onLaunch}
+                onLaunchChanged={onLaunchChanged}
+              />
+            }
           />
-        )}
-        {view === "blocked" && (
-          <BlockedView
-            asks={pendingAsks}
-            sessions={sessions}
-            projects={projects}
-            onResolveAsk={onResolveAsk}
-            onGoToFeed={() => setView("feed")}
+          <Route
+            path="/blocked"
+            element={
+              <BlockedView
+                asks={pendingAsks}
+                sessions={sessions}
+                projects={projects}
+                onResolveAsk={onResolveAsk}
+              />
+            }
           />
-        )}
-        {view === "projects" && (
-          <ProjectsView
-            projects={projects}
-            sessions={sessions}
-            checkpoints={checkpoints}
-            onSaveProject={onSaveProject}
-            onDeleteProject={onDeleteProject}
-            onSessionChanged={onSessionChanged}
+          {/* Session selection lives in the path so it survives a refresh —
+              the same reason the view does. */}
+          <Route
+            path="/projects/:sessionId?"
+            element={
+              <ProjectsView
+                projects={projects}
+                sessions={sessions}
+                checkpoints={checkpoints}
+                onSaveProject={onSaveProject}
+                onDeleteProject={onDeleteProject}
+                onSessionChanged={onSessionChanged}
+              />
+            }
           />
-        )}
+          <Route path="*" element={<Navigate to="/feed" replace />} />
+        </Routes>
       </div>
     </div>
   );

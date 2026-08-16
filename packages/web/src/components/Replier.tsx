@@ -71,9 +71,43 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
   }
 
   if (target === "ask") {
+    // Not every ask carries options. `ask_human` may omit them, and asks
+    // raised from a Notification hook never have them — the hook reports
+    // that the agent is waiting, not what it's waiting on. Rendering only
+    // buttons left those asks with no way to answer at all.
+    if (!options || options.length === 0) {
+      return (
+        <div style={{ marginTop: 11 }}>
+          <input
+            value={draft}
+            disabled={sending}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void send(draft);
+            }}
+            placeholder="Type your answer and press Enter…"
+            style={{
+              width: "100%",
+              fontSize: 13,
+              color: theme.text,
+              background: theme.ground,
+              border: `1px solid ${theme.edge}`,
+              borderRadius: 6,
+              padding: "8px 11px",
+              outline: "none",
+            }}
+          />
+          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            Sent straight to the agent. For a menu prompt, the option number
+            (e.g. <code>2</code>) is what it expects.
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div style={{ display: "flex", gap: 7, marginTop: 11, flexWrap: "wrap" }}>
-        {(options ?? []).map((opt) => (
+        {options.map((opt) => (
           <button
             key={opt}
             onClick={() => send(opt)}
