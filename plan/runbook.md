@@ -217,6 +217,18 @@ session and only meaningful for a launched one, where nobody is at the
 terminal. Neither payload says *what* is being asked — that only exists on
 the pane, which is why Blocked renders the live screen for prompt-asks.
 
+**No PostToolUse fires for a failed tool call.** Six deliberately failing
+Bash commands produced six `PreToolUse` and zero `PostToolUse`. A failure is
+therefore only visible as a `PreToolUse` whose `tool_use_id` never gets a
+matching Post — inspecting `tool_response` for error text cannot detect it,
+because the event carrying that response is never emitted. The correlation
+field is `tool_use_id` (not `tool_call_id`).
+
+To validate nudging live: `STANDUP_NUDGE=1 bun run dev`, then run five
+failing shell commands in a row (`this-command-does-not-exist-1` …). The
+nudge arrives in the agent's own context via `PostToolUse`
+`additionalContext`, and `bun run nudge:report` shows the same firing.
+
 **`tmux send-keys` drives Claude Code's menus with a plain number.** Sending
 `2` selects option 2 on an arrow-key dialog; no Up/Down key sequence is
 needed. Verified end to end: notification → reconciled ask → screen shown →
