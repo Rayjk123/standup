@@ -205,6 +205,27 @@ most-recent-active-session-by-cwd heuristic if resolution fails.
 loop. The `/hook` handler catches everything and always returns 200 — a
 collector error must never stall an agent.
 
+**Notification payloads.** Verified shapes:
+
+```json
+{ "notification_type": "idle_prompt",       "message": "Claude is waiting for your input" }
+{ "notification_type": "permission_prompt", "message": "Claude needs your permission" }
+```
+
+`idle_prompt` fires at every turn end, so it is routine for a monitored
+session and only meaningful for a launched one, where nobody is at the
+terminal. Neither payload says *what* is being asked — that only exists on
+the pane, which is why Blocked renders the live screen for prompt-asks.
+
+**`tmux send-keys` drives Claude Code's menus with a plain number.** Sending
+`2` selects option 2 on an arrow-key dialog; no Up/Down key sequence is
+needed. Verified end to end: notification → reconciled ask → screen shown →
+`2` sent → dialog cleared → ask resolved → agent resumed.
+
+Watch for unsent text left in a pane's input buffer. `send-keys` appends to
+whatever is already typed there, so a half-written prompt from an earlier
+attach will be prepended to what you send.
+
 ---
 
 ## Gotchas that cost real time
