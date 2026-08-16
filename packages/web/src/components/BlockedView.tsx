@@ -10,6 +10,7 @@ interface BlockedViewProps {
   sessions: Session[];
   projects: Project[];
   onResolveAsk: (askId: string, answer: string) => Promise<{ error?: string }>;
+  onDismissAsk: (askId: string) => Promise<{ error?: string }>;
 }
 
 export function BlockedView({
@@ -17,12 +18,14 @@ export function BlockedView({
   sessions,
   projects,
   onResolveAsk,
+  onDismissAsk,
 }: BlockedViewProps) {
   const [resolving, setResolving] = useState<string | null>(null);
   // Resolving can legitimately fail — answering a prompt-ask for a monitored
   // session is refused, and a launched session's pane may have exited.
   // Swallowing that made a failed reply look like a dead button.
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [dismissing, setDismissing] = useState<string | null>(null);
 
   const getSession = (sessionId: string) =>
     sessions.find((s) => s.id === sessionId);
@@ -41,6 +44,21 @@ export function BlockedView({
       setErrors((prev) => ({ ...prev, [askId]: (err as Error).message }));
     } finally {
       setResolving(null);
+    }
+  };
+
+  const handleDismiss = async (askId: string) => {
+    setDismissing(askId);
+    setErrors((prev) => ({ ...prev, [askId]: "" }));
+    try {
+      const result = await onDismissAsk(askId);
+      if (result?.error) {
+        setErrors((prev) => ({ ...prev, [askId]: result.error! }));
+      }
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, [askId]: (err as Error).message }));
+    } finally {
+      setDismissing(null);
     }
   };
 
@@ -101,6 +119,7 @@ export function BlockedView({
           const session = getSession(ask.sessionId);
           const project = session ? getProject(session.projectId) : null;
           const isResolving = resolving === ask.id;
+          const isDismissing = dismissing === ask.id;
 
           return (
             <div
@@ -112,7 +131,7 @@ export function BlockedView({
                 padding: "15px 17px",
                 display: "flex",
                 gap: 13,
-                opacity: isResolving ? 0.6 : 1,
+                opacity: isResolving || isDismissing ? 0.6 : 1,
               }}
             >
               {/* Avatar */}
@@ -164,6 +183,23 @@ export function BlockedView({
                     )}
                     m
                   </span>
+                  <button
+                    onClick={() => handleDismiss(ask.id)}
+                    disabled={isResolving || isDismissing}
+                    title="Dismiss without answering — the agent's wait ends the same as if it had timed out."
+                    style={{
+                      background: "none",
+                      border: `1px solid ${theme.edge}`,
+                      borderRadius: 4,
+                      padding: "1px 7px",
+                      cursor: isResolving || isDismissing ? "default" : "pointer",
+                      fontSize: 12,
+                      lineHeight: 1.6,
+                      color: theme.faint,
+                    }}
+                  >
+                    ×
+                  </button>
                 </div>
 
                 <div style={{ fontSize: 14, lineHeight: 1.55, color: theme.text }}>

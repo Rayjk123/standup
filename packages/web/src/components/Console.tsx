@@ -25,6 +25,7 @@ interface ConsoleProps {
   expertExchanges: ExpertExchange[];
   launches: Launch[];
   onResolveAsk: (askId: string, answer: string) => Promise<{ error?: string }>;
+  onDismissAsk: (askId: string) => Promise<{ error?: string }>;
   onSteer: (sessionId: string, body: string) => Promise<void>;
   onLaunch: (projectId: string, task: string) => Promise<{ error?: string }>;
   onSaveProject: (
@@ -45,6 +46,7 @@ export function Console({
   expertExchanges,
   launches,
   onResolveAsk,
+  onDismissAsk,
   onSteer,
   onLaunch,
   onSaveProject,
@@ -192,6 +194,7 @@ export function Console({
                 sessions={sessions}
                 projects={projects}
                 onResolveAsk={onResolveAsk}
+                onDismissAsk={onDismissAsk}
               />
             }
           />

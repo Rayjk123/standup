@@ -166,6 +166,15 @@ export default function App() {
         setAsks((prev) => prev.filter((a) => a.id !== askId));
         return {};
       }}
+      onDismissAsk={async (askId) => {
+        const res = await fetch(`/api/asks/${askId}`, { method: "DELETE" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          return { error: data.error ?? `Dismiss failed (${res.status})` };
+        }
+        setAsks((prev) => prev.filter((a) => a.id !== askId));
+        return {};
+      }}
       onSteer={async (sessionId, body) => {
         await fetch(`/api/sessions/${sessionId}/steer`, {
           method: "POST",

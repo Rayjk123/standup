@@ -277,7 +277,7 @@ export function FeedView({
                 flexShrink: 0,
               }}
             >
-              {project?.emoji ?? "📦"}
+              {isAutoCheckpoint ? "🤖" : (project?.emoji ?? "📦")}
             </div>
 
             {/* Content */}
@@ -292,7 +292,10 @@ export function FeedView({
                 }}
               >
                 <span style={{ fontSize: 14.5, fontWeight: 700, color: theme.text }}>
-                  {project?.name ?? "Unknown"}
+                  {/* Auto-checkpoints are Standup's own inference, not a
+                      claim about who did the work — attributed to "System"
+                      rather than falling through to "Unknown". */}
+                  {isAutoCheckpoint ? "System" : (project?.name ?? "Unknown")}
                 </span>
                 <span
                   style={{

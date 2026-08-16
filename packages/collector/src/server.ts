@@ -25,6 +25,7 @@ import {
   createAsk,
   getAsk,
   resolveAsk,
+  cancelAsk,
   cancelPromptAsks,
   cancelAllPendingAsks,
   createCheckpoint,
@@ -643,6 +644,28 @@ export function createServer(
     broadcast({
       type: "session:status",
       payload: { sessionId: ask.sessionId, status: "running" },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json({ ok: true });
+  });
+
+  // Dismiss without answering — for when the question is stale, was
+  // answered directly in the terminal, or just isn't worth a reply. An
+  // ask_human has a real waiter (an MCP tool call long-polling this row),
+  // and cancelAsk is the same terminal state waitForAskResolution already
+  // treats as "done" for a stopped session, so the waiter unblocks cleanly
+  // with an empty answer instead of hanging until its timeout.
+  app.delete("/api/asks/:id", (c) => {
+    const askId = c.req.param("id");
+    const ask = getAsk(store.db, askId);
+    if (!ask) return c.json({ error: "Not found" }, 404);
+
+    cancelAsk(store.db, askId);
+
+    broadcast({
+      type: "ask:resolved",
+      payload: { askId, answer: "" },
       timestamp: new Date().toISOString(),
     });
 
