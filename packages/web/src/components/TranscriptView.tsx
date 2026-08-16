@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { theme } from "./theme";
 import { Markdown } from "./Markdown";
 
 interface ToolCall {
@@ -102,6 +101,11 @@ export function TranscriptView({
   // "Expand all" sets a default; individual clicks override it per call,
   // like Claude Code's own transcript view. Toggling the default clears
   // overrides so it always means what it says.
+  //
+  // This per-id-override-over-a-global-default shape doesn't map onto
+  // Headless UI's Disclosure (which owns its open state internally, with no
+  // controlled open/onChange API), so expand/collapse stays plain state +
+  // Tailwind classes rather than forcing Disclosure in.
   const [expandAll, setExpandAll] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
 
@@ -179,16 +183,12 @@ export function TranscriptView({
   }
 
   if (loading && !page) {
-    return (
-      <div style={{ padding: "20px", fontSize: 12.5, color: theme.faint }}>
-        Reading transcript…
-      </div>
-    );
+    return <div className="p-5 text-[12.5px] text-faint">Reading transcript…</div>;
   }
 
   if (!page || page.totalMessages === 0) {
     return (
-      <div style={{ padding: "20px", fontSize: 13, color: theme.faint }}>
+      <div className="p-5 text-[13px] text-faint">
         No transcript found for this session. Standup reads Claude Code's own
         transcript file, which appears once the session has produced a turn.
       </div>
@@ -196,88 +196,47 @@ export function TranscriptView({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
-      <div
-        style={{
-          display: "flex",
-          gap: 14,
-          alignItems: "center",
-          padding: "10px 20px",
-          fontFamily: theme.mono,
-          fontSize: 10.5,
-          color: theme.faint,
-          borderBottom: `1px solid ${theme.edgeSoft}`,
-          flexWrap: "wrap",
-        }}
-      >
+    <div className="flex flex-col min-h-0 flex-1">
+      <div className="flex gap-3.5 items-center px-5 py-2.5 font-mono text-[10.5px] text-faint border-b border-edge-soft flex-wrap">
         <span>{page.totalMessages} messages</span>
         <span>{formatTokens(page.outputTokens)} output</span>
         <span>{formatTokens(page.contextTokens)} context</span>
-        <span style={{ flex: 1 }} />
+        <span className="flex-1" />
         <button
           onClick={toggleExpandAll}
-          style={{
-            background: "none",
-            border: `1px solid ${theme.edge}`,
-            borderRadius: 4,
-            padding: "3px 8px",
-            cursor: "pointer",
-            fontFamily: theme.mono,
-            fontSize: 10.5,
-            color: expandAll ? theme.text : theme.faint,
-          }}
+          className={`bg-transparent border border-edge rounded px-2 py-[3px] cursor-pointer font-mono text-[10.5px] ${
+            expandAll ? "text-text" : "text-faint"
+          }`}
         >
           {expandAll ? "▾ collapse all" : "▸ expand all"}
         </button>
         {page.hasMore && (
           <button
             onClick={() => setLimit((n) => n + PAGE)}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: theme.mono,
-              fontSize: 10.5,
-              color: theme.running,
-            }}
+            className="bg-transparent border-none p-0 cursor-pointer font-mono text-[10.5px] text-running"
           >
             ↑ load earlier
           </button>
         )}
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "6px 0 16px" }}>
+      <div className="flex-1 overflow-y-auto min-h-0 pt-1.5 pb-4">
         {page.messages.map((m) => {
           const isUser = m.role === "user";
           return (
             <div
               key={m.uuid}
-              style={{
-                padding: "10px 20px",
-                borderLeft: `2px solid ${isUser ? theme.edge : theme.checkpoint}`,
-                background: isUser ? theme.surface : "transparent",
-                marginBottom: 2,
-              }}
+              className={`px-5 py-2.5 border-l-2 mb-0.5 ${
+                isUser ? "border-edge" : "border-checkpoint"
+              } ${isUser ? "bg-surface" : "bg-transparent"}`}
             >
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "baseline",
-                  marginBottom: 5,
-                }}
-              >
+              <div className="flex gap-2 items-baseline mb-[5px]">
                 <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: isUser ? theme.dim : theme.checkpoint,
-                  }}
+                  className={`text-xs font-bold ${isUser ? "text-dim" : "text-checkpoint"}`}
                 >
                   {isUser ? "you" : "claude"}
                 </span>
-                <span style={{ fontFamily: theme.mono, fontSize: 10, color: theme.faint }}>
+                <span className="font-mono text-[10px] text-faint">
                   {m.timestamp
                     ? new Date(m.timestamp).toLocaleTimeString([], {
                         hour: "2-digit",
@@ -288,30 +247,18 @@ export function TranscriptView({
               </div>
 
               {m.localCommand ? (
-                <div
-                  style={{
-                    fontFamily: theme.mono,
-                    fontSize: 11.5,
-                    color: theme.dim,
-                    display: "flex",
-                    gap: 8,
-                    alignItems: "baseline",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span style={{ color: theme.running }}>
+                <div className="font-mono text-[11.5px] text-dim flex gap-2 items-baseline flex-wrap">
+                  <span className="text-running">
                     {m.localCommand.name}
                     {m.localCommand.args ? ` ${m.localCommand.args}` : ""}
                   </span>
                   {m.localCommand.stdout && (
-                    <span style={{ color: theme.faint }}>
-                      → {m.localCommand.stdout}
-                    </span>
+                    <span className="text-faint">→ {m.localCommand.stdout}</span>
                   )}
                 </div>
               ) : (
                 m.text && (
-                  <div style={{ wordBreak: "break-word" }}>
+                  <div className="break-words">
                     <Markdown>{m.text}</Markdown>
                   </div>
                 )
@@ -324,83 +271,50 @@ export function TranscriptView({
               {m.toolCalls.map((call) => {
                 const expanded = isExpanded(call.id);
                 return (
-                  <div key={call.id} style={{ marginTop: 5 }}>
+                  <div key={call.id} className="mt-[5px]">
                     <div
                       onClick={() => toggleCall(call.id)}
-                      style={{
-                        fontFamily: theme.mono,
-                        fontSize: 10.5,
-                        color: theme.faint,
-                        cursor: "pointer",
-                        userSelect: "none",
-                        overflow: expanded ? "visible" : "hidden",
-                        textOverflow: expanded ? "clip" : "ellipsis",
-                        whiteSpace: expanded ? "normal" : "nowrap",
-                      }}
+                      className={`font-mono text-[10.5px] text-faint cursor-pointer select-none ${
+                        expanded
+                          ? "overflow-visible text-clip whitespace-normal"
+                          : "overflow-hidden text-ellipsis whitespace-nowrap"
+                      }`}
                     >
                       {expanded ? "⌄" : "⟩"}{" "}
                       {expanded ? call.name : describeToolCall(call)}
                     </div>
                     {expanded && (
-                      <div
-                        style={{
-                          fontFamily: theme.mono,
-                          fontSize: 11,
-                          color: theme.dim,
-                          background: theme.ground,
-                          border: `1px solid ${theme.edgeSoft}`,
-                          borderRadius: 6,
-                          padding: "9px 11px",
-                          marginTop: 4,
-                          whiteSpace: "pre-wrap",
-                          wordBreak: "break-word",
-                          maxHeight: 420,
-                          overflowY: "auto",
-                        }}
-                      >
+                      <div className="font-mono text-[11px] text-dim bg-ground border border-edge-soft rounded-md px-[11px] py-[9px] mt-1 whitespace-pre-wrap break-words max-h-[420px] overflow-y-auto">
                         {(() => {
                           const bad = unparsedInput(call);
                           if (bad) {
                             return (
-                              <div style={{ marginBottom: 6, color: theme.waiting }}>
+                              <div className="mb-1.5 text-waiting">
                                 ⚠ Claude Code couldn't parse this call's input as
                                 JSON ({bad.len} bytes). Raw input:
-                                <div style={{ color: theme.dim, marginTop: 4 }}>
-                                  {bad.raw}
-                                </div>
+                                <div className="text-dim mt-1">{bad.raw}</div>
                               </div>
                             );
                           }
                           return Object.entries(call.input).map(([key, value]) => (
-                            <div key={key} style={{ marginBottom: 6 }}>
-                              <span style={{ color: theme.faint }}>{key}: </span>
+                            <div key={key} className="mb-1.5">
+                              <span className="text-faint">{key}: </span>
                               {formatInputValue(value)}
                             </div>
                           ));
                         })()}
                         {call.output ? (
                           <div
-                            style={{
-                              marginTop: 8,
-                              paddingTop: 8,
-                              borderTop: `1px solid ${theme.edgeSoft}`,
-                              color: call.isError ? theme.waiting : theme.faint,
-                            }}
+                            className={`mt-2 pt-2 border-t border-edge-soft ${
+                              call.isError ? "text-waiting" : "text-faint"
+                            }`}
                           >
                             {call.output.length > MAX_OUTPUT_CHARS
                               ? `${call.output.slice(0, MAX_OUTPUT_CHARS)}\n… truncated`
                               : call.output}
                           </div>
                         ) : (
-                          <div
-                            style={{
-                              marginTop: 8,
-                              paddingTop: 8,
-                              borderTop: `1px solid ${theme.edgeSoft}`,
-                              color: theme.faint,
-                              fontStyle: "italic",
-                            }}
-                          >
+                          <div className="mt-2 pt-2 border-t border-edge-soft text-faint italic">
                             no result captured
                           </div>
                         )}
@@ -414,7 +328,7 @@ export function TranscriptView({
         })}
       </div>
 
-      <div style={{ borderTop: `1px solid ${theme.edge}`, padding: "10px 20px 14px" }}>
+      <div className="border-t border-edge px-5 pt-2.5 pb-3.5">
         {page.owned ? (
           <>
             <input
@@ -425,32 +339,12 @@ export function TranscriptView({
                 if (e.key === "Enter") void send();
               }}
               placeholder="Reply to this agent — types straight into its session…"
-              style={{
-                width: "100%",
-                fontSize: 13,
-                color: theme.text,
-                background: theme.ground,
-                border: `1px solid ${theme.edge}`,
-                borderRadius: 6,
-                padding: "9px 11px",
-                outline: "none",
-              }}
+              className="w-full text-[13px] text-text bg-ground border border-edge rounded-md px-[11px] py-[9px] outline-none"
             />
-            {error && (
-              <div
-                style={{
-                  fontFamily: theme.mono,
-                  fontSize: 11,
-                  color: theme.waiting,
-                  marginTop: 7,
-                }}
-              >
-                {error}
-              </div>
-            )}
+            {error && <div className="font-mono text-[11px] text-waiting mt-[7px]">{error}</div>}
           </>
         ) : (
-          <div style={{ fontSize: 12, color: theme.faint, lineHeight: 1.5 }}>
+          <div className="text-xs text-faint leading-relaxed">
             Read-only — Standup didn't launch this session, so it can't type
             into it. Reply in its own terminal.
           </div>

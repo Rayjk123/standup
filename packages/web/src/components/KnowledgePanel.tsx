@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { theme } from "./theme";
 
 interface KnowledgeDoc {
   slug: string;
@@ -17,26 +16,11 @@ interface SearchResult {
   source: "text" | "embedding";
 }
 
-const field: React.CSSProperties = {
-  width: "100%",
-  fontSize: 13,
-  color: theme.text,
-  background: theme.ground,
-  border: `1px solid ${theme.edge}`,
-  borderRadius: 6,
-  padding: "8px 10px",
-  outline: "none",
-};
+const fieldClass =
+  "w-full text-[13px] text-text bg-ground border border-edge rounded-md px-2.5 py-2 outline-none";
 
-const label: React.CSSProperties = {
-  fontFamily: theme.mono,
-  fontSize: 9.5,
-  letterSpacing: "0.14em",
-  textTransform: "uppercase",
-  color: theme.faint,
-  display: "block",
-  marginBottom: 5,
-};
+const labelClass =
+  "font-mono text-[9.5px] tracking-[0.14em] uppercase text-faint block mb-[5px]";
 
 /**
  * View, edit, add and search a project's knowledge.
@@ -150,11 +134,11 @@ export function KnowledgePanel({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div style={{ padding: "16px 20px 24px", overflowY: "auto" }}>
+    <div className="px-5 pt-4 pb-6 overflow-y-auto">
       {/* Search first: checking what agents will retrieve is the more
           frequent task, and it's the only way to verify knowledge is
           reachable rather than merely present. */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div className="flex gap-2 mb-4">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -166,33 +150,23 @@ export function KnowledgePanel({ projectId }: { projectId: string }) {
             }
           }}
           placeholder="Search this project's knowledge as an agent would…"
-          style={field}
+          className={fieldClass}
         />
         <button
           onClick={() => setCreating(true)}
-          style={{
-            fontSize: 12.5,
-            fontWeight: 600,
-            color: theme.ground,
-            background: theme.checkpoint,
-            border: "none",
-            borderRadius: 6,
-            padding: "8px 14px",
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-          }}
+          className="text-[12.5px] font-semibold text-ground bg-checkpoint border-none rounded-md px-3.5 py-2 cursor-pointer whitespace-nowrap"
         >
           + New doc
         </button>
       </div>
 
       {results !== null && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ ...label, marginBottom: 8 }}>
+        <div className="mb-[18px]">
+          <div className={`${labelClass} mb-2`}>
             {results.length} result{results.length === 1 ? "" : "s"} for “{query}”
           </div>
           {results.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: theme.faint, lineHeight: 1.5 }}>
+            <div className="text-[12.5px] text-faint leading-relaxed">
               Nothing matched. An agent asking this would get nothing back —
               worth adding a doc, or rewording the one that should have
               answered it.
@@ -201,35 +175,27 @@ export function KnowledgePanel({ projectId }: { projectId: string }) {
             results.map((r) => (
               <div
                 key={r.slug}
-                style={{
-                  background: theme.surface,
-                  border: `1px solid ${theme.edgeSoft}`,
-                  borderRadius: 6,
-                  padding: "9px 11px",
-                  marginBottom: 7,
-                }}
+                className="bg-surface border border-edge-soft rounded-md px-[11px] py-[9px] mb-[7px]"
               >
-                <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>{r.title}</span>
-                  <span style={{ fontFamily: theme.mono, fontSize: 10, color: theme.faint }}>
+                <div className="flex gap-2 items-baseline">
+                  <span className="text-[12.5px] font-semibold">{r.title}</span>
+                  <span className="font-mono text-[10px] text-faint">
                     {r.slug} · {r.source} · {r.score.toFixed(2)}
                   </span>
                 </div>
-                <div style={{ fontSize: 12, color: theme.dim, marginTop: 4, lineHeight: 1.5 }}>
-                  {r.excerpt}
-                </div>
+                <div className="text-xs text-dim mt-1 leading-relaxed">{r.excerpt}</div>
               </div>
             ))
           )}
         </div>
       )}
 
-      <div style={{ ...label, marginBottom: 8 }}>
+      <div className={`${labelClass} mb-2`}>
         {docs.length} doc{docs.length === 1 ? "" : "s"}
       </div>
 
       {docs.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: theme.faint, lineHeight: 1.6 }}>
+        <div className="text-[12.5px] text-faint leading-relaxed">
           No knowledge yet. This is for what agents can't infer from the code —
           why the project exists, how it relates to others, conventions that
           aren't obvious from any single file.
@@ -239,53 +205,21 @@ export function KnowledgePanel({ projectId }: { projectId: string }) {
           <button
             key={doc.slug}
             onClick={() => setEditing(doc)}
-            style={{
-              display: "block",
-              width: "100%",
-              textAlign: "left",
-              background: theme.surface,
-              border: `1px solid ${theme.edgeSoft}`,
-              borderRadius: 6,
-              padding: "10px 12px",
-              marginBottom: 7,
-              cursor: "pointer",
-            }}
+            className="block w-full text-left bg-surface border border-edge-soft rounded-md px-3 py-2.5 mb-[7px] cursor-pointer"
           >
-            <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>
-                {doc.title}
-              </span>
-              <span style={{ fontFamily: theme.mono, fontSize: 10, color: theme.faint }}>
-                {doc.slug}.md
-              </span>
+            <div className="flex gap-2 items-baseline flex-wrap">
+              <span className="text-[13px] font-semibold text-text">{doc.title}</span>
+              <span className="font-mono text-[10px] text-faint">{doc.slug}.md</span>
               {doc.tags.map((t) => (
                 <span
                   key={t}
-                  style={{
-                    fontFamily: theme.mono,
-                    fontSize: 9,
-                    color: theme.expert,
-                    border: `1px solid ${theme.expert}44`,
-                    borderRadius: 3,
-                    padding: "1px 5px",
-                  }}
+                  className="font-mono text-[9px] text-expert border border-expert/25 rounded-[3px] px-[5px] py-px"
                 >
                   {t}
                 </span>
               ))}
             </div>
-            <div
-              style={{
-                fontSize: 12,
-                color: theme.dim,
-                marginTop: 5,
-                lineHeight: 1.5,
-                overflow: "hidden",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-              }}
-            >
+            <div className="text-xs text-dim mt-[5px] leading-relaxed overflow-hidden [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
               {doc.body}
             </div>
           </button>
@@ -329,67 +263,59 @@ function DocEditor({
   }, [onCancel]);
 
   return (
-    <div style={{ padding: "16px 20px 24px", overflowY: "auto" }}>
+    <div className="px-5 pt-4 pb-6 overflow-y-auto">
       {/* The way out belongs above the fold. The Cancel button at the bottom
           sits below a tall textarea, so it is both out of view and reads as
           "discard" rather than "go back". */}
       <button
         onClick={onCancel}
-        style={{
-          background: "none",
-          border: "none",
-          padding: 0,
-          marginBottom: 12,
-          cursor: "pointer",
-          fontSize: 12.5,
-          color: theme.faint,
-        }}
+        className="bg-transparent border-none p-0 mb-3 cursor-pointer text-[12.5px] text-faint"
       >
         ← All knowledge
       </button>
 
-      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>
+      <div className="text-[15px] font-bold mb-4">
         {doc ? `Edit ${doc.slug}.md` : "New knowledge doc"}
       </div>
 
-      <div style={{ display: "grid", gap: 14 }}>
+      <div className="grid gap-3.5">
         {!doc && (
           <div>
-            <span style={label}>Slug</span>
+            <span className={labelClass}>Slug</span>
             <input
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               placeholder="conventions"
-              style={{ ...field, fontFamily: theme.mono }}
+              className={`${fieldClass} font-mono`}
             />
-            <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            <div className="text-[11.5px] text-faint mt-[5px]">
               Becomes the filename. Letters, numbers, hyphens.
             </div>
           </div>
         )}
 
         <div>
-          <span style={label}>Title</span>
+          <span className={labelClass}>Title</span>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Coding conventions"
-            style={field}
+            className={fieldClass}
           />
         </div>
 
         <div>
-          <span style={label}>Tags — comma separated</span>
+          <span className={labelClass}>Tags — comma separated</span>
           <input
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             placeholder="conventions, gotchas"
-            style={field}
+            className={fieldClass}
           />
         </div>
 
         <div>
-          <span style={label}>Body — markdown</span>
+          <span className={labelClass}>Body — markdown</span>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -399,73 +325,32 @@ function DocEditor({
               "Favour what can't be grepped: why things are the way they are,\n" +
               "conventions spanning many files, cross-project dependencies."
             }
-            style={{
-              ...field,
-              fontFamily: theme.mono,
-              fontSize: 12,
-              lineHeight: 1.6,
-              resize: "vertical",
-            }}
+            className={`${fieldClass} font-mono text-xs leading-relaxed resize-y`}
           />
         </div>
       </div>
 
-      {error && (
-        <div
-          style={{
-            fontFamily: theme.mono,
-            fontSize: 11.5,
-            color: theme.waiting,
-            marginTop: 14,
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error && <div className="font-mono text-[11.5px] text-waiting mt-3.5">{error}</div>}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 18, alignItems: "center" }}>
+      <div className="flex gap-2 mt-[18px] items-center">
         <button
           onClick={() => onSave({ slug, title, body, tags })}
           disabled={busy || !slug.trim() || !body.trim()}
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: theme.ground,
-            background: theme.checkpoint,
-            border: "none",
-            borderRadius: 6,
-            padding: "9px 18px",
-            cursor: busy ? "not-allowed" : "pointer",
-            opacity: busy || !slug.trim() || !body.trim() ? 0.5 : 1,
-          }}
+          className="text-sm font-semibold text-ground bg-checkpoint border-none rounded-md px-[18px] py-[9px] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Saving…" : "Save"}
         </button>
         <button
           onClick={onCancel}
-          style={{
-            fontSize: 13,
-            color: theme.dim,
-            background: "none",
-            border: `1px solid ${theme.edge}`,
-            borderRadius: 6,
-            padding: "9px 16px",
-            cursor: "pointer",
-          }}
+          className="text-sm text-dim bg-transparent border border-edge rounded-md px-4 py-[9px] cursor-pointer"
         >
           Cancel
         </button>
-        <span style={{ flex: 1 }} />
+        <span className="flex-1" />
         {onDelete && (
           <button
             onClick={onDelete}
-            style={{
-              fontSize: 12.5,
-              color: theme.waiting,
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-            }}
+            className="text-[12.5px] text-waiting bg-transparent border-none cursor-pointer"
           >
             Delete doc
           </button>

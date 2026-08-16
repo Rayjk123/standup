@@ -1,20 +1,12 @@
 import { useState } from "react";
 import type { Session } from "@standup/shared";
-import { theme } from "./theme";
 
 interface SessionControlsProps {
   session: Session;
   onChanged: () => void;
 }
 
-const linkButton: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  padding: 0,
-  cursor: "pointer",
-  fontSize: 12,
-  color: theme.faint,
-};
+const linkButtonClass = "cursor-pointer border-none bg-transparent p-0 text-xs text-faint";
 
 /**
  * Stop and delete for a session.
@@ -86,15 +78,13 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
 
   if (freed) {
     return (
-      <div style={{ fontFamily: theme.mono, fontSize: 11, color: theme.checkpoint }}>
-        ✓ deleted · {freed}
-      </div>
+      <div className="font-mono text-[11px] text-checkpoint">✓ deleted · {freed}</div>
     );
   }
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+      <div className="flex flex-wrap items-center gap-3.5">
         {/* Which capabilities exist depends entirely on whether Standup owns
             this session's terminal, so say so rather than leaving the user to
             infer it from which buttons happen to work. */}
@@ -104,16 +94,9 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
               ? "Standup owns this session's terminal — it can read the screen, type into it, and stop it."
               : "You started this session in your own terminal. Standup observes it but can't type into it."
           }
-          style={{
-            fontFamily: theme.mono,
-            fontSize: 9.5,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: owned ? theme.checkpoint : theme.faint,
-            border: `1px solid ${owned ? theme.checkpoint : theme.edge}44`,
-            borderRadius: 3,
-            padding: "2px 6px",
-          }}
+          className={`rounded-sm border px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.12em] ${
+            owned ? "border-checkpoint/25 text-checkpoint" : "border-edge/25 text-faint"
+          }`}
         >
           {owned ? "owned" : "monitored"}
         </span>
@@ -121,7 +104,7 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
         {/* Adoption resumes an ended session under a tmux pane Standup owns,
             converting monitored → owned. Only offered where it can work. */}
         {!owned && ended && (
-          <button onClick={() => void adopt()} disabled={busy} style={linkButton}>
+          <button onClick={() => void adopt()} disabled={busy} className={linkButtonClass}>
             {busy ? "adopting…" : "⇄ adopt"}
           </button>
         )}
@@ -129,7 +112,7 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
         {!ended && (
           <button
             onClick={() => setConfirm(confirm === "stop" ? null : "stop")}
-            style={{ ...linkButton, color: theme.waiting }}
+            className={`${linkButtonClass} text-waiting`}
           >
             ■ stop
           </button>
@@ -142,23 +125,15 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
               ? "Remove this session and its stored events"
               : "Only ended sessions can be deleted"
           }
-          style={{ ...linkButton, opacity: ended ? 1 : 0.45 }}
+          className={`${linkButtonClass} ${ended ? "opacity-100" : "opacity-45"}`}
         >
           🗑 delete
         </button>
       </div>
 
       {confirm && (
-        <div
-          style={{
-            display: "flex",
-            gap: 9,
-            alignItems: "center",
-            marginTop: 9,
-            flexWrap: "wrap",
-          }}
-        >
-          <span style={{ fontSize: 11.5, color: theme.dim }}>
+        <div className="mt-[9px] flex flex-wrap items-center gap-[9px]">
+          <span className="text-[11.5px] text-dim">
             {confirm === "stop"
               ? "Kills the agent. Worktree and branch are kept."
               : "Removes its events, checkpoints, asks, and steers. Not undoable."}
@@ -166,38 +141,20 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
           <button
             onClick={() => void act(confirm)}
             disabled={busy}
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: theme.ground,
-              background: theme.waiting,
-              border: "none",
-              borderRadius: 5,
-              padding: "5px 11px",
-              cursor: busy ? "not-allowed" : "pointer",
-              opacity: busy ? 0.6 : 1,
-            }}
+            className={`rounded-md border-none bg-waiting px-2.5 py-[5px] text-xs font-semibold text-ground ${
+              busy ? "cursor-not-allowed opacity-60" : "cursor-pointer opacity-100"
+            }`}
           >
             {busy ? "…" : confirm === "stop" ? "Stop agent" : "Delete"}
           </button>
-          <button onClick={() => setConfirm(null)} style={linkButton}>
+          <button onClick={() => setConfirm(null)} className={linkButtonClass}>
             cancel
           </button>
         </div>
       )}
 
       {error && (
-        <div
-          style={{
-            fontFamily: theme.mono,
-            fontSize: 11,
-            color: theme.waiting,
-            marginTop: 8,
-            lineHeight: 1.5,
-          }}
-        >
-          {error}
-        </div>
+        <div className="mt-2 font-mono text-[11px] leading-relaxed text-waiting">{error}</div>
       )}
     </div>
   );

@@ -1,6 +1,5 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { theme } from "./theme";
 
 /**
  * Markdown rendering for agent output.
@@ -15,104 +14,49 @@ import { theme } from "./theme";
  */
 export function Markdown({ children }: { children: string }) {
   return (
-    <div style={{ fontSize: 13, lineHeight: 1.6, color: theme.text }}>
+    <div className="text-[13px] leading-relaxed text-text">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          p: ({ children }) => (
-            <p style={{ margin: "0 0 8px" }}>{children}</p>
-          ),
+          p: ({ children }) => <p className="mb-2 mt-0">{children}</p>,
           h1: ({ children }) => (
-            <h1 style={{ fontSize: 16, fontWeight: 700, margin: "14px 0 7px" }}>
-              {children}
-            </h1>
+            <h1 className="mb-[7px] mt-[14px] text-base font-bold">{children}</h1>
           ),
           h2: ({ children }) => (
-            <h2 style={{ fontSize: 15, fontWeight: 700, margin: "14px 0 7px" }}>
-              {children}
-            </h2>
+            <h2 className="mb-[7px] mt-[14px] text-[15px] font-bold">{children}</h2>
           ),
           h3: ({ children }) => (
-            <h3 style={{ fontSize: 13.5, fontWeight: 700, margin: "12px 0 6px" }}>
-              {children}
-            </h3>
+            <h3 className="mb-1.5 mt-3 text-[13.5px] font-bold">{children}</h3>
           ),
-          ul: ({ children }) => (
-            <ul style={{ margin: "0 0 8px", paddingLeft: 20 }}>{children}</ul>
-          ),
-          ol: ({ children }) => (
-            <ol style={{ margin: "0 0 8px", paddingLeft: 20 }}>{children}</ol>
-          ),
-          li: ({ children }) => (
-            <li style={{ margin: "2px 0" }}>{children}</li>
-          ),
+          ul: ({ children }) => <ul className="mb-2 mt-0 pl-5">{children}</ul>,
+          ol: ({ children }) => <ol className="mb-2 mt-0 pl-5">{children}</ol>,
+          li: ({ children }) => <li className="my-0.5">{children}</li>,
           a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: theme.running }}
-            >
+            <a href={href} target="_blank" rel="noreferrer" className="text-running">
               {children}
             </a>
           ),
           blockquote: ({ children }) => (
-            <blockquote
-              style={{
-                margin: "0 0 8px",
-                paddingLeft: 11,
-                borderLeft: `2px solid ${theme.edge}`,
-                color: theme.dim,
-              }}
-            >
+            <blockquote className="mb-2 mt-0 border-l-2 border-edge pl-[11px] text-dim">
               {children}
             </blockquote>
           ),
-          hr: () => (
-            <hr
-              style={{
-                border: "none",
-                borderTop: `1px solid ${theme.edgeSoft}`,
-                margin: "12px 0",
-              }}
-            />
-          ),
+          hr: () => <hr className="my-3 border-0 border-t border-edge-soft" />,
           // react-markdown v10 no longer passes `inline`; a fenced block
           // arrives wrapped in <pre>, so `pre` owns block styling and `code`
           // only styles the inline case.
           pre: ({ children }) => (
-            <pre
-              style={{
-                background: theme.ground,
-                border: `1px solid ${theme.edgeSoft}`,
-                borderRadius: 6,
-                padding: "9px 11px",
-                margin: "0 0 8px",
-                overflowX: "auto",
-                fontFamily: theme.mono,
-                fontSize: 11.5,
-                lineHeight: 1.5,
-              }}
-            >
+            <pre className="mb-2 mt-0 overflow-x-auto rounded-md border border-edge-soft bg-ground px-[11px] py-[9px] font-mono text-[11.5px] leading-relaxed">
               {children}
             </pre>
           ),
           code: ({ children, className }) => {
             const isBlock = !!className?.startsWith("language-");
             if (isBlock) {
-              return <code style={{ fontFamily: theme.mono }}>{children}</code>;
+              return <code className="font-mono">{children}</code>;
             }
             return (
-              <code
-                style={{
-                  fontFamily: theme.mono,
-                  fontSize: 11.5,
-                  background: theme.ground,
-                  border: `1px solid ${theme.edgeSoft}`,
-                  borderRadius: 3,
-                  padding: "1px 4px",
-                }}
-              >
+              <code className="rounded-[3px] border border-edge-soft bg-ground px-1 py-px font-mono text-[11.5px]">
                 {children}
               </code>
             );
@@ -120,40 +64,17 @@ export function Markdown({ children }: { children: string }) {
           // Wide tables scroll inside their own container rather than
           // stretching the message column.
           table: ({ children }) => (
-            <div style={{ overflowX: "auto", margin: "0 0 8px" }}>
-              <table
-                style={{
-                  borderCollapse: "collapse",
-                  fontSize: 12,
-                  width: "100%",
-                }}
-              >
-                {children}
-              </table>
+            <div className="mb-2 mt-0 overflow-x-auto">
+              <table className="w-full border-collapse text-xs">{children}</table>
             </div>
           ),
           th: ({ children }) => (
-            <th
-              style={{
-                textAlign: "left",
-                padding: "5px 9px",
-                borderBottom: `1px solid ${theme.edge}`,
-                color: theme.dim,
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-              }}
-            >
+            <th className="whitespace-nowrap border-b border-edge px-[9px] py-[5px] text-left font-semibold text-dim">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td
-              style={{
-                padding: "5px 9px",
-                borderBottom: `1px solid ${theme.edgeSoft}`,
-                verticalAlign: "top",
-              }}
-            >
+            <td className="border-b border-edge-soft px-[9px] py-[5px] align-top">
               {children}
             </td>
           ),

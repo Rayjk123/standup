@@ -1,23 +1,3 @@
-export const theme = {
-  ground: "#101520",
-  hover: "#161C27",
-  surface: "#171D2A",
-  raised: "#1E2534",
-  edge: "#2B3446",
-  edgeSoft: "#212939",
-  text: "#E6EAF2",
-  dim: "#8A97AD",
-  faint: "#5A6579",
-  running: "#4C9EF5",
-  checkpoint: "#5FDCA4",
-  stalled: "#F0A93B",
-  waiting: "#FF6B84",
-  idle: "#48536A",
-  expert: "#B08CF0",
-  mono: "ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Code', Menlo, monospace",
-  sans: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
-} as const;
-
 /**
  * Turns a transcript's raw model id (e.g. `claude-sonnet-5-20250929`) into
  * the name shown in Claude Code's own UI. Falls back to the raw id for
@@ -32,9 +12,14 @@ export function friendlyModel(id: string): string {
   return id;
 }
 
+/**
+ * Tailwind utility classes for each session status, keyed by the CSS
+ * property they color. Written as full literal class names (not built from
+ * a template) so Tailwind's static scanner can find them.
+ */
 export const statusColors = {
-  running: theme.running,
-  idle: theme.idle,
-  waiting: theme.waiting,
-  stalled: theme.stalled,
+  running: { text: "text-running", bg: "bg-running", border: "border-running" },
+  idle: { text: "text-idle", bg: "bg-idle", border: "border-idle" },
+  waiting: { text: "text-waiting", bg: "bg-waiting", border: "border-waiting" },
+  stalled: { text: "text-stalled", bg: "bg-stalled", border: "border-stalled" },
 } as const;

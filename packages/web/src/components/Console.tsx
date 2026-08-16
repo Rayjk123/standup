@@ -15,7 +15,6 @@ import { BlockedView } from "./BlockedView";
 import { ProjectsView } from "./ProjectsView";
 import { AlertStrip } from "./AlertStrip";
 import { AutoCheckpointToggle } from "./AutoCheckpointToggle";
-import { theme } from "./theme";
 
 const VIEWS = ["feed", "blocked", "projects"] as const;
 
@@ -70,97 +69,41 @@ export function Console({
   const stalledSessions = sessions.filter((s) => s.status === "stalled");
 
   return (
-    <div
-      style={{
-        background: theme.ground,
-        color: theme.text,
-        // A hard height (not minHeight) plus overflow hidden is what makes
-        // the top bar and alert strip genuinely stay put — anything taller
-        // than the viewport has to scroll inside "Main content" below,
-        // never the document itself. minHeight let the whole page grow
-        // instead, so the header scrolled away with everything else.
-        height: "100vh",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
+    // A hard height (not min-h) plus overflow-hidden is what makes the top
+    // bar and alert strip genuinely stay put — anything taller than the
+    // viewport has to scroll inside "Main content" below, never the
+    // document itself. min-h let the whole page grow instead, so the
+    // header scrolled away with everything else.
+    <div className="flex h-screen flex-col overflow-hidden bg-ground text-text">
       {/* Top bar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-          padding: "11px 16px",
-          borderBottom: `1px solid ${theme.edge}`,
-          background: theme.surface,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: theme.mono,
-            fontSize: 12,
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-            fontWeight: 600,
-          }}
-        >
+      <div className="flex items-center gap-4 border-b border-edge bg-surface px-4 py-[11px]">
+        <div className="font-mono text-xs font-semibold uppercase tracking-[0.2em]">
           Standup
         </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 13,
-            fontSize: 12.5,
-            color: theme.dim,
-          }}
-        >
+        <div className="flex gap-[13px] text-[12.5px] text-dim">
           <span>
-            <span style={{ color: theme.text, fontWeight: 600 }}>
-              {sessions.length}
-            </span>{" "}
-            agents
+            <span className="font-semibold text-text">{sessions.length}</span> agents
           </span>
           {stalledSessions.length > 0 && (
-            <span style={{ color: theme.stalled }}>
-              {stalledSessions.length} stalled
-            </span>
+            <span className="text-stalled">{stalledSessions.length} stalled</span>
           )}
         </div>
-        <div style={{ flex: 1 }} />
+        <div className="flex-1" />
         <AutoCheckpointToggle />
-        <div style={{ display: "flex", gap: 2 }}>
+        <div className="flex gap-0.5">
           {VIEWS.map((v) => (
             <NavLink
               key={v}
               to={`/${v}`}
-              style={({ isActive }) => ({
-                fontSize: 12.5,
-                fontWeight: 600,
-                padding: "5px 12px",
-                borderRadius: 5,
-                textDecoration: "none",
-                background: isActive ? theme.raised : "transparent",
-                color: isActive ? theme.text : theme.faint,
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                textTransform: "capitalize",
-              })}
+              className={({ isActive }) =>
+                `flex items-center gap-1.5 rounded-md px-3 py-[5px] text-[12.5px] font-semibold capitalize no-underline ${
+                  isActive ? "bg-raised text-text" : "bg-transparent text-faint"
+                }`
+              }
             >
               {v}
               {v === "blocked" && pendingAsks.length > 0 && (
-                <span
-                  style={{
-                    fontFamily: theme.mono,
-                    fontSize: 9.5,
-                    background: theme.waiting,
-                    color: theme.ground,
-                    borderRadius: 8,
-                    padding: "1px 6px",
-                    fontWeight: 700,
-                  }}
-                >
+                <span className="rounded-lg bg-waiting px-1.5 py-px font-mono text-[9.5px] font-bold text-ground">
                   {pendingAsks.length}
                 </span>
               )}
@@ -171,15 +114,11 @@ export function Console({
 
       {/* Redundant on Blocked, which already lists everything it summarizes */}
       {!onBlockedView && (
-        <AlertStrip
-          pendingAsks={pendingAsks}
-          sessions={sessions}
-          projects={projects}
-        />
+        <AlertStrip pendingAsks={pendingAsks} sessions={sessions} projects={projects} />
       )}
 
       {/* Main content */}
-      <div style={{ flex: 1, overflow: "hidden" }}>
+      <div className="flex-1 overflow-hidden">
         <Routes>
           <Route path="/" element={<Navigate to="/feed" replace />} />
           <Route

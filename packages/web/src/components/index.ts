@@ -5,4 +5,4 @@ export { ProjectsView } from "./ProjectsView";
 export { AlertStrip } from "./AlertStrip";
 export { SilenceStrip } from "./SilenceStrip";
 export { Replier } from "./Replier";
-export { theme, statusColors } from "./theme";
+export { statusColors, friendlyModel } from "./theme";

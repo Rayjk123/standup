@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { theme } from "./theme";
+import { Switch } from "@headlessui/react";
 
 /**
  * Global on/off for Haiku-generated auto-checkpoints (see
@@ -38,38 +38,21 @@ export function AutoCheckpointToggle() {
   }
 
   return (
-    <button
-      onClick={toggle}
+    <Switch
+      checked={enabled}
+      onChange={toggle}
       disabled={saving}
       title={
         enabled
           ? "Auto-checkpoint is on — Haiku summarizes agents that never call checkpoint themselves, at real per-call cost. Click to turn off."
           : "Auto-checkpoint is off. When on, Haiku reads each session's transcript at every turn boundary and checkpoints it if nothing was self-reported — at real per-call cost."
       }
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        background: "none",
-        border: `1px solid ${enabled ? theme.expert : theme.edge}`,
-        borderRadius: 5,
-        padding: "5px 10px",
-        cursor: saving ? "default" : "pointer",
-        fontSize: 11.5,
-        fontFamily: theme.mono,
-        color: enabled ? theme.expert : theme.faint,
-        opacity: saving ? 0.6 : 1,
-      }}
+      className={`flex items-center gap-1.5 rounded-md border px-2.5 py-[5px] font-mono text-[11.5px] ${
+        enabled ? "border-expert text-expert" : "border-edge text-faint"
+      } ${saving ? "cursor-default opacity-60" : "cursor-pointer"}`}
     >
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: enabled ? theme.expert : theme.faint,
-        }}
-      />
+      <span className={`h-1.5 w-1.5 rounded-full ${enabled ? "bg-expert" : "bg-faint"}`} />
       auto-checkpoint {enabled ? "on" : "off"}
-    </button>
+    </Switch>
   );
 }

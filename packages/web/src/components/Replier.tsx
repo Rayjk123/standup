@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { theme } from "./theme";
 
 export type ReplyTarget = "ask" | "checkpoint";
 
@@ -43,25 +42,12 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
   if (reply) {
     const isAsk = target === "ask";
     return (
-      <div
-        style={{
-          marginTop: 9,
-          paddingLeft: 11,
-          borderLeft: `2px solid ${isAsk ? theme.checkpoint : theme.stalled}`,
-        }}
-      >
-        <div style={{ fontSize: 13.5, color: theme.text }}>
-          <span style={{ fontWeight: 700, color: theme.dim }}>you </span>
+      <div className={`mt-2.5 border-l-2 pl-[11px] ${isAsk ? "border-checkpoint" : "border-stalled"}`}>
+        <div className="text-[13.5px] text-text">
+          <span className="font-bold text-dim">you </span>
           {reply}
         </div>
-        <div
-          style={{
-            fontFamily: theme.mono,
-            fontSize: 10,
-            marginTop: 4,
-            color: isAsk ? theme.checkpoint : theme.stalled,
-          }}
-        >
+        <div className={`mt-1 font-mono text-[10px] ${isAsk ? "text-checkpoint" : "text-stalled"}`}>
           {isAsk
             ? "✓ delivered · agent unblocked"
             : "⧖ queued · delivers at the next turn boundary"}
@@ -77,7 +63,7 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
     // buttons left those asks with no way to answer at all.
     if (!options || options.length === 0) {
       return (
-        <div style={{ marginTop: 11 }}>
+        <div className="mt-[11px]">
           <textarea
             value={draft}
             disabled={sending}
@@ -90,20 +76,9 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
               }
             }}
             placeholder="Type your answer and press Enter…"
-            style={{
-              width: "100%",
-              fontSize: 13,
-              fontFamily: "inherit",
-              color: theme.text,
-              background: theme.ground,
-              border: `1px solid ${theme.edge}`,
-              borderRadius: 6,
-              padding: "8px 11px",
-              outline: "none",
-              resize: "vertical",
-            }}
+            className="w-full resize-y rounded-md border border-edge bg-ground px-2.5 py-2 text-sm text-text outline-none [font-family:inherit]"
           />
-          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+          <div className="mt-[5px] text-[11.5px] text-faint">
             Sent straight to the agent. For a menu prompt, the option number
             (e.g. <code>2</code>) is what it expects. A question with several
             parts needs one answer per line — Shift+Enter for a new line,
@@ -114,23 +89,15 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
     }
 
     return (
-      <div style={{ display: "flex", gap: 7, marginTop: 11, flexWrap: "wrap" }}>
+      <div className="mt-[11px] flex flex-wrap gap-[7px]">
         {options.map((opt) => (
           <button
             key={opt}
             onClick={() => send(opt)}
             disabled={sending}
-            style={{
-              fontSize: 12.5,
-              fontWeight: 500,
-              color: theme.text,
-              background: theme.raised,
-              border: `1px solid ${theme.edge}`,
-              borderRadius: 5,
-              padding: "7px 13px",
-              cursor: sending ? "not-allowed" : "pointer",
-              opacity: sending ? 0.6 : 1,
-            }}
+            className={`rounded-md border border-edge bg-raised px-[13px] py-[7px] text-[12.5px] font-medium text-text ${
+              sending ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+            }`}
           >
             {opt}
           </button>
@@ -140,18 +107,11 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
   }
 
   return (
-    <div style={{ marginTop: 6 }}>
+    <div className="mt-1.5">
       {!open ? (
         <button
           onClick={() => setOpen(true)}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 0,
-            cursor: "pointer",
-            fontSize: 12.5,
-            color: theme.faint,
-          }}
+          className="cursor-pointer border-none bg-transparent p-0 text-[12.5px] text-faint"
         >
           ↩ steer
         </button>
@@ -169,16 +129,7 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
             }
           }}
           placeholder="Delivers at the next turn boundary, not mid-turn…"
-          style={{
-            width: "100%",
-            fontSize: 13,
-            color: theme.text,
-            background: theme.ground,
-            border: `1px solid ${theme.edge}`,
-            borderRadius: 6,
-            padding: "8px 11px",
-            outline: "none",
-          }}
+          className="w-full rounded-md border border-edge bg-ground px-2.5 py-2 text-sm text-text outline-none"
         />
       )}
     </div>

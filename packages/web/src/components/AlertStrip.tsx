@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import type { Ask, Session, Project } from "@standup/shared";
-import { theme } from "./theme";
 
 interface AlertStripProps {
   pendingAsks: Ask[];
@@ -24,24 +23,9 @@ export function AlertStrip({
   const navigate = useNavigate();
   if (pendingAsks.length === 0) {
     return (
-      <div
-        style={{
-          padding: "7px 20px",
-          borderBottom: `1px solid ${theme.edgeSoft}`,
-          display: "flex",
-          alignItems: "center",
-          gap: 9,
-        }}
-      >
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: 6,
-            background: theme.checkpoint,
-          }}
-        />
-        <span style={{ fontSize: 12.5, color: theme.faint }}>
+      <div className="flex items-center gap-[9px] border-b border-edge-soft px-5 py-[7px]">
+        <span className="h-1.5 w-1.5 rounded-full bg-checkpoint" />
+        <span className="text-[12.5px] text-faint">
           Nothing blocked. Every agent is moving.
         </span>
       </div>
@@ -68,45 +52,25 @@ export function AlertStrip({
   return (
     <button
       onClick={() => navigate("/blocked")}
-      style={{
-        width: "100%",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "9px 20px",
-        background: `${theme.waiting}12`,
-        border: "none",
-        borderBottom: `1px solid ${theme.waiting}44`,
-        cursor: "pointer",
-        textAlign: "left",
-      }}
+      className="flex w-full items-center gap-2.5 border-none border-b border-waiting/[27%] bg-waiting/[7%] px-5 py-[9px] text-left cursor-pointer"
     >
-      <span
-        style={{
-          width: 7,
-          height: 7,
-          borderRadius: 7,
-          background: theme.waiting,
-          flexShrink: 0,
-          animation: "pulse 2s ease-in-out infinite",
-        }}
-      />
-      <span style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>
+      <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-waiting" />
+      <span className="text-sm font-semibold text-text">
         {pendingAsks.length} agent{pendingAsks.length > 1 ? "s" : ""} waiting on
         you
       </span>
-      <span style={{ display: "flex", gap: 4 }}>
+      <span className="flex gap-1">
         {blockedProjects.map((p) => (
-          <span key={p.id} style={{ fontSize: 13 }}>
+          <span key={p.id} className="text-sm">
             {p.emoji}
           </span>
         ))}
       </span>
-      <span style={{ fontSize: 12.5, color: theme.dim }}>
+      <span className="text-[12.5px] text-dim">
         oldest blocked {formatQuiet(oldestSeconds)}
       </span>
-      <span style={{ flex: 1 }} />
-      <span style={{ fontSize: 12.5, color: theme.waiting, fontWeight: 600 }}>
+      <span className="flex-1" />
+      <span className="text-[12.5px] font-semibold text-waiting">
         Review →
       </span>
     </button>

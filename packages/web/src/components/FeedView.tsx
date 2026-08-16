@@ -10,7 +10,7 @@ import type {
   ClaudeEffort,
   ClaudeModel,
 } from "@standup/shared";
-import { theme, friendlyModel } from "./theme";
+import { friendlyModel } from "./theme";
 import { Replier } from "./Replier";
 import { Composer } from "./Composer";
 import { LaunchControls } from "./LaunchControls";
@@ -24,48 +24,20 @@ import { LaunchControls } from "./LaunchControls";
 function ExpertBody({ exchange }: { exchange: ExpertExchange }) {
   return (
     <>
-      <div style={{ fontSize: 13, color: theme.dim, marginBottom: 8 }}>
-        {exchange.question}
-      </div>
-      <div
-        style={{
-          background: theme.surface,
-          border: `1px solid ${theme.edgeSoft}`,
-          borderLeft: `3px solid ${theme.expert}`,
-          borderRadius: 6,
-          padding: "11px 13px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "baseline",
-            marginBottom: 6,
-            flexWrap: "wrap",
-          }}
-        >
-          <span style={{ fontSize: 13.5, color: theme.expert, fontWeight: 700 }}>
+      <div className="mb-2 text-[13px] text-dim">{exchange.question}</div>
+      <div className="rounded-md border border-edge-soft border-l-[3px] border-l-expert px-[13px] py-[11px]">
+        <div className="mb-1.5 flex flex-wrap items-baseline gap-2">
+          <span className="text-[13.5px] font-bold text-expert">
             @{exchange.region || "repo"}-expert
           </span>
           {exchange.sources.length > 0 && (
-            <span style={{ fontFamily: theme.mono, fontSize: 10, color: theme.faint }}>
+            <span className="font-mono text-[10px] text-faint">
               {exchange.sources.slice(0, 3).join(" · ")}
               {exchange.sources.length > 3 ? ` +${exchange.sources.length - 3}` : ""}
             </span>
           )}
         </div>
-        <div
-          style={{
-            fontFamily: theme.mono,
-            fontSize: 11.5,
-            lineHeight: 1.55,
-            color: theme.text,
-            whiteSpace: "pre-wrap",
-            maxHeight: 260,
-            overflowY: "auto",
-          }}
-        >
+        <div className="max-h-[260px] overflow-y-auto whitespace-pre-wrap font-mono text-[11.5px] leading-[1.55] text-text">
           {exchange.answer}
         </div>
       </div>
@@ -98,49 +70,23 @@ function LaunchBody({
 
   return (
     <>
-      <div style={{ fontSize: 14, lineHeight: 1.55, color: theme.text }}>
-        {launch.task}
-      </div>
+      <div className="text-sm leading-[1.55] text-text">{launch.task}</div>
 
       {failed ? (
-        <div
-          style={{
-            fontFamily: theme.mono,
-            fontSize: 11,
-            color: theme.waiting,
-            marginTop: 7,
-            lineHeight: 1.5,
-          }}
-        >
+        <div className="mt-[7px] font-mono text-[11px] leading-normal text-waiting">
           ✗ {launch.error ?? "Launch failed"}
         </div>
       ) : (
         <>
-          <div
-            style={{
-              fontFamily: theme.mono,
-              fontSize: 10.5,
-              color: theme.running,
-              marginTop: 7,
-            }}
-          >
+          <div className="mt-[7px] font-mono text-[10.5px] text-running">
             ⧗ worktree {launch.branch} · agent running
-            <span style={{ color: theme.faint }}>
-              {" "}
-              · {modelLabel} / {effortLabel}
-            </span>
+            <span className="text-faint"> · {modelLabel} / {effortLabel}</span>
           </div>
           {launch.tmuxSession && (
             <>
               <LaunchControls launch={launch} onStopped={onStopped} />
               <div
-                style={{
-                  fontFamily: theme.mono,
-                  fontSize: 10.5,
-                  color: theme.faint,
-                  marginTop: 8,
-                  userSelect: "all",
-                }}
+                className="mt-2 select-all font-mono text-[10.5px] text-faint"
                 title="For a full interactive terminal"
               >
                 tmux attach -t {launch.tmuxSession}
@@ -237,30 +183,17 @@ export function FeedView({
   // Column layout so the composer stays pinned below a scrolling feed
   // rather than scrolling away with it.
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div className="flex h-full min-h-0 flex-col">
       {feedItems.length === 0 ? (
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 40,
-            color: theme.dim,
-          }}
-        >
-          <div style={{ fontSize: 30, marginBottom: 10 }}>📭</div>
-          <div style={{ fontSize: 14 }}>No activity yet.</div>
-          <div style={{ fontSize: 12.5, color: theme.faint, marginTop: 4 }}>
+        <div className="flex flex-1 flex-col items-center justify-center p-10 text-dim">
+          <div className="mb-2.5 text-[30px]">📭</div>
+          <div className="text-sm">No activity yet.</div>
+          <div className="mt-1 text-[12.5px] text-faint">
             Checkpoints and asks from agents will appear here — or start work below.
           </div>
         </div>
       ) : (
-        <div
-          ref={scrollRef}
-          style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "8px 0" }}
-        >
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto py-2">
           {feedItems.map((item) => {
         const session = getSession(item.data.sessionId);
         const isAsk = item.type === "ask";
@@ -279,12 +212,21 @@ export function FeedView({
             ? getProject(session.projectId)
             : null;
         const accent = isAsk
-          ? theme.waiting
+          ? "text-waiting"
           : isExpert || isAutoCheckpoint
-            ? theme.expert
+            ? "text-expert"
             : isLaunch
-              ? theme.running
-              : theme.checkpoint;
+              ? "text-running"
+              : "text-checkpoint";
+        // Mirrors the original hex+alpha computation: an avatar tile tinted
+        // with the project's accent (currently always "running", since
+        // project.emoji is effectively always set) at ~12% opacity, or a
+        // flat surface fill when there's no project at all.
+        const avatarBgClass = project
+          ? project.emoji
+            ? "bg-running/[12%]"
+            : "bg-surface/[12%]"
+          : "bg-surface";
 
         // Opens the session this item belongs to in Projects, where the full
         // transcript and controls live. A launch may not have a session yet
@@ -299,66 +241,31 @@ export function FeedView({
           <div
             key={item.data.id}
             onClick={openInProjects}
-            style={{
-              display: "flex",
-              gap: 12,
-              padding: "9px 20px 5px",
-              cursor: "pointer",
-            }}
+            className="flex cursor-pointer gap-3 px-5 pb-[5px] pt-[9px]"
           >
             {/* Avatar */}
             <div
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 8,
-                background: project ? `${project.emoji ? theme.running : theme.surface}1F` : theme.surface,
-                border: `1px solid ${theme.edge}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 17,
-                flexShrink: 0,
-              }}
+              className={`flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-lg border border-edge text-[17px] ${avatarBgClass}`}
             >
               {isAutoCheckpoint ? "🤖" : (project?.emoji ?? "📦")}
             </div>
 
             {/* Content */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "baseline",
-                  flexWrap: "wrap",
-                  marginBottom: 3,
-                }}
-              >
-                <span style={{ fontSize: 14.5, fontWeight: 700, color: theme.text }}>
+            <div className="min-w-0 flex-1">
+              <div className="mb-[3px] flex flex-wrap items-baseline gap-2">
+                <span className="text-[14.5px] font-bold text-text">
                   {/* Auto-checkpoints are Standup's own inference, not a
                       claim about who did the work — attributed to "System"
                       rather than falling through to "Unknown". */}
                   {isAutoCheckpoint ? "System" : (project?.name ?? "Unknown")}
                 </span>
-                <span
-                  style={{
-                    fontFamily: theme.mono,
-                    fontSize: 9,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: theme.running,
-                    border: `1px solid ${theme.running}44`,
-                    borderRadius: 3,
-                    padding: "1px 5px",
-                  }}
-                >
+                <span className="rounded-[3px] border border-running/[0.267] px-[5px] py-px font-mono text-[9px] tracking-[0.08em] text-running uppercase">
                   agent
                 </span>
-                <span style={{ fontSize: 12.5, color: theme.dim }}>
+                <span className="text-[12.5px] text-dim">
                   {session?.title ?? "Untitled"}
                 </span>
-                <span style={{ fontSize: 11.5, color: theme.faint }}>
+                <span className="text-[11.5px] text-faint">
                   {new Date(item.data.createdAt).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -367,16 +274,9 @@ export function FeedView({
               </div>
 
               {(isAsk || isExpert || isLaunch || isAutoCheckpoint) && (
-                <div style={{ marginBottom: 5 }}>
+                <div className="mb-[5px]">
                   <span
-                    style={{
-                      fontFamily: theme.mono,
-                      fontSize: 9.5,
-                      letterSpacing: "0.16em",
-                      textTransform: "uppercase",
-                      color: accent,
-                      fontWeight: 600,
-                    }}
+                    className={`font-mono text-[9.5px] font-semibold tracking-[0.16em] uppercase ${accent}`}
                   >
                     {isAsk
                       ? "Needs you"
@@ -400,7 +300,7 @@ export function FeedView({
                   />
                 </div>
               ) : (
-                <div style={{ fontSize: 14, lineHeight: 1.55, color: theme.text }}>
+                <div className="text-sm leading-[1.55] text-text">
                   {item.type === "checkpoint"
                     ? (item.data as Checkpoint).summary
                     : (item.data as Ask).question}

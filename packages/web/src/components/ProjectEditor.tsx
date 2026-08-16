@@ -1,6 +1,6 @@
 import { useState } from "react";
+import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
 import type { Project } from "@standup/shared";
-import { theme } from "./theme";
 
 const EMOJI_SET = [
   "🧭","🛰️","🧬","📚","🪴","🔭","⚙️","🧊","🦑","🛠️","📡","🌗","🪵","🐙","🔩","🌾","📖","🌍",
@@ -14,26 +14,10 @@ interface ProjectEditorProps {
   onCancel: () => void;
 }
 
-const label: React.CSSProperties = {
-  fontFamily: theme.mono,
-  fontSize: 9.5,
-  letterSpacing: "0.14em",
-  textTransform: "uppercase",
-  color: theme.faint,
-  display: "block",
-  marginBottom: 5,
-};
+const labelClass = "mb-[5px] block font-mono text-[9.5px] tracking-[0.14em] text-faint uppercase";
 
-const field: React.CSSProperties = {
-  width: "100%",
-  fontSize: 13,
-  color: theme.text,
-  background: theme.ground,
-  border: `1px solid ${theme.edge}`,
-  borderRadius: 6,
-  padding: "8px 10px",
-  outline: "none",
-};
+const fieldClass =
+  "w-full rounded-md border border-edge bg-ground px-2.5 py-2 text-[13px] text-text outline-none";
 
 export function ProjectEditor({
   project,
@@ -97,66 +81,68 @@ export function ProjectEditor({
   }
 
   return (
-    <div style={{ padding: "18px 20px 26px", maxWidth: 620 }}>
+    <div className="max-w-[620px] px-5 pb-[26px] pt-[18px]">
       {/* Same reasoning as the knowledge editor: the way out shouldn't be
           below the fold, and "Cancel" reads as discard rather than back. */}
       <button
         onClick={onCancel}
-        style={{
-          background: "none",
-          border: "none",
-          padding: 0,
-          marginBottom: 12,
-          cursor: "pointer",
-          fontSize: 12.5,
-          color: theme.faint,
-        }}
+        className="mb-3 cursor-pointer border-none bg-transparent p-0 text-[12.5px] text-faint"
       >
         ← Back
       </button>
 
-      <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 18 }}>
+      <div className="mb-[18px] text-[17px] font-bold">
         {isNew ? "New project" : `Configure ${project!.name}`}
       </div>
 
-      <div style={{ display: "grid", gap: 16 }}>
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: "0 0 auto" }}>
-            <span style={label}>Icon</span>
-            <select
-              value={emoji}
-              onChange={(e) => setEmoji(e.target.value)}
-              style={{ ...field, width: 70, fontSize: 18, padding: "6px 8px" }}
-            >
-              {[...new Set([emoji, ...EMOJI_SET])].map((e) => (
-                <option key={e} value={e} style={{ background: theme.raised }}>
-                  {e}
-                </option>
-              ))}
-            </select>
+      <div className="grid gap-4">
+        <div className="flex gap-3">
+          <div className="flex-none">
+            <span className={labelClass}>Icon</span>
+            <Listbox value={emoji} onChange={setEmoji}>
+              <ListboxButton
+                className={`${fieldClass} w-[70px] cursor-pointer px-2 py-1.5 text-left text-lg`}
+              >
+                {emoji}
+              </ListboxButton>
+              <ListboxOptions
+                anchor="bottom start"
+                className="z-10 mt-1 max-h-60 overflow-auto rounded-md border border-edge bg-raised py-1 text-lg shadow-lg focus:outline-none"
+              >
+                {[...new Set([emoji, ...EMOJI_SET])].map((e) => (
+                  <ListboxOption
+                    key={e}
+                    value={e}
+                    className="cursor-pointer px-3 py-1 data-focus:bg-hover"
+                  >
+                    {e}
+                  </ListboxOption>
+                ))}
+              </ListboxOptions>
+            </Listbox>
           </div>
 
-          <div style={{ flex: 1 }}>
-            <span style={label}>Name</span>
+          <div className="flex-1">
+            <span className={labelClass}>Name</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="fusion-api"
-              style={field}
+              className={fieldClass}
             />
           </div>
         </div>
 
         {isNew && (
           <div>
-            <span style={label}>Id</span>
+            <span className={labelClass}>Id</span>
             <input
               value={id}
               onChange={(e) => setId(e.target.value)}
               placeholder="fusion-api"
-              style={field}
+              className={fieldClass}
             />
-            <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            <div className="mt-[5px] text-[11.5px] text-faint">
               Used in worktree paths and branch names. Letters, numbers, and
               hyphens only — it can't be changed later.
             </div>
@@ -164,40 +150,40 @@ export function ProjectEditor({
         )}
 
         <div>
-          <span style={label}>Repos — one per line</span>
+          <span className={labelClass}>Repos — one per line</span>
           <textarea
             value={repos}
             onChange={(e) => setRepos(e.target.value)}
             rows={3}
             placeholder={"~/src/fusion-api\n~/src/fusion-graph"}
-            style={{ ...field, resize: "vertical", fontFamily: theme.mono, fontSize: 12 }}
+            className={`${fieldClass} resize-y font-mono text-xs`}
           />
-          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+          <div className="mt-[5px] text-[11.5px] text-faint">
             Sessions are matched to this project by comparing their working
             directory against these paths. The first repo is what launches
             check out from.
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1 }}>
-            <span style={label}>Base branch</span>
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <span className={labelClass}>Base branch</span>
             <input
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
               placeholder="main"
-              style={field}
+              className={fieldClass}
             />
           </div>
-          <div style={{ flex: 1 }}>
-            <span style={label}>Expert index (unused)</span>
+          <div className="flex-1">
+            <span className={labelClass}>Expert index (unused)</span>
             <input
               value={expert}
               onChange={(e) => setExpert(e.target.value)}
               placeholder="—"
-              style={{ ...field, opacity: 0.6 }}
+              className={`${fieldClass} opacity-60`}
             />
-            <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            <div className="mt-[5px] text-[11.5px] text-faint">
               Reserved. Retrieval scopes knowledge by project id and attributes
               regions from experts.toml; nothing reads this yet.
             </div>
@@ -205,14 +191,14 @@ export function ProjectEditor({
         </div>
 
         <div>
-          <span style={label}>Setup command (optional)</span>
+          <span className={labelClass}>Setup command (optional)</span>
           <input
             value={setup}
             onChange={(e) => setSetup(e.target.value)}
             placeholder="bun install && docker compose up -d"
-            style={{ ...field, fontFamily: theme.mono, fontSize: 12 }}
+            className={`${fieldClass} font-mono text-xs`}
           />
-          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+          <div className="mt-[5px] text-[11.5px] text-faint">
             Runs in a freshly created worktree before the agent starts. Runs as
             you, with your permissions.
           </div>
@@ -220,34 +206,16 @@ export function ProjectEditor({
       </div>
 
       {error && (
-        <div
-          style={{
-            fontFamily: theme.mono,
-            fontSize: 11.5,
-            color: theme.waiting,
-            marginTop: 16,
-            lineHeight: 1.5,
-          }}
-        >
-          {error}
-        </div>
+        <div className="mt-4 font-mono text-[11.5px] leading-relaxed text-waiting">{error}</div>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 22, alignItems: "center" }}>
+      <div className="mt-[22px] flex items-center gap-2">
         <button
           onClick={() => void save()}
           disabled={busy || (isNew && !id.trim())}
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: theme.ground,
-            background: theme.checkpoint,
-            border: "none",
-            borderRadius: 6,
-            padding: "9px 18px",
-            cursor: busy ? "not-allowed" : "pointer",
-            opacity: busy || (isNew && !id.trim()) ? 0.5 : 1,
-          }}
+          className={`rounded-md border-none bg-checkpoint px-[18px] py-[9px] text-[13px] font-semibold text-ground ${
+            busy ? "cursor-not-allowed" : "cursor-pointer"
+          } ${busy || (isNew && !id.trim()) ? "opacity-50" : "opacity-100"}`}
         >
           {busy ? "Saving…" : isNew ? "Create project" : "Save changes"}
         </button>
@@ -255,52 +223,27 @@ export function ProjectEditor({
         <button
           onClick={onCancel}
           disabled={busy}
-          style={{
-            fontSize: 13,
-            color: theme.dim,
-            background: "none",
-            border: `1px solid ${theme.edge}`,
-            borderRadius: 6,
-            padding: "9px 16px",
-            cursor: "pointer",
-          }}
+          className="cursor-pointer rounded-md border border-edge bg-transparent px-4 py-[9px] text-[13px] text-dim"
         >
           Cancel
         </button>
 
-        <span style={{ flex: 1 }} />
+        <span className="flex-1" />
 
         {onDelete && project?.id !== "scratch" && (
           confirmDelete ? (
-            <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: theme.dim }}>
-                Sessions move to scratch.
-              </span>
+            <span className="flex items-center gap-2">
+              <span className="text-xs text-dim">Sessions move to scratch.</span>
               <button
                 onClick={() => void remove()}
                 disabled={busy}
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  color: theme.ground,
-                  background: theme.waiting,
-                  border: "none",
-                  borderRadius: 6,
-                  padding: "8px 14px",
-                  cursor: "pointer",
-                }}
+                className="cursor-pointer rounded-md border-none bg-waiting px-3.5 py-2 text-[12.5px] font-semibold text-ground"
               >
                 Delete
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
-                style={{
-                  fontSize: 12.5,
-                  color: theme.dim,
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                }}
+                className="cursor-pointer border-none bg-transparent text-[12.5px] text-dim"
               >
                 Keep
               </button>
@@ -308,13 +251,7 @@ export function ProjectEditor({
           ) : (
             <button
               onClick={() => setConfirmDelete(true)}
-              style={{
-                fontSize: 12.5,
-                color: theme.faint,
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-              }}
+              className="cursor-pointer border-none bg-transparent text-[12.5px] text-faint"
             >
               Delete project
             </button>

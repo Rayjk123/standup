@@ -128,8 +128,8 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}>
-        <div style={{ color: "#8A97AD" }}>Loading...</div>
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-dim">Loading...</div>
       </div>
     );
   }

@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+/*
+ * Maps the app's existing dark palette (formerly packages/web/src/components/theme.ts
+ * color hexes) into Tailwind's theme so utility classes like bg-ground, text-dim,
+ * border-edge reproduce the pre-migration look exactly.
+ */
+@theme {
+  --color-ground: #101520;
+  --color-hover: #161c27;
+  --color-surface: #171d2a;
+  --color-raised: #1e2534;
+  --color-edge: #2b3446;
+  --color-edge-soft: #212939;
+  --color-text: #e6eaf2;
+  --color-dim: #8a97ad;
+  --color-faint: #5a6579;
+  --color-running: #4c9ef5;
+  --color-checkpoint: #5fdca4;
+  --color-stalled: #f0a93b;
+  --color-waiting: #ff6b84;
+  --color-idle: #48536a;
+  --color-expert: #b08cf0;
+
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-ground);
+    color: var(--color-text);
+    min-height: 100vh;
+  }
+  #root {
+    min-height: 100vh;
+  }
+}

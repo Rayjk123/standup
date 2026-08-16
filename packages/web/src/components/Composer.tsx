@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
 import type { ClaudeEffort, ClaudeModel, Project } from "@standup/shared";
-import { theme } from "./theme";
 
 interface ComposerProps {
   projects: Project[];
@@ -36,15 +36,46 @@ const EFFORT_OPTIONS: { value: ClaudeEffort | ""; label: string }[] = [
   { value: "max", label: "Max" },
 ];
 
-const selectStyle: React.CSSProperties = {
-  fontSize: 12.5,
-  color: theme.text,
-  background: theme.raised,
-  border: `1px solid ${theme.edge}`,
-  borderRadius: 6,
-  padding: "8px 9px",
-  outline: "none",
-};
+const selectButtonClass =
+  "whitespace-nowrap rounded-md border border-edge bg-raised px-[9px] py-2 text-left text-[12.5px] text-text outline-none disabled:cursor-default disabled:opacity-60";
+
+/** A value-bound dropdown that keeps its selection — for form fields, unlike LaunchControls' fire-and-reset ActionMenu. */
+function FieldSelect<T extends string>({
+  value,
+  options,
+  disabled,
+  title,
+  onChange,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  disabled?: boolean;
+  title?: string;
+  onChange: (v: T) => void;
+}) {
+  const current = options.find((o) => o.value === value);
+  return (
+    <Listbox value={value} onChange={onChange} disabled={disabled}>
+      <ListboxButton title={title} className={selectButtonClass}>
+        {current?.label}
+      </ListboxButton>
+      <ListboxOptions
+        anchor="bottom start"
+        className="z-10 mt-1 rounded-md border border-edge bg-raised py-1 text-[12.5px] text-text shadow-lg focus:outline-none"
+      >
+        {options.map((o) => (
+          <ListboxOption
+            key={o.value}
+            value={o.value}
+            className="cursor-pointer px-3 py-1 data-focus:bg-hover"
+          >
+            {o.label}
+          </ListboxOption>
+        ))}
+      </ListboxOptions>
+    </Listbox>
+  );
+}
 
 /**
  * Composer-as-launcher: pick a project, describe the work, and the console
@@ -70,6 +101,11 @@ export function Composer({ projects, onLaunch, focusSignal }: ComposerProps) {
   const selected = projects.find((p) => p.id === target);
   const launchable = !!selected && selected.repos.length > 0;
 
+  const projectOptions = projects.map((p) => ({
+    value: p.id,
+    label: `${p.emoji ?? "📦"} ${p.name}`,
+  }));
+
   async function submit() {
     if (!task.trim() || busy || !launchable) return;
     setBusy(true);
@@ -94,104 +130,49 @@ export function Composer({ projects, onLaunch, focusSignal }: ComposerProps) {
   }
 
   return (
-    <div style={{ borderTop: `1px solid ${theme.edge}`, padding: "12px 20px 16px" }}>
+    <div className="border-t border-edge px-5 pb-4 pt-3">
       {/* This sits where a chat input would in a Slack-style feed, but it
           starts a whole new agent in its own worktree. Saying so prevents
           the obvious misread — that typing here messages a running session. */}
-      <div
-        style={{
-          fontFamily: theme.mono,
-          fontSize: 9.5,
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          color: theme.faint,
-          marginBottom: 7,
-        }}
-      >
+      <div className="mb-[7px] font-mono text-[9.5px] uppercase tracking-[0.14em] text-faint">
         Start new work — launches an agent in its own worktree
       </div>
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-          border: `1px solid ${theme.edge}`,
-          borderRadius: 9,
-          padding: 6,
-          background: theme.surface,
-        }}
-      >
+      <div className="flex items-center gap-2 rounded-[9px] border border-edge bg-surface p-1.5">
         {/* A single-project list (e.g. the composer scoped to one project's
             page) has nothing to pick between, so the selector would just be
             a dropdown of one — show the name plainly instead. */}
         {projects.length > 1 ? (
-          <select
+          <FieldSelect
             value={target}
-            onChange={(e) => {
-              setTarget(e.target.value);
+            options={projectOptions}
+            onChange={(v) => {
+              setTarget(v);
               setError(null);
             }}
-            style={{
-              fontSize: 12.5,
-              color: theme.text,
-              background: theme.raised,
-              border: `1px solid ${theme.edge}`,
-              borderRadius: 6,
-              padding: "8px 9px",
-              outline: "none",
-            }}
-          >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id} style={{ background: theme.raised }}>
-                {p.emoji ?? "📦"} {p.name}
-              </option>
-            ))}
-          </select>
+          />
         ) : (
           selected && (
-            <span
-              style={{
-                fontSize: 12.5,
-                color: theme.text,
-                background: theme.raised,
-                border: `1px solid ${theme.edge}`,
-                borderRadius: 6,
-                padding: "8px 9px",
-                whiteSpace: "nowrap",
-              }}
-            >
+            <span className="whitespace-nowrap rounded-md border border-edge bg-raised px-[9px] py-2 text-[12.5px] text-text">
               {selected.emoji ?? "📦"} {selected.name}
             </span>
           )
         )}
 
-        <select
+        <FieldSelect
           value={model}
+          options={MODEL_OPTIONS}
           disabled={busy}
-          onChange={(e) => setModel(e.target.value as ClaudeModel | "")}
           title="Model to launch with — passed as claude --model"
-          style={selectStyle}
-        >
-          {MODEL_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value} style={{ background: theme.raised }}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          onChange={setModel}
+        />
 
-        <select
+        <FieldSelect
           value={effort}
+          options={EFFORT_OPTIONS}
           disabled={busy}
-          onChange={(e) => setEffort(e.target.value as ClaudeEffort | "")}
           title="Effort level to launch with — passed as claude --effort"
-          style={selectStyle}
-        >
-          {EFFORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value} style={{ background: theme.raised }}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          onChange={setEffort}
+        />
 
         <input
           ref={taskInputRef}
@@ -204,55 +185,27 @@ export function Composer({ projects, onLaunch, focusSignal }: ComposerProps) {
               ? "Describe a task to start a new agent on it…"
               : `${selected?.name ?? "This project"} has no repos configured — add one in Projects`
           }
-          style={{
-            flex: 1,
-            fontSize: 13.5,
-            color: theme.text,
-            background: "transparent",
-            border: "none",
-            padding: "9px 6px",
-            outline: "none",
-          }}
+          className="flex-1 border-none bg-transparent px-1.5 py-[9px] text-[13.5px] text-text outline-none"
         />
 
         <button
           onClick={() => void submit()}
           disabled={busy || !task.trim() || !launchable}
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: theme.ground,
-            background: theme.checkpoint,
-            border: `1px solid ${theme.checkpoint}`,
-            borderRadius: 6,
-            padding: "9px 16px",
-            cursor: busy || !launchable ? "not-allowed" : "pointer",
-            opacity: busy || !task.trim() || !launchable ? 0.5 : 1,
-          }}
+          className={`rounded-md border border-checkpoint bg-checkpoint px-4 py-[9px] text-[13px] font-semibold text-ground ${
+            busy || !launchable ? "cursor-not-allowed" : "cursor-pointer"
+          } ${busy || !task.trim() || !launchable ? "opacity-50" : "opacity-100"}`}
         >
           {busy ? "Starting…" : "Start"}
         </button>
       </div>
 
       {busy && (
-        <div style={{ fontFamily: theme.mono, fontSize: 10.5, color: theme.running, marginTop: 8 }}>
+        <div className="mt-2 font-mono text-[10.5px] text-running">
           ⧗ creating worktree · running setup · starting agent
         </div>
       )}
 
-      {error && (
-        <div
-          style={{
-            fontFamily: theme.mono,
-            fontSize: 11,
-            color: theme.waiting,
-            marginTop: 8,
-            lineHeight: 1.5,
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error && <div className="mt-2 font-mono text-[11px] leading-relaxed text-waiting">{error}</div>}
     </div>
   );
 }

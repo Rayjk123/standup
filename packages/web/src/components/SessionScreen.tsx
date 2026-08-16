@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { theme } from "./theme";
 
 interface SessionScreenProps {
   sessionId: string;
@@ -48,7 +47,7 @@ export function SessionScreen({ sessionId, lines = 18 }: SessionScreenProps) {
 
   if (loading) {
     return (
-      <div style={{ fontFamily: theme.mono, fontSize: 11, color: theme.faint, marginTop: 10 }}>
+      <div className="mt-2.5 font-mono text-[11px] text-faint">
         reading session…
       </div>
     );
@@ -56,7 +55,7 @@ export function SessionScreen({ sessionId, lines = 18 }: SessionScreenProps) {
 
   if (!screen?.owned) {
     return (
-      <div style={{ fontSize: 12, color: theme.faint, marginTop: 10, lineHeight: 1.5 }}>
+      <div className="mt-2.5 text-xs leading-relaxed text-faint">
         This session runs in your own terminal — Standup can't read its screen.
         Check there to see what it's asking.
       </div>
@@ -65,7 +64,7 @@ export function SessionScreen({ sessionId, lines = 18 }: SessionScreenProps) {
 
   if (!screen.alive) {
     return (
-      <div style={{ fontSize: 12, color: theme.faint, marginTop: 10 }}>
+      <div className="mt-2.5 text-xs text-faint">
         Session is no longer running.
       </div>
     );
@@ -80,36 +79,11 @@ export function SessionScreen({ sessionId, lines = 18 }: SessionScreenProps) {
     .join("\n");
 
   return (
-    <div style={{ marginTop: 10 }}>
-      <div
-        style={{
-          fontFamily: theme.mono,
-          fontSize: 9.5,
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          color: theme.faint,
-          marginBottom: 5,
-        }}
-      >
+    <div className="mt-2.5">
+      <div className="mb-[5px] font-mono text-[9.5px] uppercase tracking-[0.14em] text-faint">
         On screen now
       </div>
-      <pre
-        style={{
-          fontFamily: theme.mono,
-          fontSize: 11,
-          lineHeight: 1.5,
-          color: theme.dim,
-          background: theme.ground,
-          border: `1px solid ${theme.edgeSoft}`,
-          borderRadius: 6,
-          padding: "10px 12px",
-          margin: 0,
-          maxHeight: 280,
-          overflow: "auto",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}
-      >
+      <pre className="m-0 max-h-[280px] overflow-auto whitespace-pre-wrap break-words rounded-md border border-edge-soft bg-ground px-3 py-2.5 font-mono text-[11px] leading-relaxed text-dim">
         {visible || "(nothing on screen)"}
       </pre>
     </div>

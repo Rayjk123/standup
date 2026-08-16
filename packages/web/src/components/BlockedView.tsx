@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { Ask, Session, Project } from "@standup/shared";
-import { theme } from "./theme";
 import { Link } from "react-router-dom";
 import { Replier } from "./Replier";
 import { SessionScreen } from "./SessionScreen";
@@ -64,35 +63,19 @@ export function BlockedView({
 
   if (asks.length === 0) {
     return (
-      <div style={{ padding: "22px 20px 30px" }}>
-        <div style={{ marginBottom: 4 }}>
-          <span style={{ fontSize: 19, fontWeight: 700 }}>Waiting on you</span>
+      <div className="px-5 pb-[30px] pt-[22px]">
+        <div className="mb-1">
+          <span className="text-[19px] font-bold">Waiting on you</span>
         </div>
-        <div style={{ fontSize: 13, color: theme.dim, marginBottom: 20 }}>
+        <div className="mb-5 text-sm text-dim">
           Nothing here. Every agent has what it needs.
         </div>
-        <div
-          style={{
-            border: `1px dashed ${theme.edge}`,
-            borderRadius: 8,
-            padding: "36px 20px",
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontSize: 30, marginBottom: 10 }}>🌤️</div>
-          <div style={{ fontSize: 14, color: theme.dim }}>Queue clear.</div>
+        <div className="rounded-lg border border-dashed border-edge px-5 py-9 text-center">
+          <div className="mb-2.5 text-[30px]">🌤️</div>
+          <div className="text-sm text-dim">Queue clear.</div>
           <Link
             to="/feed"
-            style={{
-              display: "inline-block",
-              marginTop: 12,
-              border: `1px solid ${theme.edge}`,
-              borderRadius: 6,
-              padding: "7px 14px",
-              fontSize: 12.5,
-              color: theme.dim,
-              textDecoration: "none",
-            }}
+            className="mt-3 inline-block rounded-md border border-edge px-3.5 py-[7px] text-[12.5px] text-dim no-underline"
           >
             Back to the feed
           </Link>
@@ -102,11 +85,11 @@ export function BlockedView({
   }
 
   return (
-    <div style={{ padding: "22px 20px 30px", overflowY: "auto", maxHeight: "calc(100vh - 100px)" }}>
-      <div style={{ marginBottom: 4 }}>
-        <span style={{ fontSize: 19, fontWeight: 700 }}>Waiting on you</span>
+    <div className="max-h-[calc(100vh-100px)] overflow-y-auto px-5 pb-[30px] pt-[22px]">
+      <div className="mb-1">
+        <span className="text-[19px] font-bold">Waiting on you</span>
       </div>
-      <div style={{ fontSize: 13, color: theme.dim, marginBottom: 20 }}>
+      <div className="mb-5 text-sm text-dim">
         {/* Two different kinds of blocked: an ask_human is genuinely paused
             inside a tool call, while a prompt-ask is sitting on a dialog in
             its terminal. Saying only the former was misleading. */}
@@ -114,7 +97,7 @@ export function BlockedView({
         sitting on a prompt in its terminal. Answering resumes it.
       </div>
 
-      <div style={{ display: "grid", gap: 12 }}>
+      <div className="grid gap-3">
         {asks.map((ask) => {
           const session = getSession(ask.sessionId);
           const project = session ? getProject(session.projectId) : null;
@@ -124,59 +107,26 @@ export function BlockedView({
           return (
             <div
               key={ask.id}
-              style={{
-                background: theme.surface,
-                border: `1px solid ${theme.waiting}44`,
-                borderRadius: 9,
-                padding: "15px 17px",
-                display: "flex",
-                gap: 13,
-                opacity: isResolving || isDismissing ? 0.6 : 1,
-              }}
+              className={`flex gap-[13px] rounded-[9px] border border-waiting/[27%] bg-surface px-[17px] py-[15px] ${
+                isResolving || isDismissing ? "opacity-60" : ""
+              }`}
             >
               {/* Avatar */}
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 8,
-                  background: `${theme.running}1F`,
-                  border: `1px solid ${theme.running}55`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 17,
-                  flexShrink: 0,
-                }}
-              >
+              <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border border-running/[33%] bg-running/[12%] text-[17px]">
                 {project?.emoji ?? "📦"}
               </div>
 
               {/* Content */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    alignItems: "baseline",
-                    flexWrap: "wrap",
-                    marginBottom: 4,
-                  }}
-                >
-                  <span style={{ fontSize: 14.5, fontWeight: 700 }}>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex flex-wrap items-baseline gap-2">
+                  <span className="text-[14.5px] font-bold">
                     {project?.name ?? "Unknown"}
                   </span>
-                  <span style={{ fontSize: 12.5, color: theme.dim }}>
+                  <span className="text-[12.5px] text-dim">
                     {session?.title ?? "Untitled"}
                   </span>
-                  <span style={{ flex: 1 }} />
-                  <span
-                    style={{
-                      fontFamily: theme.mono,
-                      fontSize: 11,
-                      color: theme.waiting,
-                    }}
-                  >
+                  <span className="flex-1" />
+                  <span className="font-mono text-[11px] text-waiting">
                     blocked{" "}
                     {Math.floor(
                       (Date.now() - new Date(ask.createdAt).getTime()) / 60000
@@ -187,22 +137,15 @@ export function BlockedView({
                     onClick={() => handleDismiss(ask.id)}
                     disabled={isResolving || isDismissing}
                     title="Dismiss without answering — the agent's wait ends the same as if it had timed out."
-                    style={{
-                      background: "none",
-                      border: `1px solid ${theme.edge}`,
-                      borderRadius: 4,
-                      padding: "1px 7px",
-                      cursor: isResolving || isDismissing ? "default" : "pointer",
-                      fontSize: 12,
-                      lineHeight: 1.6,
-                      color: theme.faint,
-                    }}
+                    className={`rounded border border-edge bg-transparent px-[7px] py-px text-xs leading-[1.6] text-faint ${
+                      isResolving || isDismissing ? "cursor-default" : "cursor-pointer"
+                    }`}
                   >
                     ×
                   </button>
                 </div>
 
-                <div style={{ fontSize: 14, lineHeight: 1.55, color: theme.text }}>
+                <div className="text-sm leading-[1.55] text-text">
                   {ask.question}
                 </div>
 
@@ -223,15 +166,7 @@ export function BlockedView({
                 />
 
                 {errors[ask.id] && (
-                  <div
-                    style={{
-                      fontFamily: theme.mono,
-                      fontSize: 11,
-                      color: theme.waiting,
-                      marginTop: 9,
-                      lineHeight: 1.5,
-                    }}
-                  >
+                  <div className="mt-[9px] font-mono text-[11px] leading-relaxed text-waiting">
                     {errors[ask.id]}
                   </div>
                 )}

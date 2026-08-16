@@ -1,5 +1,5 @@
 import type { SessionStatus } from "@standup/shared";
-import { theme, statusColors } from "./theme";
+import { statusColors } from "./theme";
 import { SILENCE_METER_MINUTES } from "@standup/shared";
 
 interface SilenceStripProps {
@@ -15,20 +15,11 @@ export function SilenceStrip({ status, ticks }: SilenceStripProps) {
   const displayTicks = ticks ?? Array.from({ length: SILENCE_METER_MINUTES }, () => false);
 
   return (
-    <div
-      style={{ display: "flex", gap: 1.5, alignItems: "flex-end" }}
-      title="Activity by minute, last 40 min"
-    >
+    <div className="flex items-end gap-[1.5px]" title="Activity by minute, last 40 min">
       {displayTicks.map((on, i) => (
         <div
           key={i}
-          style={{
-            width: 2,
-            height: on ? 8 : 3,
-            borderRadius: 1,
-            background: on ? color : theme.edge,
-            opacity: on ? 0.85 : 1,
-          }}
+          className={`w-0.5 rounded-[1px] ${on ? `h-2 ${color.bg} opacity-85` : "h-[3px] bg-edge"}`}
         />
       ))}
     </div>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import type {
   Project,
   ProjectWithCounts,
@@ -9,7 +10,7 @@ import type {
   ClaudeEffort,
   ClaudeModel,
 } from "@standup/shared";
-import { theme, statusColors, friendlyModel } from "./theme";
+import { statusColors, friendlyModel } from "./theme";
 import { SilenceStrip } from "./SilenceStrip";
 import { ProjectEditor } from "./ProjectEditor";
 import { SessionControls } from "./SessionControls";
@@ -36,6 +37,21 @@ interface ProjectsViewProps {
   ) => Promise<{ error?: string }>;
   lastEvent: { sessionId: string; n: number };
 }
+
+const PROJECT_TABS = ["chat", "knowledge", "settings"] as const;
+const DETAIL_TABS = ["transcript", "checkpoints", "info"] as const;
+
+// Directional (left-border) counterparts of statusColors' all-sides
+// `border` class — session list rows only ever color their left edge.
+const borderLeftByStatus = {
+  running: "border-l-running",
+  idle: "border-l-idle",
+  waiting: "border-l-waiting",
+  stalled: "border-l-stalled",
+} as const;
+
+const tabButtonClass =
+  "cursor-pointer border-none border-b-2 border-transparent bg-none px-3 py-1.5 text-xs font-semibold capitalize text-faint data-selected:border-running data-selected:text-text";
 
 export function ProjectsView({
   projects,
@@ -95,17 +111,9 @@ export function ProjectsView({
   const selectedLaunch = launches.find((l) => l.sessionId === selectedSession);
 
   return (
-    <div style={{ display: "flex", height: "100%" }}>
+    <div className="flex h-full">
       {/* Project list */}
-      <div
-        style={{
-          width: 290,
-          borderRight: `1px solid ${theme.edge}`,
-          overflowY: "auto",
-          background: theme.surface,
-          flexShrink: 0,
-        }}
-      >
+      <div className="w-[290px] shrink-0 overflow-y-auto border-r border-edge bg-surface">
         {projects.map((project) => {
           const projectSessions = getSessionsByProject(project.id);
           const alertCount = projectSessions.filter(
@@ -113,64 +121,28 @@ export function ProjectsView({
           ).length;
 
           return (
-            <div key={project.id} style={{ marginBottom: 3 }}>
+            <div key={project.id} className="mb-[3px]">
               {/* Project header */}
-              <div
-                style={{
-                  padding: "12px 14px 7px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 9,
-                }}
-              >
-                <div
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 5,
-                    background: `${theme.running}1F`,
-                    border: `1px solid ${theme.running}55`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 12,
-                  }}
-                >
+              <div className="flex items-center gap-[9px] px-3.5 pt-3 pb-[7px]">
+                <div className="flex h-[22px] w-[22px] items-center justify-center rounded-md border border-running/[33%] bg-running/[12%] text-xs">
                   {project.emoji ?? "📦"}
                 </div>
                 {/* The project itself is selectable, not just its sessions —
                     it owns knowledge and configuration of its own. */}
                 <button
                   onClick={() => setSelectedProject(project.id)}
-                  style={{
-                    fontSize: 13.5,
-                    fontWeight: 700,
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    color:
-                      selectedProjectId === project.id ? theme.running : theme.text,
-                  }}
+                  className={`cursor-pointer border-none bg-none p-0 text-[13.5px] font-bold ${
+                    selectedProjectId === project.id ? "text-running" : "text-text"
+                  }`}
                 >
                   {project.name}
                 </button>
                 {alertCount > 0 && (
-                  <span
-                    style={{
-                      fontFamily: theme.mono,
-                      fontSize: 9.5,
-                      background: theme.waiting,
-                      color: theme.ground,
-                      borderRadius: 8,
-                      padding: "1px 6px",
-                      fontWeight: 700,
-                    }}
-                  >
+                  <span className="rounded-lg bg-waiting px-1.5 py-px font-mono text-[9.5px] font-bold text-ground">
                     {alertCount}
                   </span>
                 )}
-                <span style={{ flex: 1 }} />
+                <span className="flex-1" />
                 {/* Jumps straight to a blank chat tab for this project —
                     the quick "start something new" affordance ChatGPT/Claude
                     put next to each item, rather than requiring you to open
@@ -182,22 +154,7 @@ export function ProjectsView({
                     setChatFocusSignal((n) => n + 1);
                   }}
                   title={`Start a new chat in ${project.name}`}
-                  style={{
-                    background: "none",
-                    border: `1px solid ${theme.edge}`,
-                    borderRadius: 5,
-                    width: 20,
-                    height: 20,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: theme.faint,
-                    cursor: "pointer",
-                    fontSize: 13,
-                    lineHeight: 1,
-                    padding: 0,
-                    flexShrink: 0,
-                  }}
+                  className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-md border border-edge bg-none p-0 text-[13px] leading-none text-faint"
                 >
                   +
                 </button>
@@ -211,12 +168,7 @@ export function ProjectsView({
               {project.knowledgeDocs > 0 && (
                 <div
                   title="Human-authored knowledge docs searchable by agents in this project"
-                  style={{
-                    padding: "0 14px 6px 45px",
-                    fontSize: 11.5,
-                    color: theme.expert,
-                    opacity: 0.85,
-                  }}
+                  className="px-3.5 pb-1.5 pl-[45px] text-[11.5px] text-expert opacity-85"
                 >
                   {project.knowledgeDocs} knowledge doc
                   {project.knowledgeDocs === 1 ? "" : "s"}
@@ -225,13 +177,7 @@ export function ProjectsView({
 
               {/* Sessions */}
               {projectSessions.length === 0 ? (
-                <div
-                  style={{
-                    padding: "2px 14px 8px 45px",
-                    fontSize: 12,
-                    color: theme.faint,
-                  }}
-                >
+                <div className="px-3.5 pt-0.5 pb-2 pl-[45px] text-xs text-faint">
                   No work running.
                 </div>
               ) : (
@@ -243,44 +189,16 @@ export function ProjectsView({
                     <button
                       key={session.id}
                       onClick={() => setSelectedSession(session.id)}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        background: isActive ? theme.raised : "transparent",
-                        border: "none",
-                        borderLeft: `2px solid ${isActive ? statusColor : "transparent"}`,
-                        padding: "8px 12px 8px 14px",
-                        cursor: "pointer",
-                        display: "block",
-                      }}
+                      className={`block w-full cursor-pointer border-none border-l-2 py-2 pr-3 pl-3.5 text-left ${
+                        isActive ? "bg-raised" : "bg-transparent"
+                      } ${isActive ? borderLeftByStatus[session.status] : "border-l-transparent"}`}
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
+                      <div className="flex items-center gap-2">
+                        <span className={`h-1.5 w-1.5 shrink-0 rounded-md ${statusColor.bg}`} />
                         <span
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: 6,
-                            background: statusColor,
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span
-                          style={{
-                            fontSize: 12.5,
-                            color: theme.text,
-                            flex: 1,
-                            lineHeight: 1.35,
-                            fontWeight: isActive ? 600 : 400,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
+                          className={`flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[12.5px] leading-[1.35] text-text ${
+                            isActive ? "font-semibold" : "font-normal"
+                          }`}
                         >
                           {session.title || "Untitled"}
                         </span>
@@ -290,18 +208,13 @@ export function ProjectsView({
                         {session.owned && (
                           <span
                             title="Standup owns this session's terminal"
-                            style={{
-                              fontFamily: theme.mono,
-                              fontSize: 9,
-                              color: theme.checkpoint,
-                              flexShrink: 0,
-                            }}
+                            className="shrink-0 font-mono text-[9px] text-checkpoint"
                           >
                             ⇄
                           </span>
                         )}
                       </div>
-                      <div style={{ marginTop: 5, paddingLeft: 14 }}>
+                      <div className="mt-[5px] pl-3.5">
                         <SilenceStrip status={session.status} ticks={session.activityTicks} />
                       </div>
                     </button>
@@ -314,22 +227,11 @@ export function ProjectsView({
 
         <button
           onClick={() => setEditing("")}
-          style={{
-            width: "100%",
-            textAlign: "left",
-            background: "none",
-            border: "none",
-            borderTop: `1px solid ${theme.edgeSoft}`,
-            padding: "12px 14px",
-            marginTop: 6,
-            cursor: "pointer",
-            fontSize: 12.5,
-            color: theme.faint,
-          }}
+          className="mt-1.5 w-full cursor-pointer border-none border-t border-edge-soft bg-none px-3.5 py-3 text-left text-[12.5px] text-faint"
         >
           + New project
         </button>
-        <div style={{ height: 20 }} />
+        <div className="h-5" />
       </div>
 
       {/* Detail pane — the editor takes over when configuring a project.
@@ -339,114 +241,58 @@ export function ProjectsView({
           overflow here — a scrollable ancestor around an already-scrollable
           child just doubles the scrollbar and lets the header drift off
           with it. */}
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {editing === null && openProject ? (
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div
-              style={{
-                padding: "18px 20px 0",
-                borderBottom: `1px solid ${theme.edgeSoft}`,
-              }}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <TabGroup
+              selectedIndex={PROJECT_TABS.indexOf(projectTab)}
+              onChange={(i) => setProjectTab(PROJECT_TABS[i])}
+              className="flex min-h-0 flex-1 flex-col"
             >
-              <div style={{ display: "flex", gap: 11, alignItems: "center" }}>
-                <span style={{ fontSize: 20 }}>{openProject.emoji ?? "📦"}</span>
-                <span style={{ fontSize: 17, fontWeight: 700 }}>
-                  {openProject.name}
-                </span>
-                <span
-                  style={{ fontFamily: theme.mono, fontSize: 10.5, color: theme.faint }}
-                >
-                  {openProject.repos.length} repo
-                  {openProject.repos.length === 1 ? "" : "s"} · {openProject.branch}
-                </span>
-              </div>
-
-              <div style={{ display: "flex", gap: 2, marginTop: 12 }}>
-                {(["chat", "knowledge", "settings"] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setProjectTab(t)}
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      padding: "6px 12px",
-                      border: "none",
-                      borderBottom: `2px solid ${
-                        projectTab === t ? theme.running : "transparent"
-                      }`,
-                      background: "none",
-                      color: projectTab === t ? theme.text : theme.faint,
-                      cursor: "pointer",
-                      textTransform: "capitalize",
-                    }}
-                  >
-                    {t}
-                    {t === "knowledge" && openProject.knowledgeDocs > 0 && (
-                      <span style={{ color: theme.faint, marginLeft: 6 }}>
-                        {openProject.knowledgeDocs}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {projectTab === "chat" ? (
-              // Chat is the landing tab and the whole reason for the "+" in
-              // the sidebar — an empty canvas with the composer pinned
-              // below, the way a new ChatGPT/Claude conversation opens.
-              <div
-                style={{
-                  flex: 1,
-                  minHeight: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                <div
-                  style={{
-                    flex: 1,
-                    minHeight: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "0 24px",
-                    textAlign: "center",
-                    color: theme.dim,
-                    fontSize: 13.5,
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Describe a task below to start a new agent working in{" "}
-                  {openProject.name}.
+              <div className="border-b border-edge-soft px-5 pt-[18px]">
+                <div className="flex items-center gap-[11px]">
+                  <span className="text-xl">{openProject.emoji ?? "📦"}</span>
+                  <span className="text-[17px] font-bold">{openProject.name}</span>
+                  <span className="font-mono text-[10.5px] text-faint">
+                    {openProject.repos.length} repo
+                    {openProject.repos.length === 1 ? "" : "s"} · {openProject.branch}
+                  </span>
                 </div>
-                <Composer
-                  key={openProject.id}
-                  projects={[openProject]}
-                  onLaunch={onLaunch}
-                  focusSignal={chatFocusSignal}
-                />
+
+                <TabList className="mt-3 flex gap-0.5">
+                  {PROJECT_TABS.map((t) => (
+                    <Tab key={t} className={tabButtonClass}>
+                      {t}
+                      {t === "knowledge" && openProject.knowledgeDocs > 0 && (
+                        <span className="ml-1.5 text-faint">{openProject.knowledgeDocs}</span>
+                      )}
+                    </Tab>
+                  ))}
+                </TabList>
               </div>
-            ) : (
-              <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-                {projectTab === "knowledge" ? (
+
+              <TabPanels className="flex min-h-0 flex-1 flex-col">
+                <TabPanel className="flex min-h-0 flex-1 flex-col" unmount={false}>
+                  {/* Chat is the landing tab and the whole reason for the "+" in
+                      the sidebar — an empty canvas with the composer pinned
+                      below, the way a new ChatGPT/Claude conversation opens. */}
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-[13.5px] leading-relaxed text-dim">
+                      Describe a task below to start a new agent working in{" "}
+                      {openProject.name}.
+                    </div>
+                    <Composer
+                      key={openProject.id}
+                      projects={[openProject]}
+                      onLaunch={onLaunch}
+                      focusSignal={chatFocusSignal}
+                    />
+                  </div>
+                </TabPanel>
+                <TabPanel className="min-h-0 flex-1 overflow-y-auto" unmount={false}>
                   <KnowledgePanel projectId={openProject.id} />
-                ) : (
+                </TabPanel>
+                <TabPanel className="min-h-0 flex-1 overflow-y-auto" unmount={false}>
                   <ProjectEditor
                     project={openProject}
                     onSave={async (patch) => onSaveProject(openProject.id, patch)}
@@ -457,12 +303,12 @@ export function ProjectsView({
                     }}
                     onCancel={() => navigate("/projects")}
                   />
-                )}
-              </div>
-            )}
+                </TabPanel>
+              </TabPanels>
+            </TabGroup>
           </div>
         ) : editing !== null ? (
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <div className="min-h-0 flex-1 overflow-y-auto">
             <ProjectEditor
               project={editing ? projects.find((p) => p.id === editing) : undefined}
               onSave={async (patch) => {
@@ -483,53 +329,20 @@ export function ProjectsView({
             />
           </div>
         ) : selected ? (
-          <>
-            <div
-              style={{
-                padding: "18px 20px 14px",
-                borderBottom: `1px solid ${theme.edgeSoft}`,
-              }}
-            >
-              <div
-                style={{ display: "flex", gap: 11, alignItems: "center" }}
-              >
-                <div
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 7,
-                    background: `${theme.running}1F`,
-                    border: `1px solid ${theme.running}55`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 15,
-                  }}
-                >
+          <TabGroup
+            selectedIndex={DETAIL_TABS.indexOf(detailTab)}
+            onChange={(i) => setDetailTab(DETAIL_TABS[i])}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="border-b border-edge-soft px-5 pt-[18px] pb-3.5">
+              <div className="flex items-center gap-[11px]">
+                <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] border border-running/[33%] bg-running/[12%] text-[15px]">
                   {selectedProject?.emoji ?? "📦"}
                 </div>
-                <span style={{ fontSize: 17, fontWeight: 700 }}>
-                  {selected.title || "Untitled"}
-                </span>
+                <span className="text-[17px] font-bold">{selected.title || "Untitled"}</span>
               </div>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 15,
-                  marginTop: 12,
-                  fontFamily: theme.mono,
-                  fontSize: 11,
-                  color: theme.faint,
-                }}
-              >
-                <span
-                  style={{
-                    color: statusColors[selected.status],
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    fontSize: 10.5,
-                  }}
-                >
+              <div className="mt-3 flex gap-[15px] font-mono text-[11px] text-faint">
+                <span className={`text-[10.5px] tracking-[0.1em] uppercase ${statusColors[selected.status].text}`}>
                   {selected.status}
                 </span>
                 <span title="Live model and effort, read from the session's own transcript/events">
@@ -541,7 +354,7 @@ export function ProjectsView({
                 {selected.endedAt && <span>ended</span>}
               </div>
 
-              <div style={{ marginTop: 14 }}>
+              <div className="mt-3.5">
                 <SessionControls session={selected} onChanged={onSessionChanged} />
               </div>
             </div>
@@ -549,106 +362,49 @@ export function ProjectsView({
             {/* Tabs: checkpoints are the milestone spine, the transcript is
                 the full conversation. Both are useful for different questions
                 — "what has it achieved" vs "what exactly did it say". */}
-            <div
-              style={{
-                display: "flex",
-                gap: 2,
-                padding: "10px 20px 0",
-                borderBottom: `1px solid ${theme.edgeSoft}`,
-              }}
-            >
-              {(["transcript", "checkpoints", "info"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setDetailTab(t)}
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    padding: "6px 12px",
-                    border: "none",
-                    borderBottom: `2px solid ${
-                      detailTab === t ? theme.running : "transparent"
-                    }`,
-                    background: "none",
-                    color: detailTab === t ? theme.text : theme.faint,
-                    cursor: "pointer",
-                    textTransform: "capitalize",
-                  }}
-                >
+            <TabList className="flex gap-0.5 border-b border-edge-soft px-5 pt-2.5">
+              {DETAIL_TABS.map((t) => (
+                <Tab key={t} className={tabButtonClass}>
                   {t}
                   {t === "checkpoints" && selectedCheckpoints.length > 0 && (
-                    <span style={{ color: theme.faint, marginLeft: 6 }}>
-                      {selectedCheckpoints.length}
-                    </span>
+                    <span className="ml-1.5 text-faint">{selectedCheckpoints.length}</span>
                   )}
-                </button>
+                </Tab>
               ))}
-            </div>
+            </TabList>
 
-            {detailTab === "transcript" ? (
-              <TranscriptView
-                key={selected.id}
-                sessionId={selected.id}
-                sessionEnded={!!selected.endedAt}
-                eventSignal={
-                  lastEvent.sessionId === selected.id ? lastEvent.n : 0
-                }
-              />
-            ) : detailTab === "checkpoints" ? (
-              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 0 24px" }}>
+            <TabPanels className="flex min-h-0 flex-1 flex-col">
+              <TabPanel className="flex min-h-0 flex-1 flex-col" unmount={false}>
+                <TranscriptView
+                  key={selected.id}
+                  sessionId={selected.id}
+                  sessionEnded={!!selected.endedAt}
+                  eventSignal={
+                    lastEvent.sessionId === selected.id ? lastEvent.n : 0
+                  }
+                />
+              </TabPanel>
+              <TabPanel className="min-h-0 flex-1 overflow-y-auto pt-2.5 pb-6" unmount={false}>
                 {selectedCheckpoints.length === 0 ? (
-                  <div
-                    style={{
-                      fontSize: 13,
-                      color: theme.faint,
-                      padding: "28px 20px",
-                      lineHeight: 1.55,
-                    }}
-                  >
+                  <div className="px-5 py-7 text-[13px] leading-[1.55] text-faint">
                     No checkpoints yet. Agents only report these if told to —
                     see docs/agent-instructions.md. Sessions launched from the
                     console are instructed automatically.
                   </div>
                 ) : (
                   selectedCheckpoints.map((cp) => (
-                    <div
-                      key={cp.id}
-                      style={{
-                        padding: "9px 20px 5px",
-                        display: "flex",
-                        gap: 12,
-                      }}
-                    >
-                      <div style={{ width: 34 }}>
-                        <span
-                          style={{
-                            fontFamily: theme.mono,
-                            fontSize: 9.5,
-                            color: theme.faint,
-                          }}
-                        >
+                    <div key={cp.id} className="flex gap-3 px-5 pt-[9px] pb-[5px]">
+                      <div className="w-[34px]">
+                        <span className="font-mono text-[9.5px] text-faint">
                           {new Date(cp.createdAt).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
                         </span>
                       </div>
-                      <div style={{ fontSize: 14, lineHeight: 1.55 }}>
+                      <div className="text-sm leading-[1.55]">
                         {cp.source === "auto" && (
-                          <span
-                            style={{
-                              fontFamily: theme.mono,
-                              fontSize: 9,
-                              letterSpacing: "0.1em",
-                              textTransform: "uppercase",
-                              color: theme.expert,
-                              border: `1px solid ${theme.expert}44`,
-                              borderRadius: 3,
-                              padding: "1px 5px",
-                              marginRight: 7,
-                              verticalAlign: 2,
-                            }}
-                          >
+                          <span className="mr-[7px] rounded-[3px] border border-expert/[27%] px-[5px] py-px align-[2px] font-mono text-[9px] tracking-[0.1em] text-expert uppercase">
                             auto
                           </span>
                         )}
@@ -657,36 +413,15 @@ export function ProjectsView({
                     </div>
                   ))
                 )}
-              </div>
-            ) : (
-              <div
-                style={{
-                  flex: 1,
-                  minHeight: 0,
-                  overflowY: "auto",
-                  padding: "18px 20px 24px",
-                }}
-              >
-                <div style={{ marginBottom: 18 }}>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: theme.dim,
-                      marginBottom: 6,
-                    }}
-                  >
+              </TabPanel>
+              <TabPanel className="min-h-0 flex-1 overflow-y-auto px-5 pt-[18px] pb-6" unmount={false}>
+                <div className="mb-[18px]">
+                  <div className="mb-1.5 text-[11px] font-semibold text-dim">
                     Working directory
                   </div>
                   <div
                     title="cd into this to work alongside the agent"
-                    style={{
-                      fontFamily: theme.mono,
-                      fontSize: 12.5,
-                      color: theme.text,
-                      userSelect: "all",
-                      wordBreak: "break-all",
-                    }}
+                    className="font-mono text-[12.5px] break-all text-text select-all"
                   >
                     {selected.cwd}
                   </div>
@@ -694,51 +429,22 @@ export function ProjectsView({
 
                 {selectedLaunch ? (
                   <>
-                    <div style={{ marginBottom: 18 }}>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          color: theme.dim,
-                          marginBottom: 6,
-                        }}
-                      >
-                        Branch
-                      </div>
-                      <div
-                        style={{
-                          fontFamily: theme.mono,
-                          fontSize: 12.5,
-                          color: theme.text,
-                        }}
-                      >
+                    <div className="mb-[18px]">
+                      <div className="mb-1.5 text-[11px] font-semibold text-dim">Branch</div>
+                      <div className="font-mono text-[12.5px] text-text">
                         {selectedLaunch.branch}{" "}
-                        <span style={{ color: theme.faint }}>
-                          ({selectedLaunch.kind})
-                        </span>
+                        <span className="text-faint">({selectedLaunch.kind})</span>
                       </div>
                     </div>
 
                     {selectedLaunch.tmuxSession && (
                       <div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: theme.dim,
-                            marginBottom: 6,
-                          }}
-                        >
+                        <div className="mb-1.5 text-[11px] font-semibold text-dim">
                           Attach to the agent's terminal
                         </div>
                         <div
                           title="For a full interactive terminal"
-                          style={{
-                            fontFamily: theme.mono,
-                            fontSize: 12.5,
-                            color: theme.text,
-                            userSelect: "all",
-                          }}
+                          className="font-mono text-[12.5px] text-text select-all"
                         >
                           tmux attach -t {selectedLaunch.tmuxSession}
                         </div>
@@ -746,26 +452,17 @@ export function ProjectsView({
                     )}
                   </>
                 ) : (
-                  <div style={{ fontSize: 12.5, color: theme.faint, lineHeight: 1.55 }}>
+                  <div className="text-[12.5px] leading-[1.55] text-faint">
                     You started this session in your own terminal, so there's
                     no worktree or tmux pane Standup owns — just the working
                     directory above.
                   </div>
                 )}
-              </div>
-            )}
-          </>
+              </TabPanel>
+            </TabPanels>
+          </TabGroup>
         ) : (
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: theme.dim,
-            }}
-          >
+          <div className="flex min-h-0 flex-1 items-center justify-center text-dim">
             Select a session to view details
           </div>
         )}
