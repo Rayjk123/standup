@@ -157,6 +157,39 @@ const MIGRATIONS = [
   ALTER TABLE launches ADD COLUMN kind TEXT NOT NULL DEFAULT 'worktree'
     CHECK (kind IN ('worktree', 'adopted'));
   `,
+
+  // Migration 005: checkpoints.source 'auto'
+  //
+  // A third checkpoint source for the Haiku-generated summaries in
+  // auto-checkpoint.ts — distinct from an agent's own self-reported call and
+  // from the structural ones derived straight from hook data (TodoWrite,
+  // SubagentStop). SQLite can't ALTER a CHECK constraint in place, so the
+  // table is recreated.
+  `
+  CREATE TABLE checkpoints_new (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(id),
+    source TEXT NOT NULL CHECK (source IN ('structural', 'self-reported', 'auto')),
+    summary TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+  INSERT INTO checkpoints_new SELECT * FROM checkpoints;
+  DROP TABLE checkpoints;
+  ALTER TABLE checkpoints_new RENAME TO checkpoints;
+  CREATE INDEX IF NOT EXISTS idx_checkpoints_session ON checkpoints(session_id);
+  `,
+
+  // Migration 006: settings
+  //
+  // A small global key/value store for UI-toggleable switches — starting
+  // with auto-checkpointing, which costs real money per call and needs to
+  // be flippable without a collector restart (unlike STANDUP_NUDGE=1).
+  `
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  `,
 ];
 
 export function runMigrations(db: Database): void {

@@ -12,6 +12,7 @@ import { FeedView } from "./FeedView";
 import { BlockedView } from "./BlockedView";
 import { ProjectsView } from "./ProjectsView";
 import { AlertStrip } from "./AlertStrip";
+import { AutoCheckpointToggle } from "./AutoCheckpointToggle";
 import { theme } from "./theme";
 
 const VIEWS = ["feed", "blocked", "projects"] as const;
@@ -112,6 +113,7 @@ export function Console({
           )}
         </div>
         <div style={{ flex: 1 }} />
+        <AutoCheckpointToggle />
         <div style={{ display: "flex", gap: 2 }}>
           {VIEWS.map((v) => (
             <NavLink

@@ -233,6 +233,11 @@ export function FeedView({
         const isAsk = item.type === "ask";
         const isExpert = item.type === "expert";
         const isLaunch = item.type === "launch";
+        // Haiku-inferred, not agent-reported — see auto-checkpoint.ts.
+        // Flagged distinctly since it's a guess about what happened, not a
+        // fact the agent stated about itself.
+        const isAutoCheckpoint =
+          item.type === "checkpoint" && (item.data as Checkpoint).source === "auto";
         // A launch knows its project directly; it may not have a session yet
         // (the agent registers a moment after the worktree is created).
         const project = isLaunch
@@ -242,7 +247,7 @@ export function FeedView({
             : null;
         const accent = isAsk
           ? theme.waiting
-          : isExpert
+          : isExpert || isAutoCheckpoint
             ? theme.expert
             : isLaunch
               ? theme.running
@@ -314,7 +319,7 @@ export function FeedView({
                 </span>
               </div>
 
-              {(isAsk || isExpert || isLaunch) && (
+              {(isAsk || isExpert || isLaunch || isAutoCheckpoint) && (
                 <div style={{ marginBottom: 5 }}>
                   <span
                     style={{
@@ -330,7 +335,9 @@ export function FeedView({
                       ? "Needs you"
                       : isExpert
                         ? "Expert consulted"
-                        : "You started this"}
+                        : isAutoCheckpoint
+                          ? "Auto-checkpoint"
+                          : "You started this"}
                   </span>
                 </div>
               )}

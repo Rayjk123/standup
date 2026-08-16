@@ -102,7 +102,7 @@ export type HookEventType =
 // Checkpoints
 // ============================================================================
 
-export type CheckpointSource = "structural" | "self-reported";
+export type CheckpointSource = "structural" | "self-reported" | "auto";
 
 export interface Checkpoint {
   id: string;

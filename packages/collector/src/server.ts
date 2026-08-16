@@ -77,6 +77,12 @@ import {
   resetTurnNudges,
   clearNudgeState,
 } from "./nudge.js";
+import {
+  maybeAutoCheckpoint,
+  isAutoCheckpointEnabled,
+  setAutoCheckpointEnabled,
+  clearAutoCheckpointState,
+} from "./auto-checkpoint.js";
 
 /** Standup's own MCP tools — nudging on these would feed back on itself. */
 function isExpertTool(toolName: string): boolean {
@@ -122,6 +128,23 @@ export function createServer(
 
   // Health check
   app.get("/health", (c) => c.json({ status: "ok" }));
+
+  // ============================================================================
+  // Global settings — currently just the auto-checkpoint toggle, kept in
+  // its own small key/value table (see migration 006) rather than an env
+  // var, so it can flip live without a collector restart.
+  // ============================================================================
+  app.get("/api/settings", (c) => {
+    return c.json({ autoCheckpoint: isAutoCheckpointEnabled(store.db) });
+  });
+
+  app.put("/api/settings", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    if (typeof body.autoCheckpoint === "boolean") {
+      setAutoCheckpointEnabled(store.db, body.autoCheckpoint);
+    }
+    return c.json({ autoCheckpoint: isAutoCheckpointEnabled(store.db) });
+  });
 
   // ============================================================================
   // Hook endpoint — Claude Code POSTs here
@@ -1071,6 +1094,7 @@ function handleHookEvent(
       endSession(store.db, session_id);
       clearTodoCheckpointState(session_id);
       clearNudgeState(session_id);
+      clearAutoCheckpointState(session_id);
       broadcast({
         type: "session:end",
         payload: { sessionId: session_id },
@@ -1197,6 +1221,25 @@ function handleHookEvent(
         payload: { sessionId: session_id, status: "idle" },
         timestamp: new Date().toISOString(),
       });
+
+      // Auto-checkpointing — off by default (real cost per call, see
+      // auto-checkpoint.ts). Fired without awaiting: it shells out to
+      // `claude -p` and takes seconds, and the hook response must not wait
+      // on that or every turn boundary gets slower for the agent.
+      if (isAutoCheckpointEnabled(store.db)) {
+        void maybeAutoCheckpoint(store.db, session_id)
+          .then((checkpoint) => {
+            if (!checkpoint) return;
+            broadcast({
+              type: "checkpoint:new",
+              payload: checkpoint,
+              timestamp: new Date().toISOString(),
+            });
+          })
+          .catch((err) => {
+            console.error(`[auto-checkpoint] ${session_id.slice(0, 8)}:`, err);
+          });
+      }
       break;
     }
 

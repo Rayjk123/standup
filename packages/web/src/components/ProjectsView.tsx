@@ -524,6 +524,24 @@ export function ProjectsView({
                         </span>
                       </div>
                       <div style={{ fontSize: 14, lineHeight: 1.55 }}>
+                        {cp.source === "auto" && (
+                          <span
+                            style={{
+                              fontFamily: theme.mono,
+                              fontSize: 9,
+                              letterSpacing: "0.1em",
+                              textTransform: "uppercase",
+                              color: theme.expert,
+                              border: `1px solid ${theme.expert}44`,
+                              borderRadius: 3,
+                              padding: "1px 5px",
+                              marginRight: 7,
+                              verticalAlign: 2,
+                            }}
+                          >
+                            auto
+                          </span>
+                        )}
                         {cp.summary}
                       </div>
                     </div>

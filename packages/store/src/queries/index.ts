@@ -6,3 +6,4 @@ export * from "./asks.js";
 export * from "./steers.js";
 export * from "./launches.js";
 export * from "./expert.js";
+export * from "./settings.js";
