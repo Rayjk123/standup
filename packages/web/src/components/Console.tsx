@@ -33,6 +33,7 @@ interface ConsoleProps {
   onDeleteProject: (id: string) => Promise<{ error?: string }>;
   onLaunchChanged: () => void;
   onSessionChanged: () => void;
+  lastEvent: { sessionId: string; n: number };
 }
 
 export function Console({
@@ -49,6 +50,7 @@ export function Console({
   onDeleteProject,
   onLaunchChanged,
   onSessionChanged,
+  lastEvent,
 }: ConsoleProps) {
   // The alert strip is hidden on Blocked, which is the one place it would be
   // redundant. Read from the route rather than tracked separately.
@@ -204,6 +206,7 @@ export function Console({
                 onSaveProject={onSaveProject}
                 onDeleteProject={onDeleteProject}
                 onSessionChanged={onSessionChanged}
+                lastEvent={lastEvent}
               />
             }
           />

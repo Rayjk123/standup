@@ -17,6 +17,13 @@ export default function App() {
   const [asks, setAsks] = useState<Ask[]>([]);
   const [expertExchanges, setExpertExchanges] = useState<ExpertExchange[]>([]);
   const [launches, setLaunches] = useState<Launch[]>([]);
+  // Which session last produced a hook event, and a counter so repeated
+  // events for the same session still trigger a refresh. Lets a transcript
+  // update as events arrive instead of on a timer.
+  const [lastEvent, setLastEvent] = useState<{ sessionId: string; n: number }>({
+    sessionId: "",
+    n: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   // WebSocket for real-time updates
@@ -78,6 +85,12 @@ export default function App() {
         refreshSessions();
         break;
 
+      case "event:new": {
+        const { sessionId } = lastMessage.payload as { sessionId: string };
+        setLastEvent((prev) => ({ sessionId, n: prev.n + 1 }));
+        break;
+      }
+
       case "checkpoint:new":
         setCheckpoints((prev) => [lastMessage.payload as Checkpoint, ...prev]);
         break;
@@ -129,6 +142,7 @@ export default function App() {
       asks={asks}
       expertExchanges={expertExchanges}
       launches={launches}
+      lastEvent={lastEvent}
       onSessionChanged={refreshSessions}
       onLaunchChanged={() => {
         fetch("/api/launches")

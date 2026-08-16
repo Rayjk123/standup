@@ -23,6 +23,7 @@ interface ProjectsViewProps {
   ) => Promise<{ error?: string }>;
   onDeleteProject: (id: string) => Promise<{ error?: string }>;
   onSessionChanged: () => void;
+  lastEvent: { sessionId: string; n: number };
 }
 
 export function ProjectsView({
@@ -32,6 +33,7 @@ export function ProjectsView({
   onSaveProject,
   onDeleteProject,
   onSessionChanged,
+  lastEvent,
 }: ProjectsViewProps) {
   // Selection lives in the path so it survives a refresh and can be linked
   // to. `kind` distinguishes a project from a session, since both are
@@ -477,7 +479,10 @@ export function ProjectsView({
               <TranscriptView
                 key={selected.id}
                 sessionId={selected.id}
-                sessionStatus={selected.status}
+                sessionEnded={!!selected.endedAt}
+                eventSignal={
+                  lastEvent.sessionId === selected.id ? lastEvent.n : 0
+                }
               />
             ) : (
               <div style={{ padding: "10px 0 24px" }}>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { theme } from "./theme";
+import { Markdown } from "./Markdown";
 
 interface ToolCall {
   id: string;
@@ -58,10 +59,14 @@ function formatTokens(n: number): string {
  */
 export function TranscriptView({
   sessionId,
-  sessionStatus,
+  sessionEnded,
+  eventSignal,
 }: {
   sessionId: string;
-  sessionStatus: string;
+  /** Ended sessions have a final transcript; no need to keep re-reading. */
+  sessionEnded: boolean;
+  /** Bumped when a hook event arrives for this session. */
+  eventSignal: number;
 }) {
   const [page, setPage] = useState<TranscriptPage | null>(null);
   const [limit, setLimit] = useState(PAGE);
@@ -88,13 +93,24 @@ export function TranscriptView({
     void load();
   }, [load]);
 
-  // Poll only while the session is live; an ended session's transcript is
-  // final and re-reading an 8MB file for nothing is pure waste.
+  // Refresh when a hook event arrives for this session, rather than on a
+  // timer. The previous version polled every 6s *and* skipped polling
+  // entirely while status was "idle" — but "idle" means a turn just ended,
+  // which is precisely when the agent's reply lands and you are most likely
+  // to be reading. The transcript appeared to freeze exactly when it
+  // mattered.
   useEffect(() => {
-    if (sessionStatus === "idle") return;
-    const timer = setInterval(load, 6000);
+    if (eventSignal === 0) return;
+    void load();
+  }, [eventSignal, load]);
+
+  // Slow backstop for writes that produce no hook — a long tool result
+  // streaming in, say. Only while the session is actually alive.
+  useEffect(() => {
+    if (sessionEnded) return;
+    const timer = setInterval(load, 10000);
     return () => clearInterval(timer);
-  }, [load, sessionStatus]);
+  }, [load, sessionEnded]);
 
   async function send() {
     if (!draft.trim() || sending) return;
@@ -214,16 +230,8 @@ export function TranscriptView({
               </div>
 
               {m.text && (
-                <div
-                  style={{
-                    fontSize: 13,
-                    lineHeight: 1.55,
-                    color: theme.text,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {m.text}
+                <div style={{ wordBreak: "break-word" }}>
+                  <Markdown>{m.text}</Markdown>
                 </div>
               )}
 
