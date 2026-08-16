@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@standup/shared": ["./packages/shared/src"],
+      "@standup/store": ["./packages/store/src"],
+      "@standup/knowledge": ["./packages/knowledge/src"],
+      "@standup/collector": ["./packages/collector/src"],
+      "@standup/mcp": ["./packages/mcp/src"]
+    }
+  },
+  "exclude": ["node_modules", "dist"]
+}

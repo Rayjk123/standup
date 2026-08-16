@@ -1,0 +1,23 @@
+{
+  "name": "@standup/collector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@standup/shared": "workspace:*",
+    "@standup/store": "workspace:*",
+    "@standup/knowledge": "workspace:*",
+    "hono": "^4.6.0",
+    "smol-toml": "^1.3.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

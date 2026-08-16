@@ -1,0 +1,50 @@
+# Expert regions — Phase 5
+#
+# Copy to ~/.config/standup/experts.toml (or set STANDUP_EXPERTS_PATH).
+#
+# A region is NOT a separate index. There is one shared corpus; a region is a
+# *traversal policy* over it — an anchor set plus a rerank bias. Retrieval
+# always searches everything, then boosts results near a region's anchors.
+#
+# This matters: `ask_expert` takes no domain parameter, so the calling agent
+# never picks a specialist and therefore can never misroute. The region on a
+# response is post-hoc attribution — a label for where the answer came
+# from — not a route that was chosen in advance.
+#
+# Do not add regions to *exclude* content from search. Segmenting on topic
+# deletes exactly the cross-domain edges that make multi-hop questions
+# answerable ("why did auth break after the schema change?"). Segment only on
+# provenance or permission, which this file does not currently support.
+
+[[region]]
+name    = "collector"
+anchors = ["packages/collector/"]
+# weight >1 boosts, <1 demotes. Omit for the 1.0 default.
+weight  = 1.0
+
+[[region]]
+name = "knowledge"
+anchors = ["packages/knowledge/", "config/knowledge.example/"]
+
+[[region]]
+name = "store"
+anchors = ["packages/store/"]
+
+[[region]]
+name = "web"
+anchors = ["packages/web/"]
+
+[[region]]
+name = "mcp"
+anchors = ["packages/mcp/"]
+
+[[region]]
+name    = "design"
+anchors = ["plan/", "README.md"]
+# Retrieval applies a 0.7 damping to prose so long markdown docs stop
+# outranking the code that answers "how does this work". This weight buys
+# intent questions back without over-correcting. Tuned against
+# expert.eval.ts rather than by feel: at 1.2 the "design docs win on intent
+# questions" case fails; at 1.6 design starts stealing attribution from
+# code-lookup questions. 1.3 passes 8/8.
+weight  = 1.3

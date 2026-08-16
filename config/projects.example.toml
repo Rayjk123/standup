@@ -1,0 +1,41 @@
+# Standup Project Registry
+#
+# This file defines your projects for the session manager.
+# Copy to ~/.config/standup/projects.toml or set STANDUP_PROJECTS_PATH.
+#
+# Each project groups multiple repos under one name, defines setup commands,
+# and optionally connects to an expert retrieval index.
+
+[[project]]
+id      = "fusion-api"
+name    = "fusion-api"
+emoji   = "🛰️"
+repos   = ["~/src/fusion-api", "~/src/fusion-graph"]
+setup   = "bun install && docker compose up -d"
+expert  = "fusion-api"   # retrieval index name, omit if none
+branch  = "main"
+
+[[project]]
+id      = "content-tools"
+name    = "content-tools"
+emoji   = "📚"
+repos   = ["~/src/content-tools"]
+setup   = "pnpm install"
+branch  = "main"
+
+[[project]]
+id      = "milestone-tracker"
+name    = "milestone-tracker"
+emoji   = "🪴"
+repos   = ["~/src/milestone-tracker"]
+setup   = "swift build"
+branch  = "main"
+
+# Catch-all project for sessions that don't match any repo
+# This is created automatically if not defined, but you can customize it
+[[project]]
+id      = "scratch"
+name    = "scratch"
+emoji   = "🦑"
+repos   = []
+branch  = "main"

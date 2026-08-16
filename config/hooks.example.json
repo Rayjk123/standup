@@ -1,0 +1,50 @@
+{
+  "$schema": "https://code.claude.com/schemas/hooks.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [{ "type": "http", "url": "http://localhost:7777/hook" }]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [{ "type": "http", "url": "http://localhost:7777/hook" }]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [{ "type": "http", "url": "http://localhost:7777/hook" }]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [{ "type": "http", "url": "http://localhost:7777/hook" }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [{ "type": "http", "url": "http://localhost:7777/hook" }]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [{ "type": "http", "url": "http://localhost:7777/hook" }]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [{ "type": "http", "url": "http://localhost:7777/hook" }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "http", "url": "http://localhost:7777/hook" }]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [{ "type": "http", "url": "http://localhost:7777/hook" }]
+      }
+    ]
+  }
+}

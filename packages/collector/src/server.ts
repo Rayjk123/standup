@@ -1,0 +1,626 @@
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import type { Store } from "@standup/store";
+import {
+  createSession,
+  updateSessionStatus,
+  updateSessionTitle,
+  endSession,
+  getSession,
+  reviveSession,
+  getMostRecentActiveSessionByCwd,
+  getActiveSessions,
+  getSessionsByProject,
+  insertEvent,
+  getSilenceTicks,
+  getProjects,
+  findProjectByCwd,
+  getPendingAsks,
+  createAsk,
+  resolveAsk,
+  createCheckpoint,
+  getRecentCheckpoints,
+  createSteer,
+  getPendingSteers,
+  getLaunches,
+  getLaunch,
+  findLaunchByCwd,
+  attachSessionToLaunch,
+  recordExpertExchange,
+  getRecentExpertExchanges,
+} from "@standup/store";
+import { searchKnowledge, type EmbeddingProvider } from "@standup/knowledge";
+import type { HookPayload, Session, ToolUsePayload, WsMessage } from "@standup/shared";
+import { runRipgrep } from "./ripgrep.js";
+import { waitForAskResolution } from "./asks.js";
+import { pushNotification } from "./push.js";
+import { checkpointCompletedTodos, clearTodoCheckpointState } from "./todo-checkpoints.js";
+import { takeSteerContext } from "./steers.js";
+import { launchSession, cleanupLaunch } from "./launcher.js";
+import { askExpert, loadRegions } from "./expert.js";
+import type { KnowledgeSync } from "./knowledge-sync.js";
+
+type WsBroadcast = (message: WsMessage) => void;
+
+export function createServer(
+  store: Store,
+  broadcast: WsBroadcast,
+  embeddingProvider: EmbeddingProvider | null = null,
+  knowledgeSync?: KnowledgeSync
+) {
+  const app = new Hono();
+
+  // CORS for local development
+  app.use("/*", cors({ origin: "http://localhost:5173" }));
+
+  // Health check
+  app.get("/health", (c) => c.json({ status: "ok" }));
+
+  // ============================================================================
+  // Hook endpoint — Claude Code POSTs here
+  // ============================================================================
+  app.post("/hook", async (c) => {
+    try {
+      const payload = (await c.req.json()) as HookPayload;
+      // Returns a hook-output body when there's something to hand back to
+      // the agent (queued steers); otherwise a bare ack. Still returns
+      // immediately either way — the steer lookup is one indexed statement,
+      // so this doesn't reintroduce blocking into the agent loop.
+      const output = handleHookEvent(store, payload, broadcast);
+      return c.json(output ?? { ok: true });
+    } catch (err) {
+      console.error("[hook] Error processing event:", err);
+      // Still return 200 to not block the agent
+      return c.json({ ok: true });
+    }
+  });
+
+  // ============================================================================
+  // REST API for the UI
+  // ============================================================================
+
+  // Projects
+  app.get("/api/projects", (c) => {
+    const projects = getProjects(store.db);
+    return c.json(projects);
+  });
+
+  // Sessions
+  app.get("/api/sessions", (c) => {
+    const sessions = getActiveSessions(store.db);
+    return c.json(sessions.map((s) => withActivityTicks(store, s)));
+  });
+
+  app.get("/api/sessions/:id", (c) => {
+    const session = getSession(store.db, c.req.param("id"));
+    if (!session) return c.json({ error: "Not found" }, 404);
+    return c.json(withActivityTicks(store, session));
+  });
+
+  app.get("/api/projects/:id/sessions", (c) => {
+    const sessions = getSessionsByProject(store.db, c.req.param("id"));
+    return c.json(sessions.map((s) => withActivityTicks(store, s)));
+  });
+
+  // Asks
+  app.get("/api/asks/pending", (c) => {
+    const asks = getPendingAsks(store.db);
+    return c.json(asks);
+  });
+
+  app.post("/api/asks/:id/resolve", async (c) => {
+    const { answer } = await c.req.json<{ answer: string }>();
+    resolveAsk(store.db, c.req.param("id"), answer);
+
+    broadcast({
+      type: "ask:resolved",
+      payload: { askId: c.req.param("id"), answer },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json({ ok: true });
+  });
+
+  // Checkpoints
+  app.get("/api/checkpoints", (c) => {
+    const limit = parseInt(c.req.query("limit") ?? "50");
+    const checkpoints = getRecentCheckpoints(store.db, limit);
+    return c.json(checkpoints);
+  });
+
+  // Expert exchanges
+  app.get("/api/expert/exchanges", (c) => {
+    const limit = parseInt(c.req.query("limit") ?? "50");
+    return c.json(getRecentExpertExchanges(store.db, limit));
+  });
+
+  // Steers
+  app.post("/api/sessions/:id/steer", async (c) => {
+    const { body } = await c.req.json<{ body: string }>();
+    const steer = createSteer(store.db, c.req.param("id"), body);
+
+    // Queued, not delivered — it reaches the agent at its next turn
+    // boundary (UserPromptSubmit) or next checkpoint call. The UI shows
+    // "delivers at the next checkpoint" off the back of this.
+    broadcast({
+      type: "steer:queued",
+      payload: steer,
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json(steer);
+  });
+
+  app.get("/api/sessions/:id/steers/pending", (c) => {
+    const steers = getPendingSteers(store.db, c.req.param("id"));
+    return c.json(steers);
+  });
+
+  // ============================================================================
+  // Launching (Phase 4)
+  // ============================================================================
+
+  app.get("/api/launches", (c) => c.json(getLaunches(store.db)));
+
+  app.post("/api/projects/:id/launch", async (c) => {
+    const projectId = c.req.param("id");
+    const { task } = await c.req.json<{ task: string }>();
+
+    if (!task?.trim()) {
+      return c.json({ error: "task is required" }, 400);
+    }
+
+    const project = getProjects(store.db).find((p) => p.id === projectId);
+    if (!project) {
+      return c.json({ error: `Unknown project: ${projectId}` }, 404);
+    }
+
+    try {
+      const result = await launchSession(store.db, { project, task: task.trim() });
+
+      broadcast({
+        type: "launch:started",
+        payload: result.launch,
+        timestamp: new Date().toISOString(),
+      });
+
+      return c.json(result);
+    } catch (err) {
+      // Thrown only for misconfiguration caught before a launch row exists
+      // (no repos, missing path); in-flight failures resolve to a "failed"
+      // launch row instead.
+      return c.json({ error: (err as Error).message }, 400);
+    }
+  });
+
+  app.post("/api/launches/:id/cleanup", async (c) => {
+    const launch = getLaunch(store.db, c.req.param("id"));
+    if (!launch) return c.json({ error: "Not found" }, 404);
+
+    const project = getProjects(store.db).find((p) => p.id === launch.projectId);
+    if (!project) return c.json({ error: "Project no longer configured" }, 400);
+
+    const result = await cleanupLaunch(store.db, launch, project);
+
+    broadcast({
+      type: "launch:cleaned",
+      payload: { launchId: launch.id },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json(result);
+  });
+
+  // ============================================================================
+  // MCP-facing endpoints — called by the standup MCP server on the agent's behalf
+  //
+  // The MCP server sends the real session_id when it can resolve one (read
+  // from the transcript filename Claude Code writes under
+  // ~/.claude/projects/ — see packages/mcp/src/session-id.ts), which is an
+  // exact match. cwd is sent alongside as a fallback for when that
+  // resolution fails, in which case we fall back to "most recently started
+  // active session in this cwd" — a heuristic that can misattribute if two
+  // sessions share a cwd, unlike the session_id path.
+  // ============================================================================
+
+  function resolveCallingSession(sessionId: string | null | undefined, cwd: string) {
+    if (sessionId) {
+      const session = getSession(store.db, sessionId);
+      if (session) return session;
+    }
+    return getMostRecentActiveSessionByCwd(store.db, cwd);
+  }
+
+  app.post("/api/checkpoint", async (c) => {
+    const { session_id, cwd, summary } = await c.req.json<{
+      session_id?: string;
+      cwd: string;
+      summary: string;
+    }>();
+
+    const session = resolveCallingSession(session_id, cwd);
+    if (!session) {
+      return c.json(
+        { error: `No active session found for cwd "${cwd}". Is the collector running and did this session register at startup?` },
+        400
+      );
+    }
+
+    const checkpoint = createCheckpoint(store.db, session.id, "self-reported", summary);
+
+    broadcast({
+      type: "checkpoint:new",
+      payload: checkpoint,
+      timestamp: new Date().toISOString(),
+    });
+
+    // A checkpoint marks a completed unit of work — the other turn boundary
+    // the design nominates for steer delivery, and the one that reaches an
+    // agent mid-task that isn't waiting on a new user prompt.
+    const pending = takeSteerContext(store.db, session.id);
+    if (pending) {
+      for (const steer of pending.steers) {
+        broadcast({
+          type: "steer:delivered",
+          payload: steer,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      console.log(
+        `[steer] Delivered ${pending.steers.length} steer(s) to ${session.id} at checkpoint`
+      );
+      return c.json({ ok: true, steers: pending.text });
+    }
+
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/ask", async (c) => {
+    const { session_id, cwd, question, options, timeout_s } = await c.req.json<{
+      session_id?: string;
+      cwd: string;
+      question: string;
+      options?: string[];
+      timeout_s?: number;
+    }>();
+
+    const session = resolveCallingSession(session_id, cwd);
+    if (!session) {
+      return c.json(
+        { error: `No active session found for cwd "${cwd}". Is the collector running and did this session register at startup?` },
+        400
+      );
+    }
+
+    const ask = createAsk(store.db, session.id, "ask_human", question, options);
+
+    updateSessionStatus(store.db, session.id, "waiting");
+    broadcast({
+      type: "ask:new",
+      payload: ask,
+      timestamp: new Date().toISOString(),
+    });
+    broadcast({
+      type: "session:status",
+      payload: { sessionId: session.id, status: "waiting" },
+      timestamp: new Date().toISOString(),
+    });
+
+    void pushNotification(session.title || "Agent needs you", question);
+
+    // Block the MCP tool call until answered or timed out.
+    const result = await waitForAskResolution(store.db, ask.id, timeout_s);
+
+    if (result.timedOut) {
+      return c.json({ answer: "", timed_out: true });
+    }
+
+    return c.json({ answer: result.answer });
+  });
+
+  app.post("/api/knowledge/search", async (c) => {
+    const { session_id, cwd, query, project } = await c.req.json<{
+      session_id?: string;
+      cwd: string;
+      query: string;
+      project?: string;
+    }>();
+
+    // Missing session correlation degrades to "scratch" rather than failing
+    // outright — this is a read-only convenience tool, not worth blocking on.
+    let projectId = project;
+    if (!projectId) {
+      const session = resolveCallingSession(session_id, cwd);
+      projectId = session?.projectId ?? "scratch";
+    }
+
+    // Lazily reconcile this project's knowledge dir against the store before
+    // searching — cheap (skips unchanged files via mtime), and it's what
+    // lets new/edited docs show up without restarting the collector.
+    await knowledgeSync?.syncProject(projectId);
+
+    const results = await searchKnowledge(store.db, projectId, query, embeddingProvider);
+
+    return c.json({ results, project: projectId });
+  });
+
+  app.post("/api/ripgrep", async (c) => {
+    // ripgrep only ever needed a cwd, not a session identity — use the
+    // caller's cwd directly rather than resolving through a session lookup.
+    const { cwd, pattern, path, flags } = await c.req.json<{
+      cwd: string;
+      pattern: string;
+      path?: string;
+      flags?: string[];
+    }>();
+
+    try {
+      const result = await runRipgrep(pattern, cwd, path, flags);
+      return c.json(result);
+    } catch (err) {
+      return c.json({ matches: [], truncated: false, error: String(err) }, 500);
+    }
+  });
+
+  app.post("/api/expert", async (c) => {
+    const { session_id, cwd, question } = await c.req.json<{
+      session_id?: string;
+      cwd: string;
+      question: string;
+    }>();
+
+    const session = resolveCallingSession(session_id, cwd);
+    const projectId = session?.projectId ?? "scratch";
+
+    // Same lazy reconcile as search_knowledge — the expert reads the same
+    // corpus, so it must see doc edits without a restart too.
+    await knowledgeSync?.syncProject(projectId);
+
+    const result = await askExpert({
+      db: store.db,
+      projectId,
+      cwd,
+      question,
+      embeddingProvider,
+      regions: await loadRegions(),
+    });
+
+    // Route every exchange through the feed. The design is explicit about
+    // why: you need to see the expert being wrong before it costs a bad
+    // edit, and the only way to tune retrieval is to watch it in the open.
+    if (session) {
+      const exchange = recordExpertExchange(
+        store.db,
+        session.id,
+        question,
+        result.answer,
+        result.region,
+        result.sources
+      );
+      broadcast({
+        type: "expert:exchange",
+        payload: exchange,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return c.json(result);
+  });
+
+  return app;
+}
+
+function withActivityTicks(store: Store, session: Session): Session {
+  return { ...session, activityTicks: getSilenceTicks(store.db, session.id) };
+}
+
+// ============================================================================
+// Hook event handler
+// ============================================================================
+
+/**
+ * Guarantees a sessions row exists before any FK-dependent insert (events,
+ * checkpoints, asks). Normally SessionStart creates it first, but a session
+ * that was already running before the collector's DB was reset/restarted
+ * never re-fires SessionStart — its later hooks would otherwise violate the
+ * events.session_id foreign key. Safe to call unconditionally; no-ops if the
+ * row is already there.
+ */
+function ensureSession(
+  store: Store,
+  sessionId: string,
+  cwd: string,
+  eventName: string
+): void {
+  const existing = getSession(store.db, sessionId);
+
+  if (existing) {
+    // Any event other than SessionEnd proves the session is still alive.
+    // Clear a stale ended_at from an earlier non-terminal SessionEnd
+    // (resume/clear), which would otherwise hide it from the UI forever.
+    if (eventName !== "SessionEnd" && existing.endedAt) {
+      reviveSession(store.db, sessionId);
+    }
+    return;
+  }
+
+  // A console-launched session runs in a git worktree, which by definition
+  // isn't among the project's configured `repos` — so check launches first,
+  // or deliberately-launched work would land in `scratch`.
+  const launch = findLaunchByCwd(store.db, cwd);
+  const project = launch ? null : findProjectByCwd(store.db, cwd);
+
+  createSession(store.db, {
+    id: sessionId,
+    projectId: launch?.projectId ?? project?.id ?? "scratch",
+    title: launch?.task ?? "",
+    cwd,
+    status: "running",
+  });
+
+  if (launch) {
+    attachSessionToLaunch(store.db, launch.id, sessionId);
+  }
+}
+
+function handleHookEvent(
+  store: Store,
+  payload: HookPayload,
+  broadcast: WsBroadcast
+): Record<string, unknown> | null {
+  const { session_id, hook_event_name, cwd } = payload;
+
+  ensureSession(store, session_id, cwd, hook_event_name);
+
+  // Populated by UserPromptSubmit when steers are waiting; returned to
+  // Claude Code as the hook's output.
+  let hookOutput: Record<string, unknown> | null = null;
+
+  switch (hook_event_name) {
+    case "SessionStart": {
+      const session = getSession(store.db, session_id);
+
+      broadcast({
+        type: "session:start",
+        payload: { sessionId: session_id, projectId: session?.projectId, cwd },
+        timestamp: new Date().toISOString(),
+      });
+      break;
+    }
+
+    case "SessionEnd": {
+      endSession(store.db, session_id);
+      clearTodoCheckpointState(session_id);
+      broadcast({
+        type: "session:end",
+        payload: { sessionId: session_id },
+        timestamp: new Date().toISOString(),
+      });
+      break;
+    }
+
+    case "UserPromptSubmit": {
+      const p = payload as { prompt: string } & typeof payload;
+      // First prompt becomes the session title; later prompts don't overwrite it.
+      updateSessionTitle(store.db, session_id, p.prompt.slice(0, 100));
+      // A new turn is starting — the session is no longer idle/waiting.
+      updateSessionStatus(store.db, session_id, "running");
+      broadcast({
+        type: "session:status",
+        payload: { sessionId: session_id, status: "running" },
+        timestamp: new Date().toISOString(),
+      });
+
+      // Deliver queued steers here: a new prompt is a turn boundary by
+      // definition, which is exactly the constraint the design imposes
+      // (never inject mid-turn — see "Steer injected mid-turn derails a
+      // run" in the failure-modes table).
+      const pending = takeSteerContext(store.db, session_id);
+      if (pending) {
+        hookOutput = {
+          hookSpecificOutput: {
+            hookEventName: "UserPromptSubmit",
+            additionalContext: pending.text,
+          },
+        };
+
+        for (const steer of pending.steers) {
+          broadcast({
+            type: "steer:delivered",
+            payload: steer,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        console.log(
+          `[steer] Delivered ${pending.steers.length} steer(s) to ${session_id} at turn boundary`
+        );
+      }
+      break;
+    }
+
+    case "PostToolUse": {
+      const p = payload as ToolUsePayload;
+
+      if (p.tool_name === "TodoWrite") {
+        for (const checkpoint of checkpointCompletedTodos(store.db, session_id, p.tool_input)) {
+          broadcast({
+            type: "checkpoint:new",
+            payload: checkpoint,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+
+      broadcast({
+        type: "event:new",
+        payload: { sessionId: session_id, type: hook_event_name },
+        timestamp: new Date().toISOString(),
+      });
+      break;
+    }
+
+    case "Stop": {
+      updateSessionStatus(store.db, session_id, "idle");
+      broadcast({
+        type: "session:status",
+        payload: { sessionId: session_id, status: "idle" },
+        timestamp: new Date().toISOString(),
+      });
+      break;
+    }
+
+    case "SubagentStop": {
+      // Structural checkpoint from subagent completion
+      const p = payload as { description?: string } & typeof payload;
+      if (p.description) {
+        const checkpoint = createCheckpoint(
+          store.db,
+          session_id,
+          "structural",
+          p.description
+        );
+
+        broadcast({
+          type: "checkpoint:new",
+          payload: checkpoint,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      break;
+    }
+
+    case "Notification": {
+      const p = payload as { notification_type: string; message?: string } & typeof payload;
+      if (p.notification_type === "permission_prompt") {
+        updateSessionStatus(store.db, session_id, "waiting");
+        broadcast({
+          type: "session:status",
+          payload: { sessionId: session_id, status: "waiting" },
+          timestamp: new Date().toISOString(),
+        });
+
+        const session = getSession(store.db, session_id);
+        void pushNotification(
+          session?.title || "Agent needs you",
+          p.message ?? "Permission requested"
+        );
+      }
+      break;
+    }
+
+    default: {
+      broadcast({
+        type: "event:new",
+        payload: { sessionId: session_id, type: hook_event_name },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  // Record every event for the silence meter and per-session scrollback.
+  // SessionStart always creates the session row above first, so the events
+  // table's session_id FK is satisfied no matter which branch ran.
+  insertEvent(store.db, session_id, hook_event_name, payload);
+
+  return hookOutput;
+}
