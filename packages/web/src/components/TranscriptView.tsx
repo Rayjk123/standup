@@ -16,6 +16,8 @@ interface Message {
   toolCalls: ToolCall[];
   outputTokens?: number;
   model?: string;
+  /** A `/command` run through the CLI passthrough — see server-side LocalCommand. */
+  localCommand?: { name: string; args: string; stdout: string };
 }
 
 interface TranscriptPage {
@@ -229,10 +231,34 @@ export function TranscriptView({
                 </span>
               </div>
 
-              {m.text && (
-                <div style={{ wordBreak: "break-word" }}>
-                  <Markdown>{m.text}</Markdown>
+              {m.localCommand ? (
+                <div
+                  style={{
+                    fontFamily: theme.mono,
+                    fontSize: 11.5,
+                    color: theme.dim,
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "baseline",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span style={{ color: theme.running }}>
+                    {m.localCommand.name}
+                    {m.localCommand.args ? ` ${m.localCommand.args}` : ""}
+                  </span>
+                  {m.localCommand.stdout && (
+                    <span style={{ color: theme.faint }}>
+                      → {m.localCommand.stdout}
+                    </span>
+                  )}
                 </div>
+              ) : (
+                m.text && (
+                  <div style={{ wordBreak: "break-word" }}>
+                    <Markdown>{m.text}</Markdown>
+                  </div>
+                )
               )}
 
               {/* Collapsed to one line each: the feed is a conversation, and

@@ -27,6 +27,21 @@ export interface TranscriptToolCall {
   input: Record<string, unknown>;
 }
 
+/**
+ * A slash command run through Claude Code's `!`/`/` passthrough — `/model`,
+ * `/login`, etc. These arrive as three separate consecutive `user` records
+ * whose content is an XML-ish tag string, not a structured field: a
+ * `<local-command-caveat>`, one carrying `<command-name>`/
+ * `<command-message>`/`<command-args>`, and a `<local-command-stdout>`.
+ * Detected and merged into one entry rather than shown as raw tags, or as
+ * three separate "you" turns for what is really one action.
+ */
+export interface LocalCommand {
+  name: string;
+  args: string;
+  stdout: string;
+}
+
 export interface TranscriptMessage {
   uuid: string;
   role: TranscriptRole;
@@ -34,6 +49,8 @@ export interface TranscriptMessage {
   /** Prose only — thinking blocks are excluded, see extractText. */
   text: string;
   toolCalls: TranscriptToolCall[];
+  /** Set instead of `text` when this record is a merged local-command triple. */
+  localCommand?: LocalCommand;
   /** Output tokens for this message; additive across a session. */
   outputTokens?: number;
   /** Context size at this turn; a point-in-time reading, not additive. */
@@ -134,6 +151,16 @@ function isToolResultOnly(content: unknown): boolean {
   );
 }
 
+const LOCAL_COMMAND_CAVEAT_RE = /^<local-command-caveat>/;
+const LOCAL_COMMAND_NAME_RE =
+  /<command-name>([^<]*)<\/command-name>\s*<command-message>([^<]*)<\/command-message>\s*<command-args>([^<]*)<\/command-args>/;
+const LOCAL_COMMAND_STDOUT_RE = /^<local-command-stdout>([\s\S]*)<\/local-command-stdout>$/;
+
+function rawText(raw: RawRecord): string {
+  const content = raw.message?.content;
+  return typeof content === "string" ? content : "";
+}
+
 function toMessage(raw: RawRecord): TranscriptMessage | null {
   if (raw.type !== "user" && raw.type !== "assistant") return null;
 
@@ -163,17 +190,62 @@ function toMessage(raw: RawRecord): TranscriptMessage | null {
 }
 
 function parseLines(lines: string[]): TranscriptMessage[] {
-  const messages: TranscriptMessage[] = [];
+  const raws: RawRecord[] = [];
 
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
-      const message = toMessage(JSON.parse(line) as RawRecord);
-      if (message) messages.push(message);
+      raws.push(JSON.parse(line) as RawRecord);
     } catch {
       // Truncated or unrecognized record — skipping one line is always
       // preferable to failing the whole read.
     }
+  }
+
+  const messages: TranscriptMessage[] = [];
+
+  for (let i = 0; i < raws.length; i++) {
+    const raw = raws[i];
+    if (raw.type !== "user") {
+      const message = toMessage(raw);
+      if (message) messages.push(message);
+      continue;
+    }
+
+    // A local-command caveat is always followed by the name/args record and
+    // then the stdout record, each its own line — see LocalCommand above.
+    // Detected on the caveat and consumes the next two lines so they don't
+    // also get pushed as their own (unreadable) entries.
+    if (LOCAL_COMMAND_CAVEAT_RE.test(rawText(raw))) {
+      const nameRaw = raws[i + 1];
+      const stdoutRaw = raws[i + 2];
+      const nameMatch =
+        nameRaw?.type === "user" ? rawText(nameRaw).match(LOCAL_COMMAND_NAME_RE) : null;
+      const stdoutMatch =
+        stdoutRaw?.type === "user"
+          ? rawText(stdoutRaw).match(LOCAL_COMMAND_STDOUT_RE)
+          : null;
+
+      if (nameMatch) {
+        messages.push({
+          uuid: raw.uuid ?? "",
+          role: "user",
+          timestamp: raw.timestamp ?? "",
+          text: "",
+          toolCalls: [],
+          localCommand: {
+            name: nameMatch[1],
+            args: nameMatch[3],
+            stdout: stdoutMatch?.[1] ?? "",
+          },
+        });
+        i += stdoutMatch ? 2 : 1;
+        continue;
+      }
+    }
+
+    const message = toMessage(raw);
+    if (message) messages.push(message);
   }
 
   return messages;
