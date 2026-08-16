@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Console } from "./components/Console";
 import { useWebSocket } from "./hooks/useWebSocket";
 import type {
@@ -8,6 +8,7 @@ import type {
   ExpertExchange,
   Launch,
   ProjectWithCounts,
+  WsMessage,
 } from "@standup/shared";
 
 export default function App() {
@@ -26,9 +27,6 @@ export default function App() {
   });
   const [loading, setLoading] = useState(true);
 
-  // WebSocket for real-time updates
-  const { lastMessage } = useWebSocket("ws://localhost:7778");
-
   // `all=1` includes ended sessions. They're needed in the Projects tab so
   // their stored rows can be reviewed and cleaned up — an ended session that
   // never appears can never be deleted.
@@ -37,6 +35,84 @@ export default function App() {
       .then((r) => r.json())
       .then(setSessions)
       .catch(() => {});
+
+  const refreshAsks = () =>
+    fetch("/api/asks/pending")
+      .then((r) => r.json())
+      .then(setAsks)
+      .catch(() => {});
+
+  const refreshLaunches = () =>
+    fetch("/api/launches")
+      .then((r) => r.json())
+      .then(setLaunches)
+      .catch(() => {});
+
+  // Runs synchronously per message — unlike storing just the latest message
+  // in state, this can't coalesce two broadcasts that land in the same task
+  // (e.g. a hook firing ask:resolved immediately followed by checkpoint:new)
+  // into only the last one being handled.
+  const handleWsMessage = useCallback((message: WsMessage) => {
+    switch (message.type) {
+      case "session:start":
+      case "session:end":
+      case "session:status":
+        refreshSessions();
+        break;
+
+      case "event:new": {
+        const { sessionId } = message.payload as { sessionId: string };
+        setLastEvent((prev) => ({ sessionId, n: prev.n + 1 }));
+        break;
+      }
+
+      case "checkpoint:new":
+        setCheckpoints((prev) => [message.payload as Checkpoint, ...prev]);
+        break;
+
+      case "ask:new":
+        setAsks((prev) => [message.payload as Ask, ...prev]);
+        break;
+
+      case "ask:resolved": {
+        const { askId } = message.payload as { askId: string };
+        setAsks((prev) => prev.filter((a) => a.id !== askId));
+        break;
+      }
+
+      case "projects:updated":
+        setProjects(message.payload as ProjectWithCounts[]);
+        break;
+
+      case "expert:exchange":
+        setExpertExchanges((prev) => [message.payload as ExpertExchange, ...prev]);
+        break;
+
+      case "session:deleted":
+        refreshSessions();
+        break;
+
+      case "launch:started":
+      case "launch:stopped":
+      case "launch:cleaned":
+        refreshLaunches();
+        break;
+    }
+  }, []);
+
+  // The blocked/asks feed in particular needs to end up correct even if a
+  // broadcast was missed while disconnected (tab backgrounded, laptop slept,
+  // server restarted) — the socket has no replay/backlog, so resync pending
+  // asks (and anything else that isn't purely append-only) from the server
+  // whenever the connection comes back, instead of only on initial page load.
+  const handleWsReconnect = useCallback(() => {
+    refreshAsks();
+    refreshSessions();
+    refreshLaunches();
+  }, []);
+
+  // WebSocket for real-time updates
+  useWebSocket("ws://localhost:7778", handleWsMessage, handleWsReconnect);
 
   // Initial data fetch
   useEffect(() => {
@@ -74,58 +150,6 @@ export default function App() {
     fetchData();
   }, []);
 
-  // Handle WebSocket messages
-  useEffect(() => {
-    if (!lastMessage) return;
-
-    switch (lastMessage.type) {
-      case "session:start":
-      case "session:end":
-      case "session:status":
-        refreshSessions();
-        break;
-
-      case "event:new": {
-        const { sessionId } = lastMessage.payload as { sessionId: string };
-        setLastEvent((prev) => ({ sessionId, n: prev.n + 1 }));
-        break;
-      }
-
-      case "checkpoint:new":
-        setCheckpoints((prev) => [lastMessage.payload as Checkpoint, ...prev]);
-        break;
-
-      case "ask:new":
-        setAsks((prev) => [lastMessage.payload as Ask, ...prev]);
-        break;
-
-      case "ask:resolved":
-        const { askId } = lastMessage.payload as { askId: string };
-        setAsks((prev) => prev.filter((a) => a.id !== askId));
-        break;
-
-      case "projects:updated":
-        setProjects(lastMessage.payload as ProjectWithCounts[]);
-        break;
-
-      case "expert:exchange":
-        setExpertExchanges((prev) => [lastMessage.payload as ExpertExchange, ...prev]);
-        break;
-
-      case "session:deleted":
-        refreshSessions();
-        break;
-
-      case "launch:started":
-      case "launch:stopped":
-      case "launch:cleaned":
-        fetch("/api/launches")
-          .then((r) => r.json())
-          .then(setLaunches);
-        break;
-    }
-  }, [lastMessage]);
-
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}>
@@ -145,9 +169,7 @@ export default function App() {
       lastEvent={lastEvent}
       onSessionChanged={refreshSessions}
       onLaunchChanged={() => {
-        fetch("/api/launches")
-          .then((r) => r.json())
-          .then(setLaunches);
+        refreshLaunches();
         refreshSessions();
       }}
       onResolveAsk={async (askId, answer) => {

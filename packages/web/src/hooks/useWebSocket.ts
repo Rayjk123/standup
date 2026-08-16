@@ -1,11 +1,29 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { WsMessage } from "@standup/shared";
 
-export function useWebSocket(url: string) {
-  const [lastMessage, setLastMessage] = useState<WsMessage | null>(null);
+// `onMessage` fires synchronously for every message, in order — unlike a
+// single `lastMessage` state slot, two messages that arrive in the same
+// task (e.g. a hook handler broadcasting ask:resolved then checkpoint:new
+// back-to-back) don't coalesce into just the last one.
+//
+// `onReconnect` fires when the socket reopens after having been connected
+// before, so callers can resync anything the server broadcast while the
+// tab was disconnected (sleep, network blip, server restart) instead of
+// silently going stale until a manual reload.
+export function useWebSocket(
+  url: string,
+  onMessage: (message: WsMessage) => void,
+  onReconnect?: () => void,
+) {
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const hasConnectedBeforeRef = useRef(false);
+
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
+  const onReconnectRef = useRef(onReconnect);
+  onReconnectRef.current = onReconnect;
 
   const connect = useCallback(() => {
     try {
@@ -14,6 +32,10 @@ export function useWebSocket(url: string) {
       ws.onopen = () => {
         console.log("[ws] Connected");
         setIsConnected(true);
+        if (hasConnectedBeforeRef.current) {
+          onReconnectRef.current?.();
+        }
+        hasConnectedBeforeRef.current = true;
       };
 
       ws.onclose = () => {
@@ -29,7 +51,7 @@ export function useWebSocket(url: string) {
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data) as WsMessage;
-          setLastMessage(message);
+          onMessageRef.current(message);
         } catch {
           // Ignore non-JSON messages (like pong)
         }
@@ -61,5 +83,5 @@ export function useWebSocket(url: string) {
     };
   }, [connect]);
 
-  return { lastMessage, isConnected };
+  return { isConnected };
 }
