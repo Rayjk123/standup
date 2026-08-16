@@ -5,6 +5,7 @@ import type {
   ProjectWithCounts,
   Session,
   Checkpoint,
+  Launch,
 } from "@standup/shared";
 import { theme, statusColors } from "./theme";
 import { SilenceStrip } from "./SilenceStrip";
@@ -18,6 +19,7 @@ interface ProjectsViewProps {
   projects: ProjectWithCounts[];
   sessions: Session[];
   checkpoints: Checkpoint[];
+  launches: Launch[];
   onSaveProject: (
     id: string | null,
     patch: Partial<Project>
@@ -32,6 +34,7 @@ export function ProjectsView({
   projects,
   sessions,
   checkpoints,
+  launches,
   onSaveProject,
   onDeleteProject,
   onSessionChanged,
@@ -54,9 +57,9 @@ export function ProjectsView({
 
   // null = not editing; "" = creating a new project; otherwise a project id.
   const [editing, setEditing] = useState<string | null>(null);
-  const [detailTab, setDetailTab] = useState<"transcript" | "checkpoints">(
-    "transcript"
-  );
+  const [detailTab, setDetailTab] = useState<
+    "transcript" | "checkpoints" | "info"
+  >("transcript");
   const [projectTab, setProjectTab] = useState<"knowledge" | "settings">(
     "knowledge"
   );
@@ -73,6 +76,10 @@ export function ProjectsView({
   const selectedCheckpoints = checkpoints.filter(
     (c) => c.sessionId === selectedSession
   );
+  // Only launched sessions have one — a monitored session was started by the
+  // user in their own terminal, so there's no worktree/branch/tmux pane to
+  // show beyond the working directory itself.
+  const selectedLaunch = launches.find((l) => l.sessionId === selectedSession);
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 100px)" }}>
@@ -468,7 +475,7 @@ export function ProjectsView({
                 borderBottom: `1px solid ${theme.edgeSoft}`,
               }}
             >
-              {(["transcript", "checkpoints"] as const).map((t) => (
+              {(["transcript", "checkpoints", "info"] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setDetailTab(t)}
@@ -505,7 +512,7 @@ export function ProjectsView({
                   lastEvent.sessionId === selected.id ? lastEvent.n : 0
                 }
               />
-            ) : (
+            ) : detailTab === "checkpoints" ? (
               <div style={{ padding: "10px 0 24px" }}>
                 {selectedCheckpoints.length === 0 ? (
                   <div
@@ -567,6 +574,94 @@ export function ProjectsView({
                       </div>
                     </div>
                   ))
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: "18px 20px 24px" }}>
+                <div style={{ marginBottom: 18 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: theme.dim,
+                      marginBottom: 6,
+                    }}
+                  >
+                    Working directory
+                  </div>
+                  <div
+                    title="cd into this to work alongside the agent"
+                    style={{
+                      fontFamily: theme.mono,
+                      fontSize: 12.5,
+                      color: theme.text,
+                      userSelect: "all",
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {selected.cwd}
+                  </div>
+                </div>
+
+                {selectedLaunch ? (
+                  <>
+                    <div style={{ marginBottom: 18 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: theme.dim,
+                          marginBottom: 6,
+                        }}
+                      >
+                        Branch
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: theme.mono,
+                          fontSize: 12.5,
+                          color: theme.text,
+                        }}
+                      >
+                        {selectedLaunch.branch}{" "}
+                        <span style={{ color: theme.faint }}>
+                          ({selectedLaunch.kind})
+                        </span>
+                      </div>
+                    </div>
+
+                    {selectedLaunch.tmuxSession && (
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: theme.dim,
+                            marginBottom: 6,
+                          }}
+                        >
+                          Attach to the agent's terminal
+                        </div>
+                        <div
+                          title="For a full interactive terminal"
+                          style={{
+                            fontFamily: theme.mono,
+                            fontSize: 12.5,
+                            color: theme.text,
+                            userSelect: "all",
+                          }}
+                        >
+                          tmux attach -t {selectedLaunch.tmuxSession}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ fontSize: 12.5, color: theme.faint, lineHeight: 1.55 }}>
+                    You started this session in your own terminal, so there's
+                    no worktree or tmux pane Standup owns — just the working
+                    directory above.
+                  </div>
                 )}
               </div>
             )}

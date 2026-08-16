@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type {
   Checkpoint,
   Ask,
@@ -170,6 +171,8 @@ export function FeedView({
   // confirmation would vanish the instant it succeeded.
   const [replies, setReplies] = useState<Record<string, string>>({});
 
+  const navigate = useNavigate();
+
   // The merged feed carries checkpoints, asks, and expert exchanges — never
   // raw tool calls. That separation is enforced here, at the query, not in
   // the rendering: an activity tier that reaches this array has already
@@ -266,13 +269,24 @@ export function FeedView({
               ? theme.running
               : theme.checkpoint;
 
+        // Opens the session this item belongs to in Projects, where the full
+        // transcript and controls live. A launch may not have a session yet
+        // (the agent registers a moment after the worktree is created) — its
+        // project is still worth opening.
+        const openInProjects = () => {
+          if (session) navigate(`/projects/s/${session.id}`);
+          else if (isLaunch) navigate(`/projects/p/${(item.data as Launch).projectId}`);
+        };
+
         return (
           <div
             key={item.data.id}
+            onClick={openInProjects}
             style={{
               display: "flex",
               gap: 12,
               padding: "9px 20px 5px",
+              cursor: "pointer",
             }}
           >
             {/* Avatar */}
@@ -361,10 +375,12 @@ export function FeedView({
               {isExpert ? (
                 <ExpertBody exchange={item.data as ExpertExchange} />
               ) : isLaunch ? (
-                <LaunchBody
-                  launch={item.data as Launch}
-                  onStopped={onLaunchChanged}
-                />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <LaunchBody
+                    launch={item.data as Launch}
+                    onStopped={onLaunchChanged}
+                  />
+                </div>
               ) : (
                 <div style={{ fontSize: 14, lineHeight: 1.55, color: theme.text }}>
                   {item.type === "checkpoint"
@@ -377,19 +393,21 @@ export function FeedView({
                   neither has a counterpart action for the human, so no
                   reply affordance. */}
               {!isExpert && !isLaunch && (
-                <Replier
-                  target={isAsk ? "ask" : "checkpoint"}
-                  options={isAsk ? (item.data as Ask).options : undefined}
-                  reply={replies[item.data.id]}
-                  onReply={async (body) => {
-                    if (isAsk) {
-                      await onResolveAsk(item.data.id, body);
-                    } else {
-                      await onSteer(item.data.sessionId, body);
-                    }
-                    setReplies((prev) => ({ ...prev, [item.data.id]: body }));
-                  }}
-                />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <Replier
+                    target={isAsk ? "ask" : "checkpoint"}
+                    options={isAsk ? (item.data as Ask).options : undefined}
+                    reply={replies[item.data.id]}
+                    onReply={async (body) => {
+                      if (isAsk) {
+                        await onResolveAsk(item.data.id, body);
+                      } else {
+                        await onSteer(item.data.sessionId, body);
+                      }
+                      setReplies((prev) => ({ ...prev, [item.data.id]: body }));
+                    }}
+                  />
+                </div>
               )}
             </div>
           </div>

@@ -208,6 +208,7 @@ export function Console({
                 projects={projects}
                 sessions={sessions}
                 checkpoints={checkpoints}
+                launches={launches}
                 onSaveProject={onSaveProject}
                 onDeleteProject={onDeleteProject}
                 onSessionChanged={onSessionChanged}
