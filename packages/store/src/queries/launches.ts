@@ -94,13 +94,28 @@ export function getLaunches(db: Database): Launch[] {
  * A worktree lives outside the project's configured `repos`, so the normal
  * findProjectByCwd path can't match it and the session would land in
  * `scratch` despite being deliberately started for a project.
+ *
+ * Only matches a launch that's still unclaimed (never attached to a session)
+ * or whose attached session is still live. Once that session has ended, the
+ * launch is spent — its task/project already flowed into that session's row,
+ * and matching it again would silently hand a brand-new, unrelated session
+ * the old one's title and steal the launch out from under it via
+ * attachSessionToLaunch. This matters most for an *adopted* launch, whose
+ * `worktree_path` is the session's original cwd rather than a fresh, unique
+ * worktree (see launcher.ts's adopt path) — for a bare repo directory that
+ * path is shared by every plain session anyone starts there afterward.
+ * `status != 'cleaned'` additionally excludes a launch whose worktree has
+ * since been removed.
  */
 export function findLaunchByCwd(db: Database, cwd: string): Launch | null {
   const row = db
     .query(
-      `SELECT * FROM launches
-       WHERE ? = worktree_path OR ? LIKE worktree_path || '/%'
-       ORDER BY length(worktree_path) DESC
+      `SELECT l.* FROM launches l
+       LEFT JOIN sessions s ON s.id = l.session_id
+       WHERE (? = l.worktree_path OR ? LIKE l.worktree_path || '/%')
+         AND l.status != 'cleaned'
+         AND (l.session_id IS NULL OR s.ended_at IS NULL)
+       ORDER BY length(l.worktree_path) DESC, l.created_at DESC
        LIMIT 1`
     )
     .get(cwd, cwd) as LaunchRow | null;
