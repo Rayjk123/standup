@@ -82,6 +82,7 @@ import {
   isAutoCheckpointEnabled,
   setAutoCheckpointEnabled,
   clearAutoCheckpointState,
+  AUTO_CHECKPOINT_CWD,
 } from "./auto-checkpoint.js";
 
 /** Standup's own MCP tools — nudging on these would feed back on itself. */
@@ -1071,6 +1072,17 @@ function handleHookEvent(
   broadcast: WsBroadcast
 ): Record<string, unknown> | null {
   const { session_id, hook_event_name, cwd } = payload;
+
+  // Standup's own auto-checkpoint summarizer is a real `claude -p`
+  // invocation, and Standup's hooks are installed globally — every
+  // invocation fires them, not just interactive sessions (see
+  // scripts/setup-hooks.ts). It always runs from this one reserved cwd, so
+  // that's the signal to ignore it entirely: no session row, no events,
+  // nothing. Without this, its own Stop event would trigger another
+  // auto-checkpoint call on itself and recurse without bound — verified
+  // live, three generations deep, before manually disabling the setting
+  // interrupted it.
+  if (cwd === AUTO_CHECKPOINT_CWD) return null;
 
   ensureSession(store, session_id, cwd, hook_event_name);
 

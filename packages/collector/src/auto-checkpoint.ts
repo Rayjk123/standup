@@ -1,3 +1,6 @@
+import { mkdirSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
 import type { Database } from "bun:sqlite";
 import { createCheckpoint, getSetting, setSetting } from "@standup/store";
 import type { Checkpoint } from "@standup/shared";
@@ -24,6 +27,28 @@ const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 const SUMMARIZE_TIMEOUT_MS = 30_000;
 const MAX_TRANSCRIPT_CHARS = 12_000; // keeps the prompt — and its cost — bounded
 const MAX_SUMMARY_CHARS = 280;
+
+/**
+ * The one cwd the summarizer subprocess ever runs from — never a real
+ * project directory. Standup's hooks are installed globally
+ * (~/.claude/settings.json applies to every `claude` invocation, not just
+ * interactive ones — see scripts/setup-hooks.ts), so this subprocess fires
+ * its own SessionStart/Stop hooks back at the collector exactly like a real
+ * session would. server.ts's hook handler checks the incoming cwd against
+ * this constant and no-ops entirely for it — no session row, no events —
+ * which is what breaks the loop: without that guard, the subprocess's own
+ * Stop event would trigger another auto-checkpoint call on itself, which
+ * fires its own Stop event, recursing without bound. Verified live: this
+ * happened for real, three generations deep, before the setting was
+ * manually flipped back off cut it short.
+ */
+export const AUTO_CHECKPOINT_CWD = join(
+  homedir(),
+  ".local",
+  "share",
+  "standup",
+  "internal"
+);
 
 // Per-session watermark: the transcript message already considered as of the
 // last fire, so a repeated call only sees what's new. In-memory, like the
@@ -95,9 +120,11 @@ async function summarize(transcript: string): Promise<string | null> {
     'clear outcome — reply with exactly: NONE\n\n' +
     transcript;
 
+  mkdirSync(AUTO_CHECKPOINT_CWD, { recursive: true });
+
   const proc = Bun.spawn(
     ["claude", "-p", prompt, "--model", HAIKU_MODEL, "--tools", "", "--output-format", "json"],
-    { stdout: "pipe", stderr: "pipe" }
+    { cwd: AUTO_CHECKPOINT_CWD, stdout: "pipe", stderr: "pipe" }
   );
   const timer = setTimeout(() => proc.kill(), SUMMARIZE_TIMEOUT_MS);
 
