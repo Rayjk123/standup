@@ -173,13 +173,17 @@ export function ProjectEditor({
             />
           </div>
           <div style={{ flex: 1 }}>
-            <span style={label}>Expert index (optional)</span>
+            <span style={label}>Expert index (unused)</span>
             <input
               value={expert}
               onChange={(e) => setExpert(e.target.value)}
-              placeholder="fusion-api"
-              style={field}
+              placeholder="—"
+              style={{ ...field, opacity: 0.6 }}
             />
+            <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+              Reserved. Retrieval scopes knowledge by project id and attributes
+              regions from experts.toml; nothing reads this yet.
+            </div>
           </div>
         </div>
 

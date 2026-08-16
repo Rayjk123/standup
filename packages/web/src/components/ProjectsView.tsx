@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import type { Project, Session, Checkpoint } from "@standup/shared";
+import type {
+  Project,
+  ProjectWithCounts,
+  Session,
+  Checkpoint,
+} from "@standup/shared";
 import { theme, statusColors } from "./theme";
 import { SilenceStrip } from "./SilenceStrip";
 import { ProjectEditor } from "./ProjectEditor";
@@ -8,7 +13,7 @@ import { SessionControls } from "./SessionControls";
 import { TranscriptView } from "./TranscriptView";
 
 interface ProjectsViewProps {
-  projects: Project[];
+  projects: ProjectWithCounts[];
   sessions: Session[];
   checkpoints: Checkpoint[];
   onSaveProject: (
@@ -130,9 +135,14 @@ export function ProjectsView({
                 </button>
               </div>
 
-              {/* Expert indicator */}
-              {project.expert && (
+              {/* Knowledge indicator.
+                  Previously read "@<expert> indexed", driven by the project's
+                  `expert` field — which nothing in the retrieval path reads,
+                  so it claimed an index that did not exist. This counts the
+                  docs actually indexed for the project. */}
+              {project.knowledgeDocs > 0 && (
                 <div
+                  title="Human-authored knowledge docs searchable by agents in this project"
                   style={{
                     padding: "0 14px 6px 45px",
                     fontSize: 11.5,
@@ -140,7 +150,8 @@ export function ProjectsView({
                     opacity: 0.85,
                   }}
                 >
-                  @{project.expert} indexed
+                  {project.knowledgeDocs} knowledge doc
+                  {project.knowledgeDocs === 1 ? "" : "s"}
                 </div>
               )}
 

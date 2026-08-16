@@ -13,6 +13,11 @@ export interface Project {
   branch: string;
 }
 
+export interface ProjectWithCounts extends Project {
+  /** Knowledge docs indexed for this project. Computed, not persisted. */
+  knowledgeDocs: number;
+}
+
 export interface ProjectConfig {
   project: Project[];
 }

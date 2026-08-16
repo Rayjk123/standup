@@ -6,6 +6,7 @@ import type {
   Ask,
   ExpertExchange,
   Launch,
+  ProjectWithCounts,
 } from "@standup/shared";
 import { FeedView } from "./FeedView";
 import { BlockedView } from "./BlockedView";
@@ -16,7 +17,7 @@ import { theme } from "./theme";
 const VIEWS = ["feed", "blocked", "projects"] as const;
 
 interface ConsoleProps {
-  projects: Project[];
+  projects: ProjectWithCounts[];
   sessions: Session[];
   checkpoints: Checkpoint[];
   asks: Ask[];

@@ -140,8 +140,26 @@ export function createServer(
   // Projects — SQLite is authoritative; see ProjectsRegistry for why TOML
   // is only a seed/import path.
   app.get("/api/projects", (c) => {
-    const projects = getProjects(store.db);
-    return c.json(projects);
+    // Knowledge doc counts come along because the UI would otherwise have
+    // nothing true to say about a project's knowledge — it previously showed
+    // an "indexed" label driven by the `expert` field, which nothing in the
+    // retrieval path actually reads.
+    const counts = new Map(
+      (
+        store.db
+          .query(
+            "SELECT project_id, COUNT(*) AS n FROM knowledge GROUP BY project_id"
+          )
+          .all() as Array<{ project_id: string; n: number }>
+      ).map((r) => [r.project_id, r.n])
+    );
+
+    return c.json(
+      getProjects(store.db).map((p) => ({
+        ...p,
+        knowledgeDocs: counts.get(p.id) ?? 0,
+      }))
+    );
   });
 
   app.post("/api/projects", async (c) => {

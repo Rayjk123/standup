@@ -3,15 +3,15 @@ import { Console } from "./components/Console";
 import { useWebSocket } from "./hooks/useWebSocket";
 import type {
   Session,
-  Project,
   Checkpoint,
   Ask,
   ExpertExchange,
   Launch,
+  ProjectWithCounts,
 } from "@standup/shared";
 
 export default function App() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectWithCounts[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [asks, setAsks] = useState<Ask[]>([]);
@@ -92,7 +92,7 @@ export default function App() {
         break;
 
       case "projects:updated":
-        setProjects(lastMessage.payload as Project[]);
+        setProjects(lastMessage.payload as ProjectWithCounts[]);
         break;
 
       case "expert:exchange":
