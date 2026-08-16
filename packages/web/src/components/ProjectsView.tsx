@@ -205,6 +205,22 @@ export function ProjectsView({
                         >
                           {session.title || "Untitled"}
                         </span>
+                        {/* Owned sessions can be driven from here; monitored
+                            ones can only be watched. Worth seeing without
+                            opening each session. */}
+                        {session.owned && (
+                          <span
+                            title="Standup owns this session's terminal"
+                            style={{
+                              fontFamily: theme.mono,
+                              fontSize: 9,
+                              color: theme.checkpoint,
+                              flexShrink: 0,
+                            }}
+                          >
+                            ⇄
+                          </span>
+                        )}
                       </div>
                       <div style={{ marginTop: 5, paddingLeft: 14 }}>
                         <SilenceStrip status={session.status} ticks={session.activityTicks} />

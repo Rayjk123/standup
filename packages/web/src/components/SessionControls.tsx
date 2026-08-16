@@ -33,6 +33,25 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
   const [freed, setFreed] = useState<string | null>(null);
 
   const ended = !!session.endedAt;
+  const owned = !!session.owned;
+
+  async function adopt() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/adopt`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Adoption failed");
+        return;
+      }
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function act(kind: "stop" | "delete") {
     setBusy(true);
@@ -76,6 +95,37 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
   return (
     <div>
       <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+        {/* Which capabilities exist depends entirely on whether Standup owns
+            this session's terminal, so say so rather than leaving the user to
+            infer it from which buttons happen to work. */}
+        <span
+          title={
+            owned
+              ? "Standup owns this session's terminal — it can read the screen, type into it, and stop it."
+              : "You started this session in your own terminal. Standup observes it but can't type into it."
+          }
+          style={{
+            fontFamily: theme.mono,
+            fontSize: 9.5,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            color: owned ? theme.checkpoint : theme.faint,
+            border: `1px solid ${owned ? theme.checkpoint : theme.edge}44`,
+            borderRadius: 3,
+            padding: "2px 6px",
+          }}
+        >
+          {owned ? "owned" : "monitored"}
+        </span>
+
+        {/* Adoption resumes an ended session under a tmux pane Standup owns,
+            converting monitored → owned. Only offered where it can work. */}
+        {!owned && ended && (
+          <button onClick={() => void adopt()} disabled={busy} style={linkButton}>
+            {busy ? "adopting…" : "⇄ adopt"}
+          </button>
+        )}
+
         {!ended && (
           <button
             onClick={() => setConfirm(confirm === "stop" ? null : "stop")}

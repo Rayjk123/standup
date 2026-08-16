@@ -1,8 +1,9 @@
 import type { Database } from "bun:sqlite";
-import type { Launch, LaunchStatus } from "@standup/shared";
+import type { Launch, LaunchStatus, LaunchKind } from "@standup/shared";
 
 interface LaunchRow {
   id: string;
+  kind: "worktree" | "adopted";
   project_id: string;
   task: string;
   worktree_path: string;
@@ -18,6 +19,7 @@ interface LaunchRow {
 function toLaunch(row: LaunchRow): Launch {
   return {
     id: row.id,
+    kind: row.kind ?? "worktree",
     projectId: row.project_id,
     task: row.task,
     worktreePath: row.worktree_path,
@@ -33,14 +35,18 @@ function toLaunch(row: LaunchRow): Launch {
 
 export function createLaunch(
   db: Database,
-  launch: Omit<Launch, "createdAt" | "status"> & { status?: LaunchStatus }
+  launch: Omit<Launch, "createdAt" | "status" | "kind"> & {
+    status?: LaunchStatus;
+    kind?: LaunchKind;
+  }
 ): Launch {
   db.run(
     `INSERT INTO launches
-       (id, project_id, task, worktree_path, branch, base_branch, tmux_session, session_id, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, kind, project_id, task, worktree_path, branch, base_branch, tmux_session, session_id, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       launch.id,
+      launch.kind ?? "worktree",
       launch.projectId,
       launch.task,
       launch.worktreePath,

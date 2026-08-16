@@ -57,6 +57,7 @@ import {
   launchSession,
   cleanupLaunch,
   stopLaunch,
+  adoptSession,
   captureLaunchOutput,
   sendToLaunch,
 } from "./launcher.js";
@@ -390,6 +391,50 @@ export function createServer(
     });
 
     return c.json({ ok: true });
+  });
+
+  /**
+   * Adopts a monitored session: resumes it under a tmux session Standup
+   * owns, so it gains the read/type/stop capabilities a launched session
+   * has. `claude --resume` reuses the session id, so existing history stays
+   * attached.
+   */
+  app.post("/api/sessions/:id/adopt", async (c) => {
+    const sessionId = c.req.param("id");
+    const session = getSession(store.db, sessionId);
+    if (!session) return c.json({ error: "Not found" }, 404);
+
+    if (isLaunchedSession(store.db, sessionId)) {
+      return c.json({ error: "Standup already owns this session" }, 409);
+    }
+
+    try {
+      const result = await adoptSession(store.db, session);
+
+      broadcast({
+        type: "launch:started",
+        payload: result.launch,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (result.launch.status === "failed") {
+        return c.json({ error: result.launch.error ?? "Adoption failed" }, 409);
+      }
+
+      // The resumed process reports in as the same session id, so clear the
+      // ended marker rather than waiting for its first hook to revive it.
+      reviveSession(store.db, sessionId);
+      updateSessionStatus(store.db, sessionId, "running");
+      broadcast({
+        type: "session:status",
+        payload: { sessionId, status: "running" },
+        timestamp: new Date().toISOString(),
+      });
+
+      return c.json(result);
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
   });
 
   /** Frees the rows a session accumulated — events dominate the count. */
@@ -816,7 +861,14 @@ export function createServer(
 }
 
 function withActivityTicks(store: Store, session: Session): Session {
-  return { ...session, activityTicks: getSilenceTicks(store.db, session.id) };
+  return {
+    ...session,
+    activityTicks: getSilenceTicks(store.db, session.id),
+    // Whether Standup owns this session's terminal. Drives which controls
+    // the UI offers, so it belongs on every session response rather than
+    // being fetched separately per session.
+    owned: isLaunchedSession(store.db, session.id),
+  };
 }
 
 // ============================================================================

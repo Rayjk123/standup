@@ -34,6 +34,13 @@ export interface Session {
   endedAt?: Date;
   // Present on API responses that compute the silence meter; not persisted.
   activityTicks?: boolean[];
+  /**
+   * True when Standup owns this session's terminal — it launched or adopted
+   * it — and can therefore read its screen, type into it, and stop it. A
+   * monitored session belongs to the user's own terminal. Computed, not
+   * persisted.
+   */
+  owned?: boolean;
 }
 
 // ============================================================================
@@ -42,8 +49,12 @@ export interface Session {
 
 export type LaunchStatus = "starting" | "running" | "failed" | "cleaned";
 
+export type LaunchKind = "worktree" | "adopted";
+
 export interface Launch {
   id: string;
+  /** worktree = created its own checkout; adopted = resumed in place. */
+  kind: LaunchKind;
   projectId: string;
   task: string;
   worktreePath: string;

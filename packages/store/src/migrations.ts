@@ -144,6 +144,19 @@ const MIGRATIONS = [
   `
   ALTER TABLE projects ADD COLUMN setup TEXT;
   `,
+
+  // Migration 004: launches.kind
+  //
+  // Distinguishes a launch that created its own git worktree from one that
+  // *adopted* an existing session by resuming it in place. The difference is
+  // safety-critical: an adopted launch's working directory is the user's
+  // real repository, and cleanup must never run `git worktree remove` there.
+  //
+  // Existing rows are all worktree launches, which is the safe default.
+  `
+  ALTER TABLE launches ADD COLUMN kind TEXT NOT NULL DEFAULT 'worktree'
+    CHECK (kind IN ('worktree', 'adopted'));
+  `,
 ];
 
 export function runMigrations(db: Database): void {

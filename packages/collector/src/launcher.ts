@@ -246,6 +246,98 @@ export async function launchSession(
 }
 
 /**
+ * Adopts an existing session: resumes it under a tmux session Standup owns,
+ * converting a monitored session into one it can read, type into, and stop.
+ *
+ * `claude --resume <id>` reuses the original session id (there is a
+ * `--fork-session` flag to opt out), so the resumed process reports the same
+ * `session_id` in its hooks. Standup's existing history, checkpoints and
+ * events stay attached — which is the whole point, and why forking would be
+ * the wrong default here.
+ *
+ * Runs in the session's original cwd, deliberately **not** a fresh worktree:
+ * the conversation being resumed refers to files at those paths, and moving
+ * it into a checkout would invalidate its own context.
+ *
+ * That makes the launch row's `worktreePath` the user's real repository,
+ * which is why the row is marked `kind: "adopted"` — `cleanupLaunch` refuses
+ * to run `git worktree remove` against those.
+ *
+ * Only ended sessions can be adopted. Resuming a live one would put two
+ * processes on the same transcript, and Standup cannot stop the original
+ * because it does not own it.
+ */
+export async function adoptSession(
+  db: Database,
+  session: { id: string; cwd: string; title: string; projectId: string; endedAt?: Date }
+): Promise<LaunchResult> {
+  const log: string[] = [];
+
+  if (!session.endedAt) {
+    throw new Error(
+      "Only an ended session can be adopted — resuming a live one would run two processes against the same conversation. Stop it in its terminal first."
+    );
+  }
+  if (!existsSync(session.cwd)) {
+    throw new Error(`Session's working directory no longer exists: ${session.cwd}`);
+  }
+  if (!tmuxAvailable()) {
+    throw new Error(
+      "tmux is not installed — adoption needs it to host the session. Run `bun run scripts/check-deps.ts`, then retry."
+    );
+  }
+
+  const tmuxSession = `standup-adopt-${session.id.slice(0, 8)}`;
+
+  if (tmuxSessionExists(tmuxSession)) {
+    throw new Error(`This session already has a tmux session: ${tmuxSession}`);
+  }
+
+  const launch = createLaunch(db, {
+    id: randomUUID(),
+    kind: "adopted",
+    projectId: session.projectId,
+    task: session.title || `Resumed session ${session.id.slice(0, 8)}`,
+    // The real repo, not a checkout — see the cleanup guard above.
+    worktreePath: session.cwd,
+    branch: "(adopted — no worktree)",
+    tmuxSession,
+    sessionId: session.id,
+    status: "starting",
+  });
+
+  try {
+    const spawned = await run(
+      [
+        "tmux",
+        "new-session",
+        "-d",
+        "-s",
+        tmuxSession,
+        "-c",
+        session.cwd,
+        "claude",
+        "--resume",
+        session.id,
+      ],
+      session.cwd,
+      log
+    );
+    if (!spawned.ok) {
+      throw new Error(`tmux new-session failed: ${spawned.output.slice(0, 300)}`);
+    }
+
+    updateLaunchStatus(db, launch.id, "running");
+    return { launch: { ...launch, status: "running" }, log };
+  } catch (err) {
+    const message = (err as Error).message;
+    updateLaunchStatus(db, launch.id, "failed", message);
+    log.push(`[error] ${message}`);
+    return { launch: { ...launch, status: "failed", error: message }, log };
+  }
+}
+
+/**
  * Capabilities that exist only for launched sessions.
  *
  * Standup observes monitored sessions but *owns* launched ones — it created
@@ -368,6 +460,18 @@ export async function cleanupLaunch(
 
   if (launch.tmuxSession && tmuxAvailable()) {
     await run(["tmux", "kill-session", "-t", launch.tmuxSession], "/", log);
+  }
+
+  // An adopted launch's "worktree" is the user's actual repository — it was
+  // resumed in place rather than checked out. Running `git worktree remove
+  // --force` there would attempt to destroy real work. This guard is the
+  // reason launches carry a `kind` at all.
+  if (launch.kind === "adopted") {
+    updateLaunchStatus(db, launch.id, "cleaned");
+    log.push(
+      `Adopted session — left ${launch.worktreePath} untouched (it is the real repository, not a worktree).`
+    );
+    return { ok: true, log };
   }
 
   const repo = project.repos[0];
