@@ -221,6 +221,115 @@ export async function launchSession(
 }
 
 /**
+ * Capabilities that exist only for launched sessions.
+ *
+ * Standup observes monitored sessions but *owns* launched ones — it created
+ * their tmux session, so it can read their screen, type into them, and stop
+ * them. The access asymmetry runs the other way: you have a terminal for a
+ * monitored session and none for a launched one, which is exactly why the
+ * launched side needs these.
+ *
+ * The design calls `tmux send-keys` an escape hatch to avoid building on for
+ * "a pane the manager did not launch". These functions all refuse to touch a
+ * session Standup didn't start, which keeps that caution intact.
+ */
+
+function assertOwned(launch: Launch): string {
+  if (!launch.tmuxSession) {
+    throw new Error(
+      "This launch has no tmux session — it either failed before starting or was already cleaned up."
+    );
+  }
+  return launch.tmuxSession;
+}
+
+export function tmuxSessionExists(name: string): boolean {
+  return Bun.spawnSync(["tmux", "has-session", "-t", name]).exitCode === 0;
+}
+
+/** Current visible screen of a launched session. */
+export async function captureLaunchOutput(
+  launch: Launch,
+  lines = 200
+): Promise<{ output: string; alive: boolean }> {
+  const session = assertOwned(launch);
+
+  if (!tmuxAvailable() || !tmuxSessionExists(session)) {
+    return { output: "", alive: false };
+  }
+
+  const proc = Bun.spawn(
+    // -p prints to stdout; -S -N starts N lines back into scrollback so the
+    // reply is still visible after it scrolls past the viewport.
+    ["tmux", "capture-pane", "-p", "-t", session, "-S", `-${lines}`],
+    { stdout: "pipe", stderr: "pipe" }
+  );
+
+  const output = await new Response(proc.stdout).text();
+  await proc.exited;
+
+  return { output: output.trimEnd(), alive: true };
+}
+
+/**
+ * Types a line into a launched session, as if the human had typed it in that
+ * terminal. Unlike a steer, this lands immediately — which is safe here only
+ * because Standup owns the pane and the human explicitly targeted it.
+ */
+export async function sendToLaunch(
+  launch: Launch,
+  text: string
+): Promise<{ ok: boolean; error?: string }> {
+  const session = assertOwned(launch);
+
+  if (!tmuxAvailable() || !tmuxSessionExists(session)) {
+    return { ok: false, error: "tmux session is no longer running" };
+  }
+
+  // Literal (-l) so the text isn't interpreted as key names, then a separate
+  // Enter — sending them together would make a message containing "Enter"
+  // ambiguous.
+  const typed = Bun.spawnSync(["tmux", "send-keys", "-t", session, "-l", text]);
+  if (typed.exitCode !== 0) {
+    return { ok: false, error: "failed to send text to the session" };
+  }
+
+  const submitted = Bun.spawnSync(["tmux", "send-keys", "-t", session, "Enter"]);
+  if (submitted.exitCode !== 0) {
+    return { ok: false, error: "failed to submit to the session" };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Stops a launched session, leaving its worktree and branch intact so the
+ * work can be inspected or resumed. Distinct from cleanupLaunch, which also
+ * removes the worktree.
+ */
+export async function stopLaunch(
+  db: Database,
+  launch: Launch
+): Promise<{ ok: boolean; log: string[] }> {
+  const log: string[] = [];
+  const session = launch.tmuxSession;
+
+  if (session && tmuxAvailable() && tmuxSessionExists(session)) {
+    await run(["tmux", "kill-session", "-t", session], "/", log);
+    log.push(`Stopped ${session}`);
+  } else {
+    log.push("Session was not running");
+  }
+
+  // Back to "starting" would be wrong and "cleaned" implies the worktree is
+  // gone, so a stopped-but-intact launch is recorded as failed with a reason.
+  updateLaunchStatus(db, launch.id, "failed", "Stopped by you");
+  log.push(`Worktree kept at ${launch.worktreePath}`);
+
+  return { ok: true, log };
+}
+
+/**
  * Tears down a launch: kills its tmux session and removes the worktree.
  * Deliberately does NOT delete the branch — uncommitted-but-wanted work
  * should survive a cleanup mistake.

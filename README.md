@@ -190,7 +190,17 @@ Type a task in the composer at the bottom of the Feed, pick a project, and
 Standup will create a git worktree off the project's base branch, run its
 `setup` command, and start a detached tmux session running Claude Code there.
 
-Attach to a launched session with `tmux attach -t standup-<project>-<slug>`.
+Because Standup *owns* a launched session's tmux pane (unlike a monitored
+session, where you have the terminal and it does not), launches get controls
+a monitored session doesn't — right in the feed entry:
+
+- **view output** — reads the session's screen without attaching
+- **send input** — types straight into it, landing immediately rather than
+  queueing for a turn boundary the way a steer does
+- **stop** — kills the agent but keeps the worktree and branch
+
+For a full interactive terminal, still attach directly:
+`tmux attach -t standup-<project>-<slug>` (`Ctrl-b d` to detach).
 
 Worktrees live in `~/.local/share/standup/worktrees/` (override with
 `STANDUP_WORKTREE_ROOT`). Cleaning up a launch removes the worktree and kills

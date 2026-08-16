@@ -1,8 +1,16 @@
 import { useState } from "react";
-import type { Checkpoint, Ask, Session, Project, ExpertExchange } from "@standup/shared";
+import type {
+  Checkpoint,
+  Ask,
+  Session,
+  Project,
+  ExpertExchange,
+  Launch,
+} from "@standup/shared";
 import { theme } from "./theme";
 import { Replier } from "./Replier";
 import { Composer } from "./Composer";
+import { LaunchControls } from "./LaunchControls";
 
 /**
  * Renders the agent's question and what retrieval returned, attributed to a
@@ -62,26 +70,100 @@ function ExpertBody({ exchange }: { exchange: ExpertExchange }) {
   );
 }
 
+/**
+ * A launch the human started from the composer.
+ *
+ * Surfaces the tmux attach command because the console deliberately does not
+ * render agent responses — it carries checkpoints, asks, and expert
+ * exchanges, not the conversation. Without this, starting work from the
+ * console gives you no way back to what the agent actually said.
+ */
+function LaunchBody({
+  launch,
+  onStopped,
+}: {
+  launch: Launch;
+  onStopped: () => void;
+}) {
+  const failed = launch.status === "failed";
+
+  return (
+    <>
+      <div style={{ fontSize: 14, lineHeight: 1.55, color: theme.text }}>
+        {launch.task}
+      </div>
+
+      {failed ? (
+        <div
+          style={{
+            fontFamily: theme.mono,
+            fontSize: 11,
+            color: theme.waiting,
+            marginTop: 7,
+            lineHeight: 1.5,
+          }}
+        >
+          ✗ {launch.error ?? "Launch failed"}
+        </div>
+      ) : (
+        <>
+          <div
+            style={{
+              fontFamily: theme.mono,
+              fontSize: 10.5,
+              color: theme.running,
+              marginTop: 7,
+            }}
+          >
+            ⧗ worktree {launch.branch} · agent running
+          </div>
+          {launch.tmuxSession && (
+            <>
+              <LaunchControls launch={launch} onStopped={onStopped} />
+              <div
+                style={{
+                  fontFamily: theme.mono,
+                  fontSize: 10.5,
+                  color: theme.faint,
+                  marginTop: 8,
+                  userSelect: "all",
+                }}
+                title="For a full interactive terminal"
+              >
+                tmux attach -t {launch.tmuxSession}
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 interface FeedViewProps {
   checkpoints: Checkpoint[];
   asks: Ask[];
   expertExchanges: ExpertExchange[];
+  launches: Launch[];
   sessions: Session[];
   projects: Project[];
   onSteer: (sessionId: string, body: string) => Promise<void>;
   onResolveAsk: (askId: string, answer: string) => Promise<void>;
   onLaunch: (projectId: string, task: string) => Promise<{ error?: string }>;
+  onLaunchChanged: () => void;
 }
 
 export function FeedView({
   checkpoints,
   asks,
   expertExchanges,
+  launches,
   sessions,
   projects,
   onSteer,
   onResolveAsk,
   onLaunch,
+  onLaunchChanged,
 }: FeedViewProps) {
   // What the human has sent this session, keyed by feed item id. Optimistic:
   // asks disappear from `asks` once resolved server-side, so without this the
@@ -95,12 +177,22 @@ export function FeedView({
   type FeedItem =
     | { type: "checkpoint"; data: Checkpoint }
     | { type: "ask"; data: Ask }
-    | { type: "expert"; data: ExpertExchange };
+    | { type: "expert"; data: ExpertExchange }
+    | { type: "launch"; data: Launch & { sessionId: string } };
 
   const feedItems: FeedItem[] = [
     ...checkpoints.map((c) => ({ type: "checkpoint" as const, data: c })),
     ...asks.map((a) => ({ type: "ask" as const, data: a })),
     ...expertExchanges.map((e) => ({ type: "expert" as const, data: e })),
+    // Launches are what the human started, so they belong in the feed as a
+    // record of intent — without this a launch produced no visible trace at
+    // all, which reads as the console having swallowed the request.
+    ...launches
+      .filter((l) => l.status !== "cleaned")
+      .map((l) => ({
+        type: "launch" as const,
+        data: { ...l, sessionId: l.sessionId ?? "" },
+      })),
   ].sort(
     (a, b) =>
       new Date(b.data.createdAt).getTime() -
@@ -138,14 +230,23 @@ export function FeedView({
         <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "8px 0" }}>
           {feedItems.map((item) => {
         const session = getSession(item.data.sessionId);
-        const project = session ? getProject(session.projectId) : null;
         const isAsk = item.type === "ask";
         const isExpert = item.type === "expert";
+        const isLaunch = item.type === "launch";
+        // A launch knows its project directly; it may not have a session yet
+        // (the agent registers a moment after the worktree is created).
+        const project = isLaunch
+          ? getProject((item.data as Launch).projectId)
+          : session
+            ? getProject(session.projectId)
+            : null;
         const accent = isAsk
           ? theme.waiting
           : isExpert
             ? theme.expert
-            : theme.checkpoint;
+            : isLaunch
+              ? theme.running
+              : theme.checkpoint;
 
         return (
           <div
@@ -213,7 +314,7 @@ export function FeedView({
                 </span>
               </div>
 
-              {(isAsk || isExpert) && (
+              {(isAsk || isExpert || isLaunch) && (
                 <div style={{ marginBottom: 5 }}>
                   <span
                     style={{
@@ -225,13 +326,22 @@ export function FeedView({
                       fontWeight: 600,
                     }}
                   >
-                    {isAsk ? "Needs you" : "Expert consulted"}
+                    {isAsk
+                      ? "Needs you"
+                      : isExpert
+                        ? "Expert consulted"
+                        : "You started this"}
                   </span>
                 </div>
               )}
 
               {isExpert ? (
                 <ExpertBody exchange={item.data as ExpertExchange} />
+              ) : isLaunch ? (
+                <LaunchBody
+                  launch={item.data as Launch}
+                  onStopped={onLaunchChanged}
+                />
               ) : (
                 <div style={{ fontSize: 14, lineHeight: 1.55, color: theme.text }}>
                   {item.type === "checkpoint"
@@ -240,10 +350,10 @@ export function FeedView({
                 </div>
               )}
 
-              {/* Expert exchanges are a record of what the agent asked and
-                  got back — there's no counterpart action for the human, so
-                  no reply affordance. */}
-              {!isExpert && (
+              {/* Expert exchanges and launches are records, not prompts —
+                  neither has a counterpart action for the human, so no
+                  reply affordance. */}
+              {!isExpert && !isLaunch && (
                 <Replier
                   target={isAsk ? "ask" : "checkpoint"}
                   options={isAsk ? (item.data as Ask).options : undefined}

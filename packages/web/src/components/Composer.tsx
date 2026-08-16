@@ -44,6 +44,21 @@ export function Composer({ projects, onLaunch }: ComposerProps) {
 
   return (
     <div style={{ borderTop: `1px solid ${theme.edge}`, padding: "12px 20px 16px" }}>
+      {/* This sits where a chat input would in a Slack-style feed, but it
+          starts a whole new agent in its own worktree. Saying so prevents
+          the obvious misread — that typing here messages a running session. */}
+      <div
+        style={{
+          fontFamily: theme.mono,
+          fontSize: 9.5,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: theme.faint,
+          marginBottom: 7,
+        }}
+      >
+        Start new work — launches an agent in its own worktree
+      </div>
       <div
         style={{
           display: "flex",
@@ -85,8 +100,8 @@ export function Composer({ projects, onLaunch }: ComposerProps) {
           onKeyDown={(e) => e.key === "Enter" && void submit()}
           placeholder={
             launchable
-              ? "Describe the work to start a session…"
-              : `${selected?.name ?? "This project"} has no repos in projects.toml`
+              ? "Describe a task to start a new agent on it…"
+              : `${selected?.name ?? "This project"} has no repos configured — add one in Projects`
           }
           style={{
             flex: 1,

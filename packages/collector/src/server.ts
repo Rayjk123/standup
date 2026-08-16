@@ -46,7 +46,13 @@ import { waitForAskResolution } from "./asks.js";
 import { pushNotification } from "./push.js";
 import { checkpointCompletedTodos, clearTodoCheckpointState } from "./todo-checkpoints.js";
 import { takeSteerContext } from "./steers.js";
-import { launchSession, cleanupLaunch } from "./launcher.js";
+import {
+  launchSession,
+  cleanupLaunch,
+  stopLaunch,
+  captureLaunchOutput,
+  sendToLaunch,
+} from "./launcher.js";
 import { askExpert, loadRegions } from "./expert.js";
 import {
   maybeNudge,
@@ -307,6 +313,53 @@ export function createServer(
       // launch row instead.
       return c.json({ error: (err as Error).message }, 400);
     }
+  });
+
+  // Capabilities below exist only for launched sessions — Standup owns their
+  // tmux pane. A monitored session has none of these, because the human
+  // already has its terminal.
+
+  app.get("/api/launches/:id/output", async (c) => {
+    const launch = getLaunch(store.db, c.req.param("id"));
+    if (!launch) return c.json({ error: "Not found" }, 404);
+
+    try {
+      const result = await captureLaunchOutput(launch);
+      return c.json(result);
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+  });
+
+  app.post("/api/launches/:id/send", async (c) => {
+    const launch = getLaunch(store.db, c.req.param("id"));
+    if (!launch) return c.json({ error: "Not found" }, 404);
+
+    const { text } = await c.req.json<{ text: string }>();
+    if (!text?.trim()) return c.json({ error: "text is required" }, 400);
+
+    try {
+      const result = await sendToLaunch(launch, text.trim());
+      if (!result.ok) return c.json({ error: result.error }, 409);
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+  });
+
+  app.post("/api/launches/:id/stop", async (c) => {
+    const launch = getLaunch(store.db, c.req.param("id"));
+    if (!launch) return c.json({ error: "Not found" }, 404);
+
+    const result = await stopLaunch(store.db, launch);
+
+    broadcast({
+      type: "launch:stopped",
+      payload: { launchId: launch.id },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json(result);
   });
 
   app.post("/api/launches/:id/cleanup", async (c) => {

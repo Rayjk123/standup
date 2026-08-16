@@ -1,7 +1,14 @@
 import { useState, useEffect } from "react";
 import { Console } from "./components/Console";
 import { useWebSocket } from "./hooks/useWebSocket";
-import type { Session, Project, Checkpoint, Ask, ExpertExchange } from "@standup/shared";
+import type {
+  Session,
+  Project,
+  Checkpoint,
+  Ask,
+  ExpertExchange,
+  Launch,
+} from "@standup/shared";
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -9,6 +16,7 @@ export default function App() {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [asks, setAsks] = useState<Ask[]>([]);
   const [expertExchanges, setExpertExchanges] = useState<ExpertExchange[]>([]);
+  const [launches, setLaunches] = useState<Launch[]>([]);
   const [loading, setLoading] = useState(true);
 
   // WebSocket for real-time updates
@@ -18,20 +26,28 @@ export default function App() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [projectsRes, sessionsRes, checkpointsRes, asksRes, expertRes] =
-          await Promise.all([
-            fetch("/api/projects"),
-            fetch("/api/sessions"),
-            fetch("/api/checkpoints"),
-            fetch("/api/asks/pending"),
-            fetch("/api/expert/exchanges"),
-          ]);
+        const [
+          projectsRes,
+          sessionsRes,
+          checkpointsRes,
+          asksRes,
+          expertRes,
+          launchesRes,
+        ] = await Promise.all([
+          fetch("/api/projects"),
+          fetch("/api/sessions"),
+          fetch("/api/checkpoints"),
+          fetch("/api/asks/pending"),
+          fetch("/api/expert/exchanges"),
+          fetch("/api/launches"),
+        ]);
 
         setProjects(await projectsRes.json());
         setSessions(await sessionsRes.json());
         setCheckpoints(await checkpointsRes.json());
         setAsks(await asksRes.json());
         setExpertExchanges(await expertRes.json());
+        setLaunches(await launchesRes.json());
       } catch (err) {
         console.error("Failed to fetch initial data:", err);
       } finally {
@@ -81,6 +97,13 @@ export default function App() {
       case "expert:exchange":
         setExpertExchanges((prev) => [lastMessage.payload as ExpertExchange, ...prev]);
         break;
+
+      case "launch:started":
+      case "launch:cleaned":
+        fetch("/api/launches")
+          .then((r) => r.json())
+          .then(setLaunches);
+        break;
     }
   }, [lastMessage]);
 
@@ -99,6 +122,15 @@ export default function App() {
       checkpoints={checkpoints}
       asks={asks}
       expertExchanges={expertExchanges}
+      launches={launches}
+      onLaunchChanged={() => {
+        fetch("/api/launches")
+          .then((r) => r.json())
+          .then(setLaunches);
+        fetch("/api/sessions")
+          .then((r) => r.json())
+          .then(setSessions);
+      }}
       onResolveAsk={async (askId, answer) => {
         await fetch(`/api/asks/${askId}/resolve`, {
           method: "POST",

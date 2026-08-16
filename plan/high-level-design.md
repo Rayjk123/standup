@@ -546,12 +546,39 @@ The composer gap is the notable one: Phase 4 assumes a composer-as-launcher
 that doesn't exist yet, so that phase starts by building it rather than
 extending it.
 
-Note what the UI still *cannot* do, by design rather than omission: there is
-no way to send a free-form message to a running session the way you would in
-its terminal. Standup observes rather than owns, so it can only answer a
-blocking `ask_human` or queue a steer for the next turn boundary. Genuine
-chat-from-the-console requires owning the process (Phase 4) or the
-`tmux send-keys` escape hatch.
+### Monitored vs. launched sessions
+
+These are not the same thing, and conflating them produced a real gap: the
+console could start an agent you then had no way to see or stop.
+
+The asymmetries run *opposite* to each other:
+
+| | Your access to it | Standup's capability over it |
+|---|---|---|
+| **Monitored** (you started it) | Full — it's your terminal | Least — cannot write to its stdin |
+| **Launched** (console started it) | None — detached tmux | Most — Standup created the pane |
+
+So the side where you have the least visibility is exactly the side where
+Standup can offer the most, and it should:
+
+- **Monitored** — observe only. Answer a blocking `ask_human`, or queue a
+  steer for the next turn boundary. This is the original design constraint
+  and it stands: Standup does not own the process.
+- **Launched** — Standup owns the tmux session, so it additionally exposes
+  reading the screen (`tmux capture-pane`), typing into it
+  (`tmux send-keys`, landing immediately rather than at a turn boundary),
+  and stopping it.
+
+The design elsewhere calls `tmux send-keys` an escape hatch not to build on,
+for "a pane the manager did not launch". That caution is about reaching into
+someone else's terminal. For a pane Standup created, it is ownership rather
+than intrusion — and the capability functions refuse to act on any launch
+without a `tmuxSession` recorded, so the distinction is enforced rather than
+assumed.
+
+Stopping a launch kills the agent but keeps the worktree and branch;
+cleaning up removes the worktree and still keeps the branch. Neither ever
+deletes work.
 
 ---
 

@@ -1,5 +1,12 @@
 import { useState } from "react";
-import type { Session, Project, Checkpoint, Ask, ExpertExchange } from "@standup/shared";
+import type {
+  Session,
+  Project,
+  Checkpoint,
+  Ask,
+  ExpertExchange,
+  Launch,
+} from "@standup/shared";
 import { FeedView } from "./FeedView";
 import { BlockedView } from "./BlockedView";
 import { ProjectsView } from "./ProjectsView";
@@ -14,6 +21,7 @@ interface ConsoleProps {
   checkpoints: Checkpoint[];
   asks: Ask[];
   expertExchanges: ExpertExchange[];
+  launches: Launch[];
   onResolveAsk: (askId: string, answer: string) => Promise<void>;
   onSteer: (sessionId: string, body: string) => Promise<void>;
   onLaunch: (projectId: string, task: string) => Promise<{ error?: string }>;
@@ -22,6 +30,7 @@ interface ConsoleProps {
     patch: Partial<Project>
   ) => Promise<{ error?: string }>;
   onDeleteProject: (id: string) => Promise<{ error?: string }>;
+  onLaunchChanged: () => void;
 }
 
 export function Console({
@@ -30,11 +39,13 @@ export function Console({
   checkpoints,
   asks,
   expertExchanges,
+  launches,
   onResolveAsk,
   onSteer,
   onLaunch,
   onSaveProject,
   onDeleteProject,
+  onLaunchChanged,
 }: ConsoleProps) {
   const [view, setView] = useState<View>("feed");
 
@@ -152,11 +163,13 @@ export function Console({
             checkpoints={checkpoints}
             asks={asks}
             expertExchanges={expertExchanges}
+            launches={launches}
             sessions={sessions}
             projects={projects}
             onSteer={onSteer}
             onResolveAsk={onResolveAsk}
             onLaunch={onLaunch}
+            onLaunchChanged={onLaunchChanged}
           />
         )}
         {view === "blocked" && (
