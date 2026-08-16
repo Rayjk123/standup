@@ -315,8 +315,39 @@ function DocEditor({
   const [body, setBody] = useState(doc?.body ?? "");
   const [tags, setTags] = useState((doc?.tags ?? []).join(", "));
 
+  // Escape exits, except from the textarea where it would be a trap for
+  // anyone using it to leave an autocomplete or IME.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "TEXTAREA") return;
+      onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
   return (
     <div style={{ padding: "16px 20px 24px", overflowY: "auto" }}>
+      {/* The way out belongs above the fold. The Cancel button at the bottom
+          sits below a tall textarea, so it is both out of view and reads as
+          "discard" rather than "go back". */}
+      <button
+        onClick={onCancel}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          marginBottom: 12,
+          cursor: "pointer",
+          fontSize: 12.5,
+          color: theme.faint,
+        }}
+      >
+        ← All knowledge
+      </button>
+
       <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>
         {doc ? `Edit ${doc.slug}.md` : "New knowledge doc"}
       </div>

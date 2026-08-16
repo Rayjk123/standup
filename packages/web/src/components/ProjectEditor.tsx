@@ -98,6 +98,23 @@ export function ProjectEditor({
 
   return (
     <div style={{ padding: "18px 20px 26px", maxWidth: 620 }}>
+      {/* Same reasoning as the knowledge editor: the way out shouldn't be
+          below the fold, and "Cancel" reads as discard rather than back. */}
+      <button
+        onClick={onCancel}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          marginBottom: 12,
+          cursor: "pointer",
+          fontSize: 12.5,
+          color: theme.faint,
+        }}
+      >
+        ← Back
+      </button>
+
       <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 18 }}>
         {isNew ? "New project" : `Configure ${project!.name}`}
       </div>
