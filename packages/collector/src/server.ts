@@ -273,6 +273,31 @@ export function createServer(
     return c.json(result);
   });
 
+  /**
+   * The session's current screen, when Standup owns its pane.
+   *
+   * Keyed by session rather than launch so callers holding an ask (which
+   * references a session) can show what the agent is actually waiting on. A
+   * Notification hook reports *that* an agent is blocked but never *what*
+   * it's blocked on — without this, a prompt-ask is an alert with no
+   * content, which is not something a human can act on.
+   */
+  app.get("/api/sessions/:id/output", async (c) => {
+    const sessionId = c.req.param("id");
+    const launch = getLaunchBySession(store.db, sessionId);
+
+    // Not an error: monitored sessions simply have no pane to read, and the
+    // caller renders that as "look at your own terminal".
+    if (!launch) return c.json({ output: "", alive: false, owned: false });
+
+    try {
+      const result = await captureLaunchOutput(launch, 60);
+      return c.json({ ...result, owned: true });
+    } catch {
+      return c.json({ output: "", alive: false, owned: true });
+    }
+  });
+
   /** Frees the rows a session accumulated — events dominate the count. */
   app.delete("/api/sessions/:id", (c) => {
     const sessionId = c.req.param("id");

@@ -3,6 +3,7 @@ import type { Ask, Session, Project } from "@standup/shared";
 import { theme } from "./theme";
 import { Link } from "react-router-dom";
 import { Replier } from "./Replier";
+import { SessionScreen } from "./SessionScreen";
 
 interface BlockedViewProps {
   asks: Ask[];
@@ -88,8 +89,11 @@ export function BlockedView({
         <span style={{ fontSize: 19, fontWeight: 700 }}>Waiting on you</span>
       </div>
       <div style={{ fontSize: 13, color: theme.dim, marginBottom: 20 }}>
-        Each of these agents is paused inside a tool call. Answering resumes it
-        immediately.
+        {/* Two different kinds of blocked: an ask_human is genuinely paused
+            inside a tool call, while a prompt-ask is sitting on a dialog in
+            its terminal. Saying only the former was misleading. */}
+        Each of these agents is waiting on you — paused inside a tool call, or
+        sitting on a prompt in its terminal. Answering resumes it.
       </div>
 
       <div style={{ display: "grid", gap: 12 }}>
@@ -165,6 +169,13 @@ export function BlockedView({
                 <div style={{ fontSize: 14, lineHeight: 1.55, color: theme.text }}>
                   {ask.question}
                 </div>
+
+                {/* An ask_human carries its own question. A prompt-ask only
+                    knows that the agent is waiting, so the screen is the
+                    only place the actual question exists. */}
+                {ask.kind === "permission_prompt" && (
+                  <SessionScreen sessionId={ask.sessionId} />
+                )}
 
                 {/* Shared with the feed so both paths handle option-less
                     asks identically — this view previously rendered nothing
