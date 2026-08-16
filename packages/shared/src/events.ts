@@ -85,6 +85,7 @@ export type WsMessageType =
   | "projects:updated"
   | "launch:started"
   | "launch:stopped"
+  | "session:deleted"
   | "launch:cleaned";
 
 export interface WsMessage<T = unknown> {

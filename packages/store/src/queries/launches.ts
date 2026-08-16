@@ -101,6 +101,30 @@ export function findLaunchByCwd(db: Database, cwd: string): Launch | null {
   return row ? toLaunch(row) : null;
 }
 
+/**
+ * Whether this session was started by the console rather than by a human in
+ * their own terminal. The distinction changes how signals are read: an
+ * "agent is waiting for input" notification is routine for a monitored
+ * session (you are sitting at that terminal) and means nobody is coming for
+ * a launched one.
+ */
+export function getLaunchBySession(
+  db: Database,
+  sessionId: string
+): Launch | null {
+  const row = db
+    .query("SELECT * FROM launches WHERE session_id = ? LIMIT 1")
+    .get(sessionId) as LaunchRow | null;
+  return row ? toLaunch(row) : null;
+}
+
+export function isLaunchedSession(db: Database, sessionId: string): boolean {
+  const row = db
+    .query("SELECT 1 AS found FROM launches WHERE session_id = ? LIMIT 1")
+    .get(sessionId) as { found: number } | null;
+  return row !== null;
+}
+
 /** Links a launch to the Claude Code session that reported in from it. */
 export function attachSessionToLaunch(
   db: Database,

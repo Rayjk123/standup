@@ -31,6 +31,7 @@ interface ConsoleProps {
   ) => Promise<{ error?: string }>;
   onDeleteProject: (id: string) => Promise<{ error?: string }>;
   onLaunchChanged: () => void;
+  onSessionChanged: () => void;
 }
 
 export function Console({
@@ -46,6 +47,7 @@ export function Console({
   onSaveProject,
   onDeleteProject,
   onLaunchChanged,
+  onSessionChanged,
 }: ConsoleProps) {
   const [view, setView] = useState<View>("feed");
 
@@ -188,6 +190,7 @@ export function Console({
             checkpoints={checkpoints}
             onSaveProject={onSaveProject}
             onDeleteProject={onDeleteProject}
+            onSessionChanged={onSessionChanged}
           />
         )}
       </div>

@@ -65,6 +65,66 @@ export function reviveSession(db: Database, sessionId: string): void {
   );
 }
 
+export interface DeletedSessionCounts {
+  events: number;
+  checkpoints: number;
+  asks: number;
+  steers: number;
+  expertExchanges: number;
+}
+
+/**
+ * Permanently removes a session and everything hanging off it.
+ *
+ * Child rows are deleted explicitly rather than by cascade — the schema
+ * declares plain foreign keys without ON DELETE, so a bare delete of the
+ * parent fails once any event exists. Events dominate the row count (a busy
+ * session accumulates hundreds), which is what makes this worth having as a
+ * cleanup action at all.
+ *
+ * Callers should refuse this for a live session: `ensureSession` recreates a
+ * row on the very next hook, so deleting one mid-flight just discards its
+ * history while leaving it running.
+ */
+export function deleteSession(
+  db: Database,
+  sessionId: string
+): DeletedSessionCounts {
+  const count = (table: string): number =>
+    (
+      db
+        .query(`SELECT COUNT(*) AS n FROM ${table} WHERE session_id = ?`)
+        .get(sessionId) as { n: number }
+    ).n;
+
+  const counts: DeletedSessionCounts = {
+    events: count("events"),
+    checkpoints: count("checkpoints"),
+    asks: count("asks"),
+    steers: count("steers"),
+    expertExchanges: count("expert_exchanges"),
+  };
+
+  db.transaction(() => {
+    for (const table of [
+      "events",
+      "checkpoints",
+      "asks",
+      "steers",
+      "expert_exchanges",
+      "stall_detections",
+    ]) {
+      db.run(`DELETE FROM ${table} WHERE session_id = ?`, [sessionId]);
+    }
+    // Keep the launch row: it records what was started and where the
+    // worktree lives, which outlives the session it spawned.
+    db.run("UPDATE launches SET session_id = NULL WHERE session_id = ?", [sessionId]);
+    db.run("DELETE FROM sessions WHERE id = ?", [sessionId]);
+  })();
+
+  return counts;
+}
+
 export function getSession(db: Database, sessionId: string): Session | null {
   const row = db.query("SELECT * FROM sessions WHERE id = ?").get(sessionId) as {
     id: string;
@@ -158,6 +218,37 @@ export function getMostRecentActiveSessionByCwd(
     startedAt: new Date(row.started_at),
     endedAt: row.ended_at ? new Date(row.ended_at) : undefined,
   };
+}
+
+/**
+ * Every session including ended ones. The console needs these to offer
+ * cleanup — an ended session is invisible to getActiveSessions, so its rows
+ * would accumulate with no way to see or remove them.
+ */
+export function getAllSessions(db: Database): Session[] {
+  const rows = db
+    .query("SELECT * FROM sessions ORDER BY started_at DESC")
+    .all() as Array<{
+    id: string;
+    project_id: string;
+    title: string | null;
+    cwd: string;
+    parent_session_id: string | null;
+    status: SessionStatus;
+    started_at: string;
+    ended_at: string | null;
+  }>;
+
+  return rows.map((row) => ({
+    id: row.id,
+    projectId: row.project_id,
+    title: row.title ?? "",
+    cwd: row.cwd,
+    parentSessionId: row.parent_session_id ?? undefined,
+    status: row.status,
+    startedAt: new Date(row.started_at),
+    endedAt: row.ended_at ? new Date(row.ended_at) : undefined,
+  }));
 }
 
 export function getActiveSessions(db: Database): Session[] {

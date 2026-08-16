@@ -80,6 +80,49 @@ export function getAsk(db: Database, askId: string): Ask | null {
   };
 }
 
+/**
+ * Cancels pending prompt-asks for a session and returns what was cancelled.
+ *
+ * These are raised from Notification hooks rather than a blocking tool call,
+ * so nothing resolves them when the human answers in the terminal directly.
+ * Any sign of the session moving again means they're stale. Deliberately
+ * scoped to `permission_prompt` — an `ask_human` has a real waiter and must
+ * never be cancelled out from under it.
+ */
+export function cancelPromptAsks(db: Database, sessionId: string): Ask[] {
+  const stale = db
+    .query(
+      `UPDATE asks
+         SET status = 'cancelled', resolved_at = datetime('now')
+       WHERE session_id = ? AND status = 'pending' AND kind = 'permission_prompt'
+       RETURNING id, session_id, kind, question, options_json, answer, status,
+                 created_at, resolved_at`
+    )
+    .all(sessionId) as Array<{
+    id: string;
+    session_id: string;
+    kind: AskKind;
+    question: string;
+    options_json: string | null;
+    answer: string | null;
+    status: AskStatus;
+    created_at: string;
+    resolved_at: string | null;
+  }>;
+
+  return stale.map((row) => ({
+    id: row.id,
+    sessionId: row.session_id,
+    kind: row.kind,
+    question: row.question,
+    options: row.options_json ? JSON.parse(row.options_json) : undefined,
+    answer: row.answer ?? undefined,
+    status: row.status,
+    createdAt: new Date(row.created_at),
+    resolvedAt: row.resolved_at ? new Date(row.resolved_at) : undefined,
+  }));
+}
+
 export function getPendingAsks(db: Database): Ask[] {
   const rows = db
     .query("SELECT * FROM asks WHERE status = 'pending' ORDER BY created_at ASC")

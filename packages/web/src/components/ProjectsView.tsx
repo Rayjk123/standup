@@ -3,6 +3,7 @@ import type { Project, Session, Checkpoint } from "@standup/shared";
 import { theme, statusColors } from "./theme";
 import { SilenceStrip } from "./SilenceStrip";
 import { ProjectEditor } from "./ProjectEditor";
+import { SessionControls } from "./SessionControls";
 
 interface ProjectsViewProps {
   projects: Project[];
@@ -13,6 +14,7 @@ interface ProjectsViewProps {
     patch: Partial<Project>
   ) => Promise<{ error?: string }>;
   onDeleteProject: (id: string) => Promise<{ error?: string }>;
+  onSessionChanged: () => void;
 }
 
 export function ProjectsView({
@@ -21,6 +23,7 @@ export function ProjectsView({
   checkpoints,
   onSaveProject,
   onDeleteProject,
+  onSessionChanged,
 }: ProjectsViewProps) {
   const [selectedSession, setSelectedSession] = useState<string | null>(
     sessions[0]?.id ?? null
@@ -297,6 +300,11 @@ export function ProjectsView({
                 >
                   {selected.status}
                 </span>
+                {selected.endedAt && <span>ended</span>}
+              </div>
+
+              <div style={{ marginTop: 14 }}>
+                <SessionControls session={selected} onChanged={onSessionChanged} />
               </div>
             </div>
 

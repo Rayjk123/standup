@@ -10,7 +10,9 @@ import {
   reviveSession,
   getMostRecentActiveSessionByCwd,
   getActiveSessions,
+  getAllSessions,
   getSessionsByProject,
+  deleteSession,
   insertEvent,
   getSilenceTicks,
   getProjects,
@@ -20,7 +22,9 @@ import {
   findProjectByCwd,
   getPendingAsks,
   createAsk,
+  getAsk,
   resolveAsk,
+  cancelPromptAsks,
   createCheckpoint,
   getRecentCheckpoints,
   createSteer,
@@ -29,6 +33,8 @@ import {
   getLaunch,
   findLaunchByCwd,
   attachSessionToLaunch,
+  isLaunchedSession,
+  getLaunchBySession,
   recordExpertExchange,
   getRecentExpertExchanges,
 } from "@standup/store";
@@ -207,9 +213,13 @@ export function createServer(
     return c.text(registry.exportToToml(), 200, { "Content-Type": "text/plain" });
   });
 
-  // Sessions
+  // Sessions. Ended ones are excluded by default so the console reflects
+  // what's live; ?all=1 includes them so they can be reviewed and cleaned up.
   app.get("/api/sessions", (c) => {
-    const sessions = getActiveSessions(store.db);
+    const sessions =
+      c.req.query("all") === "1"
+        ? getAllSessions(store.db)
+        : getActiveSessions(store.db);
     return c.json(sessions.map((s) => withActivityTicks(store, s)));
   });
 
@@ -224,6 +234,76 @@ export function createServer(
     return c.json(sessions.map((s) => withActivityTicks(store, s)));
   });
 
+  /**
+   * Stops the agent behind a session. Only possible for launched sessions —
+   * Standup owns their tmux pane. A monitored session belongs to the human's
+   * own terminal, and reaching into it is exactly what the design declines
+   * to build on.
+   */
+  app.post("/api/sessions/:id/stop", async (c) => {
+    const sessionId = c.req.param("id");
+    const session = getSession(store.db, sessionId);
+    if (!session) return c.json({ error: "Not found" }, 404);
+
+    const launch = getLaunchBySession(store.db, sessionId);
+    if (!launch) {
+      return c.json(
+        {
+          error:
+            "This session wasn't launched by the console, so Standup doesn't own it — stop it from its own terminal.",
+        },
+        409
+      );
+    }
+
+    const result = await stopLaunch(store.db, launch);
+    endSession(store.db, sessionId);
+
+    broadcast({
+      type: "session:status",
+      payload: { sessionId, status: "idle" },
+      timestamp: new Date().toISOString(),
+    });
+    broadcast({
+      type: "launch:stopped",
+      payload: { launchId: launch.id },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json(result);
+  });
+
+  /** Frees the rows a session accumulated — events dominate the count. */
+  app.delete("/api/sessions/:id", (c) => {
+    const sessionId = c.req.param("id");
+    const session = getSession(store.db, sessionId);
+    if (!session) return c.json({ error: "Not found" }, 404);
+
+    // ensureSession recreates a row on the next hook from a live session, so
+    // deleting one mid-flight discards its history and changes nothing else.
+    if (!session.endedAt) {
+      return c.json(
+        {
+          error:
+            "Session is still active — stop or end it first, otherwise its next hook recreates the record.",
+        },
+        409
+      );
+    }
+
+    const deleted = deleteSession(store.db, sessionId);
+    clearTodoCheckpointState(sessionId);
+    clearNudgeState(sessionId);
+
+    broadcast({
+      type: "session:deleted",
+      payload: { sessionId, deleted },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json({ ok: true, deleted });
+  });
+
   // Asks
   app.get("/api/asks/pending", (c) => {
     const asks = getPendingAsks(store.db);
@@ -231,12 +311,49 @@ export function createServer(
   });
 
   app.post("/api/asks/:id/resolve", async (c) => {
+    const askId = c.req.param("id");
     const { answer } = await c.req.json<{ answer: string }>();
-    resolveAsk(store.db, c.req.param("id"), answer);
+
+    const ask = getAsk(store.db, askId);
+    if (!ask) return c.json({ error: "Not found" }, 404);
+
+    // An ask_human is a blocked MCP call: resolving the row is enough,
+    // because the tool handler is long-polling for exactly this.
+    //
+    // A permission_prompt has no such waiter — it came from a Notification
+    // hook, and the agent is sitting on a TUI dialog. Marking it answered
+    // would clear the badge while leaving the agent just as stuck. For a
+    // launched session we own the pane, so the answer can actually be typed
+    // in; for a monitored one, only the human at that terminal can act.
+    if (ask.kind === "permission_prompt") {
+      const launch = getLaunchBySession(store.db, ask.sessionId);
+      if (!launch) {
+        return c.json(
+          {
+            error:
+              "This session wasn't launched by the console, so Standup can't answer for you — respond in its terminal.",
+          },
+          409
+        );
+      }
+
+      const sent = await sendToLaunch(launch, answer);
+      if (!sent.ok) {
+        return c.json({ error: sent.error ?? "Could not reach the session" }, 409);
+      }
+    }
+
+    resolveAsk(store.db, askId, answer);
+    updateSessionStatus(store.db, ask.sessionId, "running");
 
     broadcast({
       type: "ask:resolved",
-      payload: { askId: c.req.param("id"), answer },
+      payload: { askId, answer },
+      timestamp: new Date().toISOString(),
+    });
+    broadcast({
+      type: "session:status",
+      payload: { sessionId: ask.sessionId, status: "running" },
       timestamp: new Date().toISOString(),
     });
 
@@ -676,6 +793,17 @@ function handleHookEvent(
       // A new turn is starting — the session is no longer idle/waiting.
       updateSessionStatus(store.db, session_id, "running");
       resetTurnNudges(session_id);
+
+      // The human answered in the terminal rather than through the console,
+      // so any prompt-ask we raised is moot. Left pending it would badge the
+      // Blocked view forever for a session that has already moved on.
+      for (const stale of cancelPromptAsks(store.db, session_id)) {
+        broadcast({
+          type: "ask:resolved",
+          payload: { askId: stale.id, answer: "" },
+          timestamp: new Date().toISOString(),
+        });
+      }
       broadcast({
         type: "session:status",
         payload: { sessionId: session_id, status: "running" },
@@ -801,7 +929,22 @@ function handleHookEvent(
 
     case "Notification": {
       const p = payload as { notification_type: string; message?: string } & typeof payload;
-      if (p.notification_type === "permission_prompt") {
+
+      // Verified payloads (see runbook): permission_prompt carries "Claude
+      // needs your permission"; idle_prompt carries "Claude is waiting for
+      // your input"; auth_success is informational.
+      //
+      // idle_prompt means different things depending on who started the
+      // session, which is why it isn't handled uniformly:
+      //   - monitored: routine. You are at that terminal and will type when
+      //     ready; badging every turn end would be constant noise.
+      //   - launched:  nobody is at that terminal. Left unflagged it waits
+      //     forever — exactly the blocked-and-invisible case.
+      const isPermission = p.notification_type === "permission_prompt";
+      const isIdle = p.notification_type === "idle_prompt";
+      const launched = isLaunchedSession(store.db, session_id);
+
+      if (isPermission || (isIdle && launched)) {
         updateSessionStatus(store.db, session_id, "waiting");
         broadcast({
           type: "session:status",
@@ -810,10 +953,28 @@ function handleHookEvent(
         });
 
         const session = getSession(store.db, session_id);
-        void pushNotification(
-          session?.title || "Agent needs you",
-          p.message ?? "Permission requested"
+        const detail =
+          p.message ??
+          (isPermission ? "Permission requested" : "Waiting for your input");
+
+        // Surfaced as an ask so it lands in the Blocked view and the alert
+        // strip. Answering it isn't possible from here for a monitored
+        // session — but a launched one can be answered with send input.
+        const ask = createAsk(
+          store.db,
+          session_id,
+          "permission_prompt",
+          launched
+            ? `${detail} — this session was launched by the console, so nobody is at its terminal.`
+            : detail
         );
+        broadcast({
+          type: "ask:new",
+          payload: ask,
+          timestamp: new Date().toISOString(),
+        });
+
+        void pushNotification(session?.title || "Agent needs you", detail);
       }
       break;
     }

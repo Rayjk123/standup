@@ -22,6 +22,15 @@ export default function App() {
   // WebSocket for real-time updates
   const { lastMessage } = useWebSocket("ws://localhost:7778");
 
+  // `all=1` includes ended sessions. They're needed in the Projects tab so
+  // their stored rows can be reviewed and cleaned up — an ended session that
+  // never appears can never be deleted.
+  const refreshSessions = () =>
+    fetch("/api/sessions?all=1")
+      .then((r) => r.json())
+      .then(setSessions)
+      .catch(() => {});
+
   // Initial data fetch
   useEffect(() => {
     async function fetchData() {
@@ -35,7 +44,7 @@ export default function App() {
           launchesRes,
         ] = await Promise.all([
           fetch("/api/projects"),
-          fetch("/api/sessions"),
+          fetch("/api/sessions?all=1"),
           fetch("/api/checkpoints"),
           fetch("/api/asks/pending"),
           fetch("/api/expert/exchanges"),
@@ -64,17 +73,9 @@ export default function App() {
 
     switch (lastMessage.type) {
       case "session:start":
-        // Refetch sessions
-        fetch("/api/sessions")
-          .then((res) => res.json())
-          .then(setSessions);
-        break;
-
       case "session:end":
       case "session:status":
-        fetch("/api/sessions")
-          .then((res) => res.json())
-          .then(setSessions);
+        refreshSessions();
         break;
 
       case "checkpoint:new":
@@ -98,7 +99,12 @@ export default function App() {
         setExpertExchanges((prev) => [lastMessage.payload as ExpertExchange, ...prev]);
         break;
 
+      case "session:deleted":
+        refreshSessions();
+        break;
+
       case "launch:started":
+      case "launch:stopped":
       case "launch:cleaned":
         fetch("/api/launches")
           .then((r) => r.json())
@@ -123,13 +129,12 @@ export default function App() {
       asks={asks}
       expertExchanges={expertExchanges}
       launches={launches}
+      onSessionChanged={refreshSessions}
       onLaunchChanged={() => {
         fetch("/api/launches")
           .then((r) => r.json())
           .then(setLaunches);
-        fetch("/api/sessions")
-          .then((r) => r.json())
-          .then(setSessions);
+        refreshSessions();
       }}
       onResolveAsk={async (askId, answer) => {
         await fetch(`/api/asks/${askId}/resolve`, {
@@ -166,9 +171,7 @@ export default function App() {
           const data = await res.json().catch(() => ({}));
           return { error: data.error ?? `Delete failed (${res.status})` };
         }
-        fetch("/api/sessions")
-          .then((r) => r.json())
-          .then(setSessions);
+        refreshSessions();
         return {};
       }}
       onLaunch={async (projectId, task) => {
@@ -186,9 +189,7 @@ export default function App() {
           return { error: data.launch.error ?? "Launch failed" };
         }
 
-        fetch("/api/sessions")
-          .then((r) => r.json())
-          .then(setSessions);
+        refreshSessions();
         return {};
       }}
     />
