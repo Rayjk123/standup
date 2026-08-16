@@ -171,72 +171,13 @@ test artifacts with
 
 ## Confirmed integration details
 
-Claude Code specifics verified empirically in this repo. Don't re-derive
-these from memory — two of them were guessed wrong initially and cost real
-debugging time.
+Claude Code behavior Standup depends on — hook config shape, payload fields,
+context injection, session identity, transcript format, tmux — is documented
+in [docs/claude-code-internals.md](../docs/claude-code-internals.md).
 
-**Hook config shape.** Definitions nest under a `hooks` array on each matcher
-entry. A flat definition fails settings validation with
-`hooks.<Event>.0.hooks: Expected array, but received undefined`.
-
-```json
-{ "hooks": { "SessionStart": [{ "hooks": [{ "type": "http", "url": "..." }] }] } }
-```
-
-**Injecting context from a hook.** `UserPromptSubmit` reads the HTTP response
-body:
-
-```json
-{ "hookSpecificOutput": { "hookEventName": "UserPromptSubmit", "additionalContext": "..." } }
-```
-
-**Session correlation from MCP.** There is no `CLAUDE_SESSION_ID` env var.
-The MCP subprocess inherits only `cwd`. The real session UUID is recoverable
-from the transcript filename Claude Code writes:
-
-```
-~/.claude/projects/<cwd-with-slashes-as-dashes>/<session-uuid>.jsonl
-```
-
-`packages/mcp/src/session-id.ts` does this; the collector falls back to a
-most-recent-active-session-by-cwd heuristic if resolution fails.
-
-**Hook payloads must never block.** Hooks run synchronously in the agent's
-loop. The `/hook` handler catches everything and always returns 200 — a
-collector error must never stall an agent.
-
-**Notification payloads.** Verified shapes:
-
-```json
-{ "notification_type": "idle_prompt",       "message": "Claude is waiting for your input" }
-{ "notification_type": "permission_prompt", "message": "Claude needs your permission" }
-```
-
-`idle_prompt` fires at every turn end, so it is routine for a monitored
-session and only meaningful for a launched one, where nobody is at the
-terminal. Neither payload says *what* is being asked — that only exists on
-the pane, which is why Blocked renders the live screen for prompt-asks.
-
-**No PostToolUse fires for a failed tool call.** Six deliberately failing
-Bash commands produced six `PreToolUse` and zero `PostToolUse`. A failure is
-therefore only visible as a `PreToolUse` whose `tool_use_id` never gets a
-matching Post — inspecting `tool_response` for error text cannot detect it,
-because the event carrying that response is never emitted. The correlation
-field is `tool_use_id` (not `tool_call_id`).
-
-To validate nudging live: `STANDUP_NUDGE=1 bun run dev`, then run five
-failing shell commands in a row (`this-command-does-not-exist-1` …). The
-nudge arrives in the agent's own context via `PostToolUse`
-`additionalContext`, and `bun run nudge:report` shows the same firing.
-
-**`tmux send-keys` drives Claude Code's menus with a plain number.** Sending
-`2` selects option 2 on an arrow-key dialog; no Up/Down key sequence is
-needed. Verified end to end: notification → reconciled ask → screen shown →
-`2` sent → dialog cleared → ask resolved → agent resumed.
-
-Watch for unsent text left in a pane's input buffer. `send-keys` appends to
-whatever is already typed there, so a half-written prompt from an earlier
-attach will be prepended to what you send.
+Read it before writing code against any Claude Code behavior. Everything in
+it was guessed wrong at least once first, and the usual symptom was a
+feature that ran without error while quietly doing nothing.
 
 ---
 

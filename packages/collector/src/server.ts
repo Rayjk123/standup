@@ -933,14 +933,30 @@ function handleHookEvent(
     }
 
     case "SubagentStop": {
-      // Structural checkpoint from subagent completion
-      const p = payload as { description?: string } & typeof payload;
-      if (p.description) {
+      // Structural checkpoint from a subagent finishing.
+      //
+      // There is no `description` field — verified payload carries
+      // `agent_type`, `agent_id`, and `last_assistant_message`. An earlier
+      // version keyed on `description` and so silently skipped every event.
+      //
+      // Gated on a non-empty agent_type, which is what the design means by
+      // "a *named* subtask". Claude Code fires SubagentStop for internal
+      // helpers too (title generation, summarization); those carry an empty
+      // agent_type and a last_assistant_message that is often just the
+      // human's own words echoed back. Checkpointing those would fill the
+      // feed with the user's own messages attributed to an agent.
+      const p = payload as {
+        agent_type?: string;
+        last_assistant_message?: string;
+      } & typeof payload;
+
+      const summary = p.last_assistant_message?.trim();
+      if (p.agent_type && summary) {
         const checkpoint = createCheckpoint(
           store.db,
           session_id,
           "structural",
-          p.description
+          summary.length > 280 ? `${summary.slice(0, 277)}…` : summary
         );
 
         broadcast({

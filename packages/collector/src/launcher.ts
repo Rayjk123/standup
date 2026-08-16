@@ -14,6 +14,31 @@ const WORKTREE_ROOT =
 /** Per-step cap so a wedged setup command can't hang the launch forever. */
 const STEP_TIMEOUT_MS = 5 * 60 * 1000;
 
+/**
+ * Appended to a launched agent's opening prompt.
+ *
+ * Self-reported checkpoints are what make the merged feed readable, but the
+ * design notes they "require one line in project instructions" — an agent
+ * with the tool available and no instruction simply never calls it, which
+ * is exactly what happened: sessions ran for hours producing zero
+ * checkpoints.
+ *
+ * A launched session's prompt is ours to compose, so the instruction goes
+ * here rather than depending on the user having set up a CLAUDE.md. For
+ * monitored sessions there is no equivalent hook — see
+ * docs/agent-instructions.md for the snippet to add manually.
+ *
+ * Deliberately brief and permissive: a heavy directive would distort the
+ * work, and an agent that ignores it still functions, just less visibly.
+ */
+const CHECKPOINT_INSTRUCTION = `
+
+---
+You're running under Standup, a console that shows your progress alongside other agents.
+Call the \`checkpoint\` tool when you finish a discrete piece of work (not per tool call) —
+a short status line in your own words. Use \`ask_human\` if you need a decision rather than
+guessing. Both are optional; they only affect visibility, not correctness.`;
+
 export interface LaunchRequest {
   project: Project;
   task: string;
@@ -201,7 +226,7 @@ export async function launchSession(
         "-c",
         worktreePath,
         "claude",
-        task,
+        task + CHECKPOINT_INSTRUCTION,
       ],
       worktreePath,
       log

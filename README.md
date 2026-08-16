@@ -306,6 +306,7 @@ if you're self-hosting. Unset `NTFY_TOPIC` and push is a no-op.
 - [High-Level Design](plan/high-level-design.md) — Full architecture and rationale
 - [Implementation Plan](plan/implementation.md) — Phase-by-phase status and model assignments
 - [Runbook](plan/runbook.md) — How to verify each piece, what hot-reloads, and gotchas that cost real time
+- [Claude Code internals](docs/claude-code-internals.md) — Verified behavior Standup depends on. Read before writing code against any Claude Code behavior.
 
 ## License
 
