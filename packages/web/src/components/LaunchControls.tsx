@@ -1,6 +1,9 @@
 import { useState } from "react";
-import type { Launch } from "@standup/shared";
+import type { ClaudeEffort, ClaudeModel, Launch } from "@standup/shared";
 import { theme } from "./theme";
+
+const MODELS: ClaudeModel[] = ["opus", "sonnet", "haiku", "fable"];
+const EFFORTS: ClaudeEffort[] = ["low", "medium", "high", "xhigh", "max"];
 
 interface LaunchControlsProps {
   launch: Launch;
@@ -50,29 +53,45 @@ export function LaunchControls({ launch, onStopped }: LaunchControlsProps) {
     }
   }
 
-  async function send() {
-    if (!draft.trim() || sending) return;
+  async function sendText(text: string) {
+    if (!text.trim() || sending) return;
     setSending(true);
     setError(null);
     try {
       const res = await fetch(`/api/launches/${launch.id}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: draft.trim() }),
+        body: JSON.stringify({ text: text.trim() }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Send failed");
         return;
       }
-      setDraft("");
-      setComposing(false);
       // Give the agent a beat to react, then show the result — otherwise
       // you'd see the screen from before your input landed.
       setTimeout(() => void loadOutput(), 1200);
     } finally {
       setSending(false);
     }
+  }
+
+  async function send() {
+    if (!draft.trim()) return;
+    await sendText(draft);
+    setDraft("");
+    setComposing(false);
+  }
+
+  // `/model` and `/effort` are real Claude Code slash commands — typed at
+  // the prompt exactly like sendText does, so switching mid-session reuses
+  // the same literal-keystroke path rather than a new mechanism.
+  async function switchModel(model: ClaudeModel) {
+    await sendText(`/model ${model}`);
+  }
+
+  async function switchEffort(effort: ClaudeEffort) {
+    await sendText(`/effort ${effort}`);
   }
 
   async function stop() {
@@ -102,6 +121,42 @@ export function LaunchControls({ launch, onStopped }: LaunchControlsProps) {
         <button onClick={() => setComposing((v) => !v)} style={linkButton}>
           ↩ send input
         </button>
+
+        <select
+          defaultValue=""
+          disabled={sending}
+          onChange={(e) => {
+            if (e.target.value) void switchModel(e.target.value as ClaudeModel);
+            e.target.value = "";
+          }}
+          title="Switch this running session's model — sends /model at its prompt"
+          style={{ ...linkButton, border: `1px solid ${theme.edge}`, borderRadius: 4, padding: "1px 4px" }}
+        >
+          <option value="">model…</option>
+          {MODELS.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+
+        <select
+          defaultValue=""
+          disabled={sending}
+          onChange={(e) => {
+            if (e.target.value) void switchEffort(e.target.value as ClaudeEffort);
+            e.target.value = "";
+          }}
+          title="Switch this running session's effort — sends /effort at its prompt"
+          style={{ ...linkButton, border: `1px solid ${theme.edge}`, borderRadius: 4, padding: "1px 4px" }}
+        >
+          <option value="">effort…</option>
+          {EFFORTS.map((e) => (
+            <option key={e} value={e}>
+              {e}
+            </option>
+          ))}
+        </select>
 
         <span style={{ flex: 1 }} />
 

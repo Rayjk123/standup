@@ -7,6 +7,8 @@ import type {
   ExpertExchange,
   Launch,
   ProjectWithCounts,
+  ClaudeEffort,
+  ClaudeModel,
 } from "@standup/shared";
 import { FeedView } from "./FeedView";
 import { BlockedView } from "./BlockedView";
@@ -27,7 +29,12 @@ interface ConsoleProps {
   onResolveAsk: (askId: string, answer: string) => Promise<{ error?: string }>;
   onDismissAsk: (askId: string) => Promise<{ error?: string }>;
   onSteer: (sessionId: string, body: string) => Promise<void>;
-  onLaunch: (projectId: string, task: string) => Promise<{ error?: string }>;
+  onLaunch: (
+    projectId: string,
+    task: string,
+    model?: ClaudeModel,
+    effort?: ClaudeEffort
+  ) => Promise<{ error?: string }>;
   onSaveProject: (
     id: string | null,
     patch: Partial<Project>

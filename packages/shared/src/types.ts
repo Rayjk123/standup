@@ -46,6 +46,19 @@ export interface Session {
    * persisted.
    */
   owned?: boolean;
+  /**
+   * Effort level read off the most recent hook payload for this session —
+   * the ground truth even after a `/effort` change mid-session, unlike the
+   * value chosen at launch. Computed, not persisted; unset until the first
+   * hook fires.
+   */
+  liveEffort?: string;
+  /**
+   * Model off the most recent real assistant turn in the transcript —
+   * ground truth even after a `/model` change mid-session. Computed, not
+   * persisted; unset until the transcript has a real (non-synthetic) turn.
+   */
+  liveModel?: string;
 }
 
 // ============================================================================
@@ -55,6 +68,12 @@ export interface Session {
 export type LaunchStatus = "starting" | "running" | "failed" | "cleaned";
 
 export type LaunchKind = "worktree" | "adopted";
+
+/** Aliases accepted by `claude --model`. */
+export type ClaudeModel = "opus" | "sonnet" | "haiku" | "fable";
+
+/** Levels accepted by `claude --effort`. */
+export type ClaudeEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface Launch {
   id: string;
@@ -69,6 +88,10 @@ export interface Launch {
   sessionId?: string;
   status: LaunchStatus;
   error?: string;
+  /** Chosen at launch and passed as `--model`; unset means the CLI's own default. */
+  model?: ClaudeModel;
+  /** Chosen at launch and passed as `--effort`; unset means the CLI's own default. */
+  effort?: ClaudeEffort;
   createdAt: Date;
 }
 

@@ -8,6 +8,9 @@ export interface BaseHookPayload {
   cwd: string;
   transcript_path: string;
   hook_event_name: string;
+  /** Observed on the wire per docs/claude-code-internals.md; not documented, so optional. Shape is `{ level: "low"|"medium"|... }`, not a bare string. */
+  effort?: { level?: string };
+  permission_mode?: string;
 }
 
 export interface SessionStartPayload extends BaseHookPayload {

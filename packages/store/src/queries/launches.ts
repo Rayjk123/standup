@@ -13,6 +13,8 @@ interface LaunchRow {
   session_id: string | null;
   status: LaunchStatus;
   error: string | null;
+  model: string | null;
+  effort: string | null;
   created_at: string;
 }
 
@@ -29,6 +31,8 @@ function toLaunch(row: LaunchRow): Launch {
     sessionId: row.session_id ?? undefined,
     status: row.status,
     error: row.error ?? undefined,
+    model: (row.model as Launch["model"]) ?? undefined,
+    effort: (row.effort as Launch["effort"]) ?? undefined,
     createdAt: new Date(row.created_at),
   };
 }
@@ -42,8 +46,8 @@ export function createLaunch(
 ): Launch {
   db.run(
     `INSERT INTO launches
-       (id, kind, project_id, task, worktree_path, branch, base_branch, tmux_session, session_id, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, kind, project_id, task, worktree_path, branch, base_branch, tmux_session, session_id, status, model, effort)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       launch.id,
       launch.kind ?? "worktree",
@@ -55,6 +59,8 @@ export function createLaunch(
       launch.tmuxSession ?? null,
       launch.sessionId ?? null,
       launch.status ?? "starting",
+      launch.model ?? null,
+      launch.effort ?? null,
     ]
   );
 

@@ -18,6 +18,20 @@ export const theme = {
   sans: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
 } as const;
 
+/**
+ * Turns a transcript's raw model id (e.g. `claude-sonnet-5-20250929`) into
+ * the name shown in Claude Code's own UI. Falls back to the raw id for
+ * anything unrecognized rather than hiding it.
+ */
+export function friendlyModel(id: string): string {
+  const lower = id.toLowerCase();
+  if (lower.includes("opus")) return "Opus 5";
+  if (lower.includes("sonnet")) return "Sonnet 5";
+  if (lower.includes("haiku")) return "Haiku 4.5";
+  if (lower.includes("fable")) return "Fable 5";
+  return id;
+}
+
 export const statusColors = {
   running: theme.running,
   idle: theme.idle,

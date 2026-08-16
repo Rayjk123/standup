@@ -7,8 +7,10 @@ import type {
   Project,
   ExpertExchange,
   Launch,
+  ClaudeEffort,
+  ClaudeModel,
 } from "@standup/shared";
-import { theme } from "./theme";
+import { theme, friendlyModel } from "./theme";
 import { Replier } from "./Replier";
 import { Composer } from "./Composer";
 import { LaunchControls } from "./LaunchControls";
@@ -81,12 +83,18 @@ function ExpertBody({ exchange }: { exchange: ExpertExchange }) {
  */
 function LaunchBody({
   launch,
+  session,
   onStopped,
 }: {
   launch: Launch;
+  session?: Session;
   onStopped: () => void;
 }) {
   const failed = launch.status === "failed";
+  const modelLabel = session?.liveModel
+    ? friendlyModel(session.liveModel)
+    : launch.model ?? "default";
+  const effortLabel = session?.liveEffort ?? launch.effort ?? "default";
 
   return (
     <>
@@ -117,6 +125,10 @@ function LaunchBody({
             }}
           >
             ⧗ worktree {launch.branch} · agent running
+            <span style={{ color: theme.faint }}>
+              {" "}
+              · {modelLabel} / {effortLabel}
+            </span>
           </div>
           {launch.tmuxSession && (
             <>
@@ -150,7 +162,12 @@ interface FeedViewProps {
   projects: Project[];
   onSteer: (sessionId: string, body: string) => Promise<void>;
   onResolveAsk: (askId: string, answer: string) => Promise<{ error?: string }>;
-  onLaunch: (projectId: string, task: string) => Promise<{ error?: string }>;
+  onLaunch: (
+    projectId: string,
+    task: string,
+    model?: ClaudeModel,
+    effort?: ClaudeEffort
+  ) => Promise<{ error?: string }>;
   onLaunchChanged: () => void;
 }
 
@@ -378,6 +395,7 @@ export function FeedView({
                 <div onClick={(e) => e.stopPropagation()}>
                   <LaunchBody
                     launch={item.data as Launch}
+                    session={getSession((item.data as Launch).sessionId ?? "")}
                     onStopped={onLaunchChanged}
                   />
                 </div>

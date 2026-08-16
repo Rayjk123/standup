@@ -301,10 +301,13 @@ function parseLines(lines: string[]): TranscriptMessage[] {
   return messages;
 }
 
-/** Reads the last `TAIL_BYTES` of a file, dropping a partial first line. */
-async function readTail(path: string): Promise<{ text: string; partial: boolean }> {
+/** Reads the last `bytes` of a file, dropping a partial first line. */
+async function readTail(
+  path: string,
+  bytes: number = TAIL_BYTES
+): Promise<{ text: string; partial: boolean }> {
   const { size } = await stat(path);
-  const start = Math.max(0, size - TAIL_BYTES);
+  const start = Math.max(0, size - bytes);
 
   const handle = await open(path, "r");
   try {
@@ -377,4 +380,77 @@ export function transcriptPathForSession(
     .get(sessionId) as { path: string | null } | null;
 
   return row?.path ?? null;
+}
+
+/**
+ * The effort level off the most recent hook payload for a session.
+ *
+ * Hook payloads carry `effort` on every event (see
+ * docs/claude-code-internals.md), so unlike the value chosen at launch this
+ * reflects a mid-session `/effort` change. Undocumented field — read
+ * defensively, same as transcriptPathForSession. Observed shape is an object,
+ * `{"level":"medium"}`, not a bare string.
+ */
+export function currentEffortForSession(
+  db: import("bun:sqlite").Database,
+  sessionId: string
+): string | null {
+  const row = db
+    .query(
+      `SELECT json_extract(payload_json, '$.effort.level') AS level
+         FROM events
+        WHERE session_id = ?
+          AND json_extract(payload_json, '$.effort.level') IS NOT NULL
+        ORDER BY seq DESC
+        LIMIT 1`
+    )
+    .get(sessionId) as { level: string | null } | null;
+
+  return row?.level ?? null;
+}
+
+/**
+ * Bytes read when tailing for the last message's model. A single message
+ * (tool input/output, especially) can run well past 16 KB, so a small tail
+ * risks landing entirely inside non-assistant records (queue-operation,
+ * plain user text) with no model field at all — matches TAIL_BYTES so it's
+ * exactly as reliable as the full transcript read.
+ */
+const MODEL_TAIL_BYTES = TAIL_BYTES;
+
+/**
+ * The model off the most recent real assistant turn in a session's
+ * transcript.
+ *
+ * Unlike effort, `model` never appears on a hook payload — it's only in the
+ * transcript, one per message (see TranscriptMessage.model). A small tail
+ * read is enough since we only need the last one, not the whole history.
+ * `<synthetic>` is a placeholder Claude Code writes on tool-only turns with
+ * no real model call, so it's skipped rather than reported as current.
+ */
+export async function currentModelForSession(
+  transcriptPath: string | null
+): Promise<string | null> {
+  if (!transcriptPath || !existsSync(transcriptPath)) return null;
+
+  try {
+    const { text, partial } = await readTail(transcriptPath, MODEL_TAIL_BYTES);
+    const lines = text.split("\n");
+    if (partial) lines.shift();
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      try {
+        const raw = JSON.parse(line) as RawRecord;
+        const model = raw.message?.model;
+        if (model && model !== "<synthetic>") return model;
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }

@@ -47,6 +47,8 @@ session_id       transcript_path   cwd
 hook_event_name  prompt_id         permission_mode   effort
 ```
 
+`effort` is an object, not a bare string: `{"level": "medium"}`.
+
 Tool events (`PreToolUse` / `PostToolUse`) add:
 
 ```

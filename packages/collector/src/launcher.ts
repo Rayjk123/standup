@@ -4,7 +4,7 @@ import { existsSync } from "fs";
 import { mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
 import type { Database } from "bun:sqlite";
-import type { Launch, Project } from "@standup/shared";
+import type { ClaudeEffort, ClaudeModel, Launch, Project } from "@standup/shared";
 import { createLaunch, updateLaunchStatus } from "@standup/store";
 
 const WORKTREE_ROOT =
@@ -42,6 +42,18 @@ guessing. Both are optional; they only affect visibility, not correctness.`;
 export interface LaunchRequest {
   project: Project;
   task: string;
+  /** Passed as `claude --model`; omitted means the CLI's own default. */
+  model?: ClaudeModel;
+  /** Passed as `claude --effort`; omitted means the CLI's own default. */
+  effort?: ClaudeEffort;
+}
+
+/** Builds the trailing `--model`/`--effort` flags for a `claude` invocation. */
+function modelEffortFlags(model?: ClaudeModel, effort?: ClaudeEffort): string[] {
+  const flags: string[] = [];
+  if (model) flags.push("--model", model);
+  if (effort) flags.push("--effort", effort);
+  return flags;
 }
 
 export interface LaunchResult {
@@ -138,7 +150,7 @@ export function tmuxAvailable(): boolean {
  */
 export async function launchSession(
   db: Database,
-  { project, task }: LaunchRequest
+  { project, task, model, effort }: LaunchRequest
 ): Promise<LaunchResult> {
   const log: string[] = [];
   const slug = slugify(task);
@@ -179,6 +191,8 @@ export async function launchSession(
     baseBranch: project.branch,
     tmuxSession,
     status: "starting",
+    model,
+    effort,
   });
 
   try {
@@ -226,6 +240,7 @@ export async function launchSession(
         "-c",
         worktreePath,
         "claude",
+        ...modelEffortFlags(model, effort),
         task + CHECKPOINT_INSTRUCTION,
       ],
       worktreePath,

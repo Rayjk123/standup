@@ -6,8 +6,10 @@ import type {
   Session,
   Checkpoint,
   Launch,
+  ClaudeEffort,
+  ClaudeModel,
 } from "@standup/shared";
-import { theme, statusColors } from "./theme";
+import { theme, statusColors, friendlyModel } from "./theme";
 import { SilenceStrip } from "./SilenceStrip";
 import { ProjectEditor } from "./ProjectEditor";
 import { SessionControls } from "./SessionControls";
@@ -26,7 +28,12 @@ interface ProjectsViewProps {
   ) => Promise<{ error?: string }>;
   onDeleteProject: (id: string) => Promise<{ error?: string }>;
   onSessionChanged: () => void;
-  onLaunch: (projectId: string, task: string) => Promise<{ error?: string }>;
+  onLaunch: (
+    projectId: string,
+    task: string,
+    model?: ClaudeModel,
+    effort?: ClaudeEffort
+  ) => Promise<{ error?: string }>;
   lastEvent: { sessionId: string; n: number };
 }
 
@@ -455,6 +462,12 @@ export function ProjectsView({
                   }}
                 >
                   {selected.status}
+                </span>
+                <span title="Live model and effort, read from the session's own transcript/events">
+                  {selected.liveModel
+                    ? friendlyModel(selected.liveModel)
+                    : selectedLaunch?.model ?? "default"}{" "}
+                  / {selected.liveEffort ?? selectedLaunch?.effort ?? "default"}
                 </span>
                 {selected.endedAt && <span>ended</span>}
               </div>

@@ -50,12 +50,17 @@ import {
   type EmbeddingProvider,
 } from "@standup/knowledge";
 import type {
+  ClaudeEffort,
+  ClaudeModel,
   HookPayload,
   Project,
   Session,
   ToolUsePayload,
   WsMessage,
 } from "@standup/shared";
+
+const CLAUDE_MODELS: ClaudeModel[] = ["opus", "sonnet", "haiku", "fable"];
+const CLAUDE_EFFORTS: ClaudeEffort[] = ["low", "medium", "high", "xhigh", "max"];
 import type { ProjectsRegistry } from "./projects-registry.js";
 import { runRipgrep } from "./ripgrep.js";
 import { waitForAskResolution } from "./asks.js";
@@ -71,7 +76,12 @@ import {
   sendToLaunch,
 } from "./launcher.js";
 import { askExpert, loadRegions } from "./expert.js";
-import { readTranscript, transcriptPathForSession } from "./transcript.js";
+import {
+  readTranscript,
+  transcriptPathForSession,
+  currentEffortForSession,
+  currentModelForSession,
+} from "./transcript.js";
 import {
   maybeNudge,
   isNudgingEnabled,
@@ -357,23 +367,23 @@ export function createServer(
 
   // Sessions. Ended ones are excluded by default so the console reflects
   // what's live; ?all=1 includes them so they can be reviewed and cleaned up.
-  app.get("/api/sessions", (c) => {
+  app.get("/api/sessions", async (c) => {
     const sessions =
       c.req.query("all") === "1"
         ? getAllSessions(store.db)
         : getActiveSessions(store.db);
-    return c.json(sessions.map((s) => withActivityTicks(store, s)));
+    return c.json(await Promise.all(sessions.map((s) => withActivityTicks(store, s))));
   });
 
-  app.get("/api/sessions/:id", (c) => {
+  app.get("/api/sessions/:id", async (c) => {
     const session = getSession(store.db, c.req.param("id"));
     if (!session) return c.json({ error: "Not found" }, 404);
-    return c.json(withActivityTicks(store, session));
+    return c.json(await withActivityTicks(store, session));
   });
 
-  app.get("/api/projects/:id/sessions", (c) => {
+  app.get("/api/projects/:id/sessions", async (c) => {
     const sessions = getSessionsByProject(store.db, c.req.param("id"));
-    return c.json(sessions.map((s) => withActivityTicks(store, s)));
+    return c.json(await Promise.all(sessions.map((s) => withActivityTicks(store, s))));
   });
 
   /**
@@ -715,10 +725,20 @@ export function createServer(
 
   app.post("/api/projects/:id/launch", async (c) => {
     const projectId = c.req.param("id");
-    const { task } = await c.req.json<{ task: string }>();
+    const { task, model, effort } = await c.req.json<{
+      task: string;
+      model?: string;
+      effort?: string;
+    }>();
 
     if (!task?.trim()) {
       return c.json({ error: "task is required" }, 400);
+    }
+    if (model && !CLAUDE_MODELS.includes(model as ClaudeModel)) {
+      return c.json({ error: `Unknown model: ${model}` }, 400);
+    }
+    if (effort && !CLAUDE_EFFORTS.includes(effort as ClaudeEffort)) {
+      return c.json({ error: `Unknown effort level: ${effort}` }, 400);
     }
 
     const project = getProjects(store.db).find((p) => p.id === projectId);
@@ -727,7 +747,12 @@ export function createServer(
     }
 
     try {
-      const result = await launchSession(store.db, { project, task: task.trim() });
+      const result = await launchSession(store.db, {
+        project,
+        task: task.trim(),
+        model: model as ClaudeModel | undefined,
+        effort: effort as ClaudeEffort | undefined,
+      });
 
       broadcast({
         type: "launch:started",
@@ -1029,7 +1054,8 @@ export function createServer(
   return app;
 }
 
-function withActivityTicks(store: Store, session: Session): Session {
+async function withActivityTicks(store: Store, session: Session): Promise<Session> {
+  const transcriptPath = transcriptPathForSession(store.db, session.id);
   return {
     ...session,
     activityTicks: getSilenceTicks(store.db, session.id),
@@ -1037,6 +1063,8 @@ function withActivityTicks(store: Store, session: Session): Session {
     // the UI offers, so it belongs on every session response rather than
     // being fetched separately per session.
     owned: isLaunchedSession(store.db, session.id),
+    liveEffort: currentEffortForSession(store.db, session.id) ?? undefined,
+    liveModel: (await currentModelForSession(transcriptPath)) ?? undefined,
   };
 }
 

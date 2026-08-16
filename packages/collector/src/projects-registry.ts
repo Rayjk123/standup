@@ -1,4 +1,4 @@
-import { readFile, watch } from "fs/promises";
+import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";

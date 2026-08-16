@@ -206,11 +206,11 @@ export default function App() {
         refreshSessions();
         return {};
       }}
-      onLaunch={async (projectId, task) => {
+      onLaunch={async (projectId, task, model, effort) => {
         const res = await fetch(`/api/projects/${projectId}/launch`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ task }),
+          body: JSON.stringify({ task, model, effort }),
         });
         const data = await res.json();
 

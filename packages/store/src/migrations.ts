@@ -190,6 +190,15 @@ const MIGRATIONS = [
     value TEXT NOT NULL
   );
   `,
+
+  // Migration 007: launches.model / launches.effort
+  //
+  // What to pass as `claude --model` / `--effort` at launch, chosen from the
+  // composer. NULL means the CLI's own default — never forced.
+  `
+  ALTER TABLE launches ADD COLUMN model TEXT;
+  ALTER TABLE launches ADD COLUMN effort TEXT;
+  `,
 ];
 
 export function runMigrations(db: Database): void {

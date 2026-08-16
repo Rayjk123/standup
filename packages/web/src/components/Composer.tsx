@@ -1,11 +1,43 @@
 import { useState } from "react";
-import type { Project } from "@standup/shared";
+import type { ClaudeEffort, ClaudeModel, Project } from "@standup/shared";
 import { theme } from "./theme";
 
 interface ComposerProps {
   projects: Project[];
-  onLaunch: (projectId: string, task: string) => Promise<{ error?: string }>;
+  onLaunch: (
+    projectId: string,
+    task: string,
+    model?: ClaudeModel,
+    effort?: ClaudeEffort
+  ) => Promise<{ error?: string }>;
 }
+
+const MODEL_OPTIONS: { value: ClaudeModel | ""; label: string }[] = [
+  { value: "", label: "Default model" },
+  { value: "opus", label: "Opus" },
+  { value: "sonnet", label: "Sonnet" },
+  { value: "haiku", label: "Haiku" },
+  { value: "fable", label: "Fable" },
+];
+
+const EFFORT_OPTIONS: { value: ClaudeEffort | ""; label: string }[] = [
+  { value: "", label: "Default effort" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "X-high" },
+  { value: "max", label: "Max" },
+];
+
+const selectStyle: React.CSSProperties = {
+  fontSize: 12.5,
+  color: theme.text,
+  background: theme.raised,
+  border: `1px solid ${theme.edge}`,
+  borderRadius: 6,
+  padding: "8px 9px",
+  outline: "none",
+};
 
 /**
  * Composer-as-launcher: pick a project, describe the work, and the console
@@ -16,6 +48,8 @@ interface ComposerProps {
 export function Composer({ projects, onLaunch }: ComposerProps) {
   const [target, setTarget] = useState(projects[0]?.id ?? "");
   const [task, setTask] = useState("");
+  const [model, setModel] = useState<ClaudeModel | "">("");
+  const [effort, setEffort] = useState<ClaudeEffort | "">("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +63,12 @@ export function Composer({ projects, onLaunch }: ComposerProps) {
     setBusy(true);
     setError(null);
     try {
-      const result = await onLaunch(target, task.trim());
+      const result = await onLaunch(
+        target,
+        task.trim(),
+        model || undefined,
+        effort || undefined
+      );
       if (result.error) {
         setError(result.error);
       } else {
@@ -113,6 +152,34 @@ export function Composer({ projects, onLaunch }: ComposerProps) {
             </span>
           )
         )}
+
+        <select
+          value={model}
+          disabled={busy}
+          onChange={(e) => setModel(e.target.value as ClaudeModel | "")}
+          title="Model to launch with — passed as claude --model"
+          style={selectStyle}
+        >
+          {MODEL_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value} style={{ background: theme.raised }}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={effort}
+          disabled={busy}
+          onChange={(e) => setEffort(e.target.value as ClaudeEffort | "")}
+          title="Effort level to launch with — passed as claude --effort"
+          style={selectStyle}
+        >
+          {EFFORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value} style={{ background: theme.raised }}>
+              {o.label}
+            </option>
+          ))}
+        </select>
 
         <input
           value={task}

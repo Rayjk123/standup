@@ -1,12 +1,14 @@
 import type { Database } from "bun:sqlite";
-import type { HookEvent, HookEventType } from "@standup/shared";
+import type { HookEvent, HookEventType, HookPayload } from "@standup/shared";
 import { SILENCE_METER_MINUTES } from "@standup/shared";
 
 export function insertEvent(
   db: Database,
   sessionId: string,
   type: HookEventType,
-  payload: Record<string, unknown>
+  // Only ever JSON.stringified, never indexed — accepts the real hook
+  // payload shapes directly rather than forcing every caller to cast.
+  payload: Record<string, unknown> | HookPayload
 ): number {
   // Get next sequence number for this session
   const seqRow = db
