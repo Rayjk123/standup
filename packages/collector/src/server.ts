@@ -26,6 +26,7 @@ import {
   getAsk,
   resolveAsk,
   cancelPromptAsks,
+  cancelAllPendingAsks,
   createCheckpoint,
   getRecentCheckpoints,
   createSteer,
@@ -375,6 +376,17 @@ export function createServer(
     const result = await stopLaunch(store.db, launch);
     endSession(store.db, sessionId);
 
+    // The process behind any pending ask is now gone, so nothing will ever
+    // resolve it — left pending it would sit in Blocked forever pointing at
+    // a session that no longer exists.
+    for (const ask of cancelAllPendingAsks(store.db, sessionId)) {
+      broadcast({
+        type: "ask:resolved",
+        payload: { askId: ask.id, answer: "" },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     broadcast({
       type: "session:status",
       payload: { sessionId, status: "idle" },
@@ -722,6 +734,27 @@ export function createServer(
     if (!launch) return c.json({ error: "Not found" }, 404);
 
     const result = await stopLaunch(store.db, launch);
+
+    // This endpoint (the Feed's launch control) previously stopped the tmux
+    // pane but never touched the session row or its asks — the session kept
+    // reading as "running"/"waiting" and any pending ask sat in Blocked
+    // pointing at a session that was already gone. Mirrors what
+    // /api/sessions/:id/stop does.
+    if (launch.sessionId) {
+      endSession(store.db, launch.sessionId);
+      for (const ask of cancelAllPendingAsks(store.db, launch.sessionId)) {
+        broadcast({
+          type: "ask:resolved",
+          payload: { askId: ask.id, answer: "" },
+          timestamp: new Date().toISOString(),
+        });
+      }
+      broadcast({
+        type: "session:status",
+        payload: { sessionId: launch.sessionId, status: "idle" },
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     broadcast({
       type: "launch:stopped",
