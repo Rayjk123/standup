@@ -34,8 +34,10 @@ export interface TranscriptMessage {
   /** Prose only — thinking blocks are excluded, see extractText. */
   text: string;
   toolCalls: TranscriptToolCall[];
-  /** Present on assistant messages that reported usage. */
-  tokens?: number;
+  /** Output tokens for this message; additive across a session. */
+  outputTokens?: number;
+  /** Context size at this turn; a point-in-time reading, not additive. */
+  contextTokens?: number;
   model?: string;
 }
 
@@ -44,7 +46,18 @@ export interface TranscriptPage {
   /** True when older messages exist before the returned window. */
   hasMore: boolean;
   totalMessages: number;
-  totalTokens: number;
+  /**
+   * Sum of output tokens — the one usage figure that is genuinely additive
+   * across a conversation.
+   *
+   * Input and cache-read counts are *not* summable: every turn re-sends the
+   * whole history, so adding them across messages counts the same context
+   * once per turn. Doing that naively reported 43M tokens for a session that
+   * had used a small fraction of that.
+   */
+  outputTokens: number;
+  /** Context size at the most recent turn — a point-in-time reading. */
+  contextTokens: number;
 }
 
 /** Bytes read from the end of the file when tailing. */
@@ -132,12 +145,6 @@ function toMessage(raw: RawRecord): TranscriptMessage | null {
   if (!text && toolCalls.length === 0) return null;
 
   const usage = raw.message?.usage;
-  const tokens = usage
-    ? (usage.input_tokens ?? 0) +
-      (usage.output_tokens ?? 0) +
-      (usage.cache_read_input_tokens ?? 0) +
-      (usage.cache_creation_input_tokens ?? 0)
-    : undefined;
 
   return {
     uuid: raw.uuid ?? "",
@@ -145,7 +152,12 @@ function toMessage(raw: RawRecord): TranscriptMessage | null {
     timestamp: raw.timestamp ?? "",
     text,
     toolCalls,
-    tokens,
+    outputTokens: usage?.output_tokens,
+    contextTokens: usage
+      ? (usage.input_tokens ?? 0) +
+        (usage.cache_read_input_tokens ?? 0) +
+        (usage.cache_creation_input_tokens ?? 0)
+      : undefined,
     model: raw.message?.model,
   };
 }
@@ -191,7 +203,8 @@ export async function readTranscript(
     messages: [],
     hasMore: false,
     totalMessages: 0,
-    totalTokens: 0,
+    outputTokens: 0,
+    contextTokens: 0,
   };
 
   if (!transcriptPath || !existsSync(transcriptPath)) return empty;
@@ -209,7 +222,9 @@ export async function readTranscript(
       messages,
       hasMore: partial || all.length > messages.length,
       totalMessages: all.length,
-      totalTokens: all.reduce((sum, m) => sum + (m.tokens ?? 0), 0),
+      outputTokens: all.reduce((sum, m) => sum + (m.outputTokens ?? 0), 0),
+      contextTokens:
+        [...all].reverse().find((m) => m.contextTokens)?.contextTokens ?? 0,
     };
   } catch (err) {
     console.error(`[transcript] Failed to read ${transcriptPath}:`, err);

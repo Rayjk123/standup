@@ -60,6 +60,7 @@ import {
   sendToLaunch,
 } from "./launcher.js";
 import { askExpert, loadRegions } from "./expert.js";
+import { readTranscript, transcriptPathForSession } from "./transcript.js";
 import {
   maybeNudge,
   isNudgingEnabled,
@@ -296,6 +297,74 @@ export function createServer(
     } catch {
       return c.json({ output: "", alive: false, owned: true });
     }
+  });
+
+  /**
+   * The session's actual conversation, read from Claude Code's transcript.
+   *
+   * Works for monitored sessions as well as launched ones, and with full
+   * history either way: the transcript covers the whole session including
+   * whatever happened before Standup started observing.
+   *
+   * `owned` tells the client whether replying is possible — Standup can only
+   * type into panes it created.
+   */
+  app.get("/api/sessions/:id/transcript", async (c) => {
+    const sessionId = c.req.param("id");
+    if (!getSession(store.db, sessionId)) {
+      return c.json({ error: "Not found" }, 404);
+    }
+
+    const path = transcriptPathForSession(store.db, sessionId);
+    if (!path) {
+      return c.json({
+        messages: [],
+        hasMore: false,
+        totalMessages: 0,
+        totalTokens: 0,
+        owned: false,
+      });
+    }
+
+    // Capped: the reader only tails a fixed slice of the file, so asking for
+    // more than it can hold would promise history it cannot return.
+    const limit = Math.min(parseInt(c.req.query("limit") ?? "40"), 400);
+    const page = await readTranscript(path, limit);
+
+    return c.json({ ...page, owned: !!getLaunchBySession(store.db, sessionId) });
+  });
+
+  /**
+   * Types into a session, keyed by session rather than launch so the
+   * transcript view can reply without knowing about launches.
+   */
+  app.post("/api/sessions/:id/send", async (c) => {
+    const sessionId = c.req.param("id");
+    const { text } = await c.req.json<{ text: string }>();
+    if (!text?.trim()) return c.json({ error: "text is required" }, 400);
+
+    const launch = getLaunchBySession(store.db, sessionId);
+    if (!launch) {
+      return c.json(
+        {
+          error:
+            "Standup didn't launch this session, so it can't type into it — reply in its own terminal.",
+        },
+        409
+      );
+    }
+
+    const result = await sendToLaunch(launch, text.trim());
+    if (!result.ok) return c.json({ error: result.error }, 409);
+
+    updateSessionStatus(store.db, sessionId, "running");
+    broadcast({
+      type: "session:status",
+      payload: { sessionId, status: "running" },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json({ ok: true });
   });
 
   /** Frees the rows a session accumulated — events dominate the count. */

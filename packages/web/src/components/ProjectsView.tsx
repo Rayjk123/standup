@@ -5,6 +5,7 @@ import { theme, statusColors } from "./theme";
 import { SilenceStrip } from "./SilenceStrip";
 import { ProjectEditor } from "./ProjectEditor";
 import { SessionControls } from "./SessionControls";
+import { TranscriptView } from "./TranscriptView";
 
 interface ProjectsViewProps {
   projects: Project[];
@@ -34,6 +35,9 @@ export function ProjectsView({
   const setSelectedSession = (id: string) => navigate(`/projects/${id}`);
   // null = not editing; "" = creating a new project; otherwise a project id.
   const [editing, setEditing] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<"transcript" | "checkpoints">(
+    "transcript"
+  );
 
   const getSessionsByProject = (projectId: string) =>
     sessions.filter((s) => s.projectId === projectId);
@@ -233,8 +237,20 @@ export function ProjectsView({
         <div style={{ height: 20 }} />
       </div>
 
-      {/* Detail pane — the editor takes over when configuring a project */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      {/* Detail pane — the editor takes over when configuring a project.
+          Column flex with minHeight 0 so the transcript can own its own
+          scroll region and keep its reply box pinned, rather than the whole
+          pane scrolling as one block. */}
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflowY: "auto",
+        }}
+      >
         {editing !== null ? (
           <ProjectEditor
             project={editing ? projects.find((p) => p.id === editing) : undefined}
@@ -312,50 +328,98 @@ export function ProjectsView({
               </div>
             </div>
 
-            {/* Checkpoints for this session */}
-            <div style={{ padding: "10px 0 24px" }}>
-              {selectedCheckpoints.length === 0 ? (
-                <div
+            {/* Tabs: checkpoints are the milestone spine, the transcript is
+                the full conversation. Both are useful for different questions
+                — "what has it achieved" vs "what exactly did it say". */}
+            <div
+              style={{
+                display: "flex",
+                gap: 2,
+                padding: "10px 20px 0",
+                borderBottom: `1px solid ${theme.edgeSoft}`,
+              }}
+            >
+              {(["transcript", "checkpoints"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setDetailTab(t)}
                   style={{
-                    fontSize: 13,
-                    color: theme.faint,
-                    padding: "28px 20px",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: "6px 12px",
+                    border: "none",
+                    borderBottom: `2px solid ${
+                      detailTab === t ? theme.running : "transparent"
+                    }`,
+                    background: "none",
+                    color: detailTab === t ? theme.text : theme.faint,
+                    cursor: "pointer",
+                    textTransform: "capitalize",
                   }}
                 >
-                  No checkpoints yet. This agent will report at its first
-                  milestone.
-                </div>
-              ) : (
-                selectedCheckpoints.map((cp) => (
+                  {t}
+                  {t === "checkpoints" && selectedCheckpoints.length > 0 && (
+                    <span style={{ color: theme.faint, marginLeft: 6 }}>
+                      {selectedCheckpoints.length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {detailTab === "transcript" ? (
+              <TranscriptView
+                key={selected.id}
+                sessionId={selected.id}
+                sessionStatus={selected.status}
+              />
+            ) : (
+              <div style={{ padding: "10px 0 24px" }}>
+                {selectedCheckpoints.length === 0 ? (
                   <div
-                    key={cp.id}
                     style={{
-                      padding: "9px 20px 5px",
-                      display: "flex",
-                      gap: 12,
+                      fontSize: 13,
+                      color: theme.faint,
+                      padding: "28px 20px",
+                      lineHeight: 1.55,
                     }}
                   >
-                    <div style={{ width: 34 }}>
-                      <span
-                        style={{
-                          fontFamily: theme.mono,
-                          fontSize: 9.5,
-                          color: theme.faint,
-                        }}
-                      >
-                        {new Date(cp.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 14, lineHeight: 1.55 }}>
-                      {cp.summary}
-                    </div>
+                    No checkpoints yet. Agents only report these if told to —
+                    see docs/agent-instructions.md. Sessions launched from the
+                    console are instructed automatically.
                   </div>
-                ))
-              )}
-            </div>
+                ) : (
+                  selectedCheckpoints.map((cp) => (
+                    <div
+                      key={cp.id}
+                      style={{
+                        padding: "9px 20px 5px",
+                        display: "flex",
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ width: 34 }}>
+                        <span
+                          style={{
+                            fontFamily: theme.mono,
+                            fontSize: 9.5,
+                            color: theme.faint,
+                          }}
+                        >
+                          {new Date(cp.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 14, lineHeight: 1.55 }}>
+                        {cp.summary}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div
