@@ -67,9 +67,15 @@ export function ProjectsView({
   const [detailTab, setDetailTab] = useState<
     "transcript" | "checkpoints" | "info"
   >("transcript");
-  const [projectTab, setProjectTab] = useState<"knowledge" | "settings">(
-    "knowledge"
+  // "chat" first and default so opening a project lands you somewhere you
+  // can immediately start typing, the way a new ChatGPT/Claude conversation
+  // does — knowledge and settings are one click away, not the landing spot.
+  const [projectTab, setProjectTab] = useState<"chat" | "knowledge" | "settings">(
+    "chat"
   );
+  // Bumped by the sidebar "+" so the composer's task input focuses even when
+  // the chat tab is already open and nothing would otherwise remount.
+  const [chatFocusSignal, setChatFocusSignal] = useState(0);
 
   const openProject = projects.find((p) => p.id === selectedProjectId);
 
@@ -89,7 +95,7 @@ export function ProjectsView({
   const selectedLaunch = launches.find((l) => l.sessionId === selectedSession);
 
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 100px)" }}>
+    <div style={{ display: "flex", height: "100%" }}>
       {/* Project list */}
       <div
         style={{
@@ -165,6 +171,36 @@ export function ProjectsView({
                   </span>
                 )}
                 <span style={{ flex: 1 }} />
+                {/* Jumps straight to a blank chat tab for this project —
+                    the quick "start something new" affordance ChatGPT/Claude
+                    put next to each item, rather than requiring you to open
+                    the project and then find the composer. */}
+                <button
+                  onClick={() => {
+                    setSelectedProject(project.id);
+                    setProjectTab("chat");
+                    setChatFocusSignal((n) => n + 1);
+                  }}
+                  title={`Start a new chat in ${project.name}`}
+                  style={{
+                    background: "none",
+                    border: `1px solid ${theme.edge}`,
+                    borderRadius: 5,
+                    width: 20,
+                    height: 20,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: theme.faint,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    lineHeight: 1,
+                    padding: 0,
+                    flexShrink: 0,
+                  }}
+                >
+                  +
+                </button>
               </div>
 
               {/* Knowledge indicator.
@@ -297,9 +333,12 @@ export function ProjectsView({
       </div>
 
       {/* Detail pane — the editor takes over when configuring a project.
-          Column flex with minHeight 0 so the transcript can own its own
-          scroll region and keep its reply box pinned, rather than the whole
-          pane scrolling as one block. */}
+          Column flex with minHeight 0 so each branch below owns its own
+          scroll region (header/tabs stay put, only the tab content
+          scrolls) rather than the whole pane scrolling as one block. No
+          overflow here — a scrollable ancestor around an already-scrollable
+          child just doubles the scrollbar and lets the header drift off
+          with it. */}
       <div
         style={{
           flex: 1,
@@ -307,7 +346,6 @@ export function ProjectsView({
           minHeight: 0,
           display: "flex",
           flexDirection: "column",
-          overflowY: "auto",
         }}
       >
         {editing === null && openProject ? (
@@ -339,7 +377,7 @@ export function ProjectsView({
               </div>
 
               <div style={{ display: "flex", gap: 2, marginTop: 12 }}>
-                {(["knowledge", "settings"] as const).map((t) => (
+                {(["chat", "knowledge", "settings"] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setProjectTab(t)}
@@ -368,51 +406,82 @@ export function ProjectsView({
               </div>
             </div>
 
-            <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-              {projectTab === "knowledge" ? (
-                <KnowledgePanel projectId={openProject.id} />
-              ) : (
-                <ProjectEditor
-                  project={openProject}
-                  onSave={async (patch) => onSaveProject(openProject.id, patch)}
-                  onDelete={async () => {
-                    const result = await onDeleteProject(openProject.id);
-                    if (!result.error) navigate("/projects");
-                    return result;
+            {projectTab === "chat" ? (
+              // Chat is the landing tab and the whole reason for the "+" in
+              // the sidebar — an empty canvas with the composer pinned
+              // below, the way a new ChatGPT/Claude conversation opens.
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "0 24px",
+                    textAlign: "center",
+                    color: theme.dim,
+                    fontSize: 13.5,
+                    lineHeight: 1.6,
                   }}
-                  onCancel={() => navigate("/projects")}
+                >
+                  Describe a task below to start a new agent working in{" "}
+                  {openProject.name}.
+                </div>
+                <Composer
+                  key={openProject.id}
+                  projects={[openProject]}
+                  onLaunch={onLaunch}
+                  focusSignal={chatFocusSignal}
                 />
-              )}
-            </div>
-
-            {/* Starting work from here was previously only possible from the
-                Feed tab — this locks the composer to the open project so
-                launching an agent doesn't require leaving Projects. */}
-            <Composer
-              key={openProject.id}
-              projects={[openProject]}
-              onLaunch={onLaunch}
-            />
+              </div>
+            ) : (
+              <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+                {projectTab === "knowledge" ? (
+                  <KnowledgePanel projectId={openProject.id} />
+                ) : (
+                  <ProjectEditor
+                    project={openProject}
+                    onSave={async (patch) => onSaveProject(openProject.id, patch)}
+                    onDelete={async () => {
+                      const result = await onDeleteProject(openProject.id);
+                      if (!result.error) navigate("/projects");
+                      return result;
+                    }}
+                    onCancel={() => navigate("/projects")}
+                  />
+                )}
+              </div>
+            )}
           </div>
         ) : editing !== null ? (
-          <ProjectEditor
-            project={editing ? projects.find((p) => p.id === editing) : undefined}
-            onSave={async (patch) => {
-              const result = await onSaveProject(editing || null, patch);
-              if (!result.error) setEditing(null);
-              return result;
-            }}
-            onDelete={
-              editing
-                ? async () => {
-                    const result = await onDeleteProject(editing);
-                    if (!result.error) setEditing(null);
-                    return result;
-                  }
-                : undefined
-            }
-            onCancel={() => setEditing(null)}
-          />
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+            <ProjectEditor
+              project={editing ? projects.find((p) => p.id === editing) : undefined}
+              onSave={async (patch) => {
+                const result = await onSaveProject(editing || null, patch);
+                if (!result.error) setEditing(null);
+                return result;
+              }}
+              onDelete={
+                editing
+                  ? async () => {
+                      const result = await onDeleteProject(editing);
+                      if (!result.error) setEditing(null);
+                      return result;
+                    }
+                  : undefined
+              }
+              onCancel={() => setEditing(null)}
+            />
+          </div>
         ) : selected ? (
           <>
             <div
@@ -526,7 +595,7 @@ export function ProjectsView({
                 }
               />
             ) : detailTab === "checkpoints" ? (
-              <div style={{ padding: "10px 0 24px" }}>
+              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 0 24px" }}>
                 {selectedCheckpoints.length === 0 ? (
                   <div
                     style={{
@@ -590,7 +659,14 @@ export function ProjectsView({
                 )}
               </div>
             ) : (
-              <div style={{ padding: "18px 20px 24px" }}>
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: "auto",
+                  padding: "18px 20px 24px",
+                }}
+              >
                 <div style={{ marginBottom: 18 }}>
                   <div
                     style={{
@@ -682,10 +758,11 @@ export function ProjectsView({
         ) : (
           <div
             style={{
+              flex: 1,
+              minHeight: 0,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              height: "100%",
               color: theme.dim,
             }}
           >

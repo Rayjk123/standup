@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ClaudeEffort, ClaudeModel, Project } from "@standup/shared";
 import { theme } from "./theme";
 
@@ -10,6 +10,13 @@ interface ComposerProps {
     model?: ClaudeModel,
     effort?: ClaudeEffort
   ) => Promise<{ error?: string }>;
+  /**
+   * Bump this to focus the task input — e.g. from a "+ new chat" button
+   * elsewhere on the page. A plain autoFocus attribute only fires once on
+   * mount, which misses the case where the composer is already on screen
+   * and the tab/route just switched to it without remounting.
+   */
+  focusSignal?: number;
 }
 
 const MODEL_OPTIONS: { value: ClaudeModel | ""; label: string }[] = [
@@ -45,13 +52,18 @@ const selectStyle: React.CSSProperties = {
  * session it can attach to. Closes the loop the design describes: you no
  * longer leave the console to begin work.
  */
-export function Composer({ projects, onLaunch }: ComposerProps) {
+export function Composer({ projects, onLaunch, focusSignal }: ComposerProps) {
   const [target, setTarget] = useState(projects[0]?.id ?? "");
   const [task, setTask] = useState("");
   const [model, setModel] = useState<ClaudeModel | "">("");
   const [effort, setEffort] = useState<ClaudeEffort | "">("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const taskInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (focusSignal) taskInputRef.current?.focus();
+  }, [focusSignal]);
 
   // A project with no repos can't be checked out — surface that before the
   // user types a task and hits a failure.
@@ -182,6 +194,7 @@ export function Composer({ projects, onLaunch }: ComposerProps) {
         </select>
 
         <input
+          ref={taskInputRef}
           value={task}
           disabled={busy}
           onChange={(e) => setTask(e.target.value)}

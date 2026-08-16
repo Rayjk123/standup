@@ -74,7 +74,13 @@ export function Console({
       style={{
         background: theme.ground,
         color: theme.text,
-        minHeight: "100vh",
+        // A hard height (not minHeight) plus overflow hidden is what makes
+        // the top bar and alert strip genuinely stay put — anything taller
+        // than the viewport has to scroll inside "Main content" below,
+        // never the document itself. minHeight let the whole page grow
+        // instead, so the header scrolled away with everything else.
+        height: "100vh",
+        overflow: "hidden",
         display: "flex",
         flexDirection: "column",
       }}
