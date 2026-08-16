@@ -51,6 +51,47 @@ export function getProjects(db: Database): Project[] {
   }));
 }
 
+/**
+ * Re-homes `scratch` sessions whose cwd matches a project's repos.
+ *
+ * Projects are matched at SessionStart, so a session that began before its
+ * project existed is stranded in `scratch` forever — which is the normal
+ * order of events, since you notice you want a project *because* work is
+ * already happening in that directory.
+ *
+ * Only moves sessions out of `scratch`: a session already attributed to
+ * another project stays there, so overlapping repo paths can't silently
+ * steal history from one project to another.
+ *
+ * Returns the ids moved, so the caller can tell the UI what changed.
+ */
+export function rehomeScratchSessions(db: Database, project: Project): string[] {
+  if (project.id === "scratch" || project.repos.length === 0) return [];
+
+  const stranded = db
+    .query("SELECT id, cwd FROM sessions WHERE project_id = 'scratch'")
+    .all() as Array<{ id: string; cwd: string }>;
+
+  const home = process.env.HOME ?? "";
+  const roots = project.repos.map((r) => r.replace(/^~/, home));
+
+  const moved: string[] = [];
+  for (const session of stranded) {
+    const matches = roots.some(
+      (root) => session.cwd === root || session.cwd.startsWith(`${root}/`)
+    );
+    if (!matches) continue;
+
+    db.run("UPDATE sessions SET project_id = ? WHERE id = ?", [
+      project.id,
+      session.id,
+    ]);
+    moved.push(session.id);
+  }
+
+  return moved;
+}
+
 export function getProject(db: Database, id: string): Project | null {
   return getProjects(db).find((p) => p.id === id) ?? null;
 }

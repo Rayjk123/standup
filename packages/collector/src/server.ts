@@ -19,6 +19,7 @@ import {
   getProject,
   upsertProject,
   deleteProject,
+  rehomeScratchSessions,
   findProjectByCwd,
   getPendingAsks,
   createAsk,
@@ -97,6 +98,15 @@ export function createServer(
     });
   }
 
+  /** Nudges clients to refetch after sessions are reassigned between projects. */
+  function broadcastSessions(): void {
+    broadcast({
+      type: "session:status",
+      payload: {},
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   // CORS for local development
   app.use("/*", cors({ origin: "http://localhost:5173" }));
 
@@ -159,8 +169,18 @@ export function createServer(
     };
 
     upsertProject(store.db, project);
+
+    // Sessions that started in this directory before the project existed are
+    // sitting in scratch — which is the common case, since you create a
+    // project because work is already happening there.
+    const moved = rehomeScratchSessions(store.db, project);
+    if (moved.length > 0) {
+      console.log(`[registry] Moved ${moved.length} session(s) into ${project.id}`);
+      broadcastSessions();
+    }
+
     broadcastProjects();
-    return c.json(project, 201);
+    return c.json({ ...project, movedSessions: moved.length }, 201);
   });
 
   app.patch("/api/projects/:id", async (c) => {
@@ -182,8 +202,13 @@ export function createServer(
     };
 
     upsertProject(store.db, updated);
+
+    // Editing repos can newly cover a stranded session.
+    const moved = rehomeScratchSessions(store.db, updated);
+    if (moved.length > 0) broadcastSessions();
+
     broadcastProjects();
-    return c.json(updated);
+    return c.json({ ...updated, movedSessions: moved.length });
   });
 
   app.delete("/api/projects/:id", (c) => {
