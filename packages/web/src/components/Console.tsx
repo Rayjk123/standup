@@ -211,6 +211,7 @@ export function Console({
                 onSaveProject={onSaveProject}
                 onDeleteProject={onDeleteProject}
                 onSessionChanged={onSessionChanged}
+                onLaunch={onLaunch}
                 lastEvent={lastEvent}
               />
             }

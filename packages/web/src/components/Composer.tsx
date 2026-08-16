@@ -70,28 +70,49 @@ export function Composer({ projects, onLaunch }: ComposerProps) {
           background: theme.surface,
         }}
       >
-        <select
-          value={target}
-          onChange={(e) => {
-            setTarget(e.target.value);
-            setError(null);
-          }}
-          style={{
-            fontSize: 12.5,
-            color: theme.text,
-            background: theme.raised,
-            border: `1px solid ${theme.edge}`,
-            borderRadius: 6,
-            padding: "8px 9px",
-            outline: "none",
-          }}
-        >
-          {projects.map((p) => (
-            <option key={p.id} value={p.id} style={{ background: theme.raised }}>
-              {p.emoji ?? "📦"} {p.name}
-            </option>
-          ))}
-        </select>
+        {/* A single-project list (e.g. the composer scoped to one project's
+            page) has nothing to pick between, so the selector would just be
+            a dropdown of one — show the name plainly instead. */}
+        {projects.length > 1 ? (
+          <select
+            value={target}
+            onChange={(e) => {
+              setTarget(e.target.value);
+              setError(null);
+            }}
+            style={{
+              fontSize: 12.5,
+              color: theme.text,
+              background: theme.raised,
+              border: `1px solid ${theme.edge}`,
+              borderRadius: 6,
+              padding: "8px 9px",
+              outline: "none",
+            }}
+          >
+            {projects.map((p) => (
+              <option key={p.id} value={p.id} style={{ background: theme.raised }}>
+                {p.emoji ?? "📦"} {p.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          selected && (
+            <span
+              style={{
+                fontSize: 12.5,
+                color: theme.text,
+                background: theme.raised,
+                border: `1px solid ${theme.edge}`,
+                borderRadius: 6,
+                padding: "8px 9px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {selected.emoji ?? "📦"} {selected.name}
+            </span>
+          )
+        )}
 
         <input
           value={task}

@@ -12,6 +12,7 @@ import { ProjectEditor } from "./ProjectEditor";
 import { SessionControls } from "./SessionControls";
 import { TranscriptView } from "./TranscriptView";
 import { KnowledgePanel } from "./KnowledgePanel";
+import { Composer } from "./Composer";
 
 interface ProjectsViewProps {
   projects: ProjectWithCounts[];
@@ -23,6 +24,7 @@ interface ProjectsViewProps {
   ) => Promise<{ error?: string }>;
   onDeleteProject: (id: string) => Promise<{ error?: string }>;
   onSessionChanged: () => void;
+  onLaunch: (projectId: string, task: string) => Promise<{ error?: string }>;
   lastEvent: { sessionId: string; n: number };
 }
 
@@ -33,6 +35,7 @@ export function ProjectsView({
   onSaveProject,
   onDeleteProject,
   onSessionChanged,
+  onLaunch,
   lastEvent,
 }: ProjectsViewProps) {
   // Selection lives in the path so it survives a refresh and can be linked
@@ -294,7 +297,14 @@ export function ProjectsView({
         }}
       >
         {editing === null && openProject ? (
-          <>
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <div
               style={{
                 padding: "18px 20px 0",
@@ -344,21 +354,32 @@ export function ProjectsView({
               </div>
             </div>
 
-            {projectTab === "knowledge" ? (
-              <KnowledgePanel projectId={openProject.id} />
-            ) : (
-              <ProjectEditor
-                project={openProject}
-                onSave={async (patch) => onSaveProject(openProject.id, patch)}
-                onDelete={async () => {
-                  const result = await onDeleteProject(openProject.id);
-                  if (!result.error) navigate("/projects");
-                  return result;
-                }}
-                onCancel={() => navigate("/projects")}
-              />
-            )}
-          </>
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+              {projectTab === "knowledge" ? (
+                <KnowledgePanel projectId={openProject.id} />
+              ) : (
+                <ProjectEditor
+                  project={openProject}
+                  onSave={async (patch) => onSaveProject(openProject.id, patch)}
+                  onDelete={async () => {
+                    const result = await onDeleteProject(openProject.id);
+                    if (!result.error) navigate("/projects");
+                    return result;
+                  }}
+                  onCancel={() => navigate("/projects")}
+                />
+              )}
+            </div>
+
+            {/* Starting work from here was previously only possible from the
+                Feed tab — this locks the composer to the open project so
+                launching an agent doesn't require leaving Projects. */}
+            <Composer
+              key={openProject.id}
+              projects={[openProject]}
+              onLaunch={onLaunch}
+            />
+          </div>
         ) : editing !== null ? (
           <ProjectEditor
             project={editing ? projects.find((p) => p.id === editing) : undefined}

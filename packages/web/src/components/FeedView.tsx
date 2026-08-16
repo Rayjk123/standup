@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   Checkpoint,
   Ask,
@@ -194,15 +194,25 @@ export function FeedView({
         data: { ...l, sessionId: l.sessionId ?? "" },
       })),
   ].sort(
+    // Oldest first, newest last — reads top-to-bottom like a chat thread,
+    // with the composer immediately below the most recent item.
     (a, b) =>
-      new Date(b.data.createdAt).getTime() -
-      new Date(a.data.createdAt).getTime()
+      new Date(a.data.createdAt).getTime() -
+      new Date(b.data.createdAt).getTime()
   );
 
   const getSession = (sessionId: string) =>
     sessions.find((s) => s.id === sessionId);
   const getProject = (projectId: string) =>
     projects.find((p) => p.id === projectId);
+
+  // Keep the newest item in view as the feed grows, rather than leaving the
+  // reader scrolled up at the oldest item every time the list re-renders.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [feedItems.length]);
 
   // Column layout so the composer stays pinned below a scrolling feed
   // rather than scrolling away with it.
@@ -227,7 +237,10 @@ export function FeedView({
           </div>
         </div>
       ) : (
-        <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "8px 0" }}>
+        <div
+          ref={scrollRef}
+          style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "8px 0" }}
+        >
           {feedItems.map((item) => {
         const session = getSession(item.data.sessionId);
         const isAsk = item.type === "ask";
