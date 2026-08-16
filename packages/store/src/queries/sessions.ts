@@ -42,6 +42,17 @@ export function updateSessionTitle(
   );
 }
 
+/**
+ * `/clear` keeps Claude Code's session_id (and thus this row) alive, so
+ * without this the title stays locked to whatever the first prompt was
+ * hours or days ago — stale and unrelated to what the session is doing now.
+ * Clearing it back to NULL lets the next UserPromptSubmit's first-write-wins
+ * update in updateSessionTitle set a fresh one.
+ */
+export function resetSessionTitle(db: Database, sessionId: string): void {
+  db.run("UPDATE sessions SET title = NULL WHERE id = ?", [sessionId]);
+}
+
 export function endSession(db: Database, sessionId: string): void {
   db.run(
     "UPDATE sessions SET status = 'idle', ended_at = datetime('now') WHERE id = ?",

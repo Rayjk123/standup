@@ -78,28 +78,36 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
     if (!options || options.length === 0) {
       return (
         <div style={{ marginTop: 11 }}>
-          <input
+          <textarea
             value={draft}
             disabled={sending}
+            rows={1}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void send(draft);
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void send(draft);
+              }
             }}
             placeholder="Type your answer and press Enter…"
             style={{
               width: "100%",
               fontSize: 13,
+              fontFamily: "inherit",
               color: theme.text,
               background: theme.ground,
               border: `1px solid ${theme.edge}`,
               borderRadius: 6,
               padding: "8px 11px",
               outline: "none",
+              resize: "vertical",
             }}
           />
           <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
             Sent straight to the agent. For a menu prompt, the option number
-            (e.g. <code>2</code>) is what it expects.
+            (e.g. <code>2</code>) is what it expects. A question with several
+            parts needs one answer per line — Shift+Enter for a new line,
+            Enter to send.
           </div>
         </div>
       );

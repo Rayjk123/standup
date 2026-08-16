@@ -5,6 +5,7 @@ import {
   createSession,
   updateSessionStatus,
   updateSessionTitle,
+  resetSessionTitle,
   endSession,
   getSession,
   reviveSession,
@@ -40,6 +41,7 @@ import {
   getLaunchBySession,
   recordExpertExchange,
   getRecentExpertExchanges,
+  getRecentEventsBySession,
 } from "@standup/store";
 import {
   searchKnowledge,
@@ -637,9 +639,22 @@ export function createServer(
         );
       }
 
-      const sent = await sendToLaunch(launch, answer);
-      if (!sent.ok) {
-        return c.json({ error: sent.error ?? "Could not reach the session" }, 409);
+      // A compound AskUserQuestion needs one reply per sub-question — see
+      // describePendingTool, which tells the human to send one per line.
+      // Each send needs a beat to land before the next one, or the TUI is
+      // still animating onto the next question when the second answer
+      // arrives and it's dropped.
+      const parts = answer
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      for (const [i, part] of parts.entries()) {
+        const sent = await sendToLaunch(launch, part);
+        if (!sent.ok) {
+          return c.json({ error: sent.error ?? "Could not reach the session" }, 409);
+        }
+        if (i < parts.length - 1) await new Promise((r) => setTimeout(r, 400));
       }
     }
 
@@ -1117,6 +1132,58 @@ function ensureSession(
   }
 }
 
+interface AskUserQuestionInput {
+  questions?: Array<{
+    question?: string;
+    header?: string;
+    options?: Array<{ label?: string }>;
+  }>;
+}
+
+/**
+ * The Notification hook reports only *that* an agent is blocked, never
+ * *what* it's blocked on — that lives on the PreToolUse event for the tool
+ * call it's still sitting inside, which (since nothing else can have run
+ * while it's blocked) is guaranteed to be the most recent event recorded.
+ * Reading it back turns "Claude needs your permission" into something a
+ * human can actually act on, for AskUserQuestion's real questions/options as
+ * well as any other tool waiting on approval (Bash, Write, ...).
+ */
+function describePendingTool(store: Store, sessionId: string): string | null {
+  const [last] = getRecentEventsBySession(store.db, sessionId, 1);
+  if (!last || last.type !== "PreToolUse") return null;
+
+  const p = last.payload as { tool_name?: string; tool_input?: unknown };
+  if (!p.tool_name) return null;
+
+  if (p.tool_name === "AskUserQuestion") {
+    const questions = (p.tool_input as AskUserQuestionInput)?.questions ?? [];
+    if (questions.length === 0) return null;
+
+    const body = questions
+      .map((q, i) => {
+        const opts = (q.options ?? [])
+          .map((o, j) => `${j + 1}. ${o.label ?? ""}`)
+          .join("  ");
+        const prefix = questions.length > 1 ? `${i + 1}) ` : "";
+        return `${prefix}${q.header ? `${q.header}: ` : ""}${q.question ?? ""}${
+          opts ? `\n   ${opts}` : ""
+        }`;
+      })
+      .join("\n");
+
+    return questions.length > 1
+      ? `${body}\n\nMultiple questions — reply with one answer per line, in order (option number or free text).`
+      : body;
+  }
+
+  // Any other tool needing approval — show what it's asking to do, not just
+  // that it's asking.
+  const input = p.tool_input as Record<string, unknown> | undefined;
+  const inputText = input ? JSON.stringify(input) : "";
+  return `${p.tool_name}${inputText ? ` — ${inputText.slice(0, 300)}` : ""}`;
+}
+
 function handleHookEvent(
   store: Store,
   payload: HookPayload,
@@ -1143,6 +1210,15 @@ function handleHookEvent(
 
   switch (hook_event_name) {
     case "SessionStart": {
+      // Claude Code reuses the same session_id across /clear, so without
+      // this the title stays pinned to whatever the very first prompt was —
+      // increasingly stale and unrelated as a long-lived session gets
+      // cleared and reused for something new.
+      const p = payload as { source?: "startup" | "resume" | "clear" } & typeof payload;
+      if (p.source === "clear") {
+        resetSessionTitle(store.db, session_id);
+      }
+
       const session = getSession(store.db, session_id);
 
       broadcast({
@@ -1219,6 +1295,20 @@ function handleHookEvent(
 
     case "PostToolUse": {
       const p = payload as ToolUsePayload;
+
+      // PostToolUse firing proves whatever blocked the agent (an
+      // AskUserQuestion, a Bash approval, ...) just got resolved — whether
+      // through Standup's ask flow or answered directly in the terminal.
+      // Same reasoning as cancelPromptAsks in UserPromptSubmit below: left
+      // pending, a directly-answered prompt would badge the Blocked view
+      // forever for something that's already moved on.
+      for (const stale of cancelPromptAsks(store.db, session_id)) {
+        broadcast({
+          type: "ask:resolved",
+          payload: { askId: stale.id, answer: "" },
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       if (p.tool_name === "TodoWrite") {
         for (const checkpoint of checkpointCompletedTodos(store.db, session_id, p.tool_input)) {
@@ -1369,6 +1459,7 @@ function handleHookEvent(
 
         const session = getSession(store.db, session_id);
         const detail =
+          describePendingTool(store, session_id) ??
           p.message ??
           (isPermission ? "Permission requested" : "Waiting for your input");
 
@@ -1380,7 +1471,7 @@ function handleHookEvent(
           session_id,
           "permission_prompt",
           launched
-            ? `${detail} — this session was launched by the console, so nobody is at its terminal.`
+            ? `${detail}\n\n(this session was launched by the console, so nobody is at its terminal)`
             : detail
         );
         broadcast({
