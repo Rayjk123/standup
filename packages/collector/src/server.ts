@@ -39,7 +39,14 @@ import {
   recordExpertExchange,
   getRecentExpertExchanges,
 } from "@standup/store";
-import { searchKnowledge, type EmbeddingProvider } from "@standup/knowledge";
+import {
+  searchKnowledge,
+  listKnowledgeFiles,
+  readKnowledgeFile,
+  writeKnowledgeFile,
+  deleteKnowledgeFile,
+  type EmbeddingProvider,
+} from "@standup/knowledge";
 import type {
   HookPayload,
   Project,
@@ -85,7 +92,8 @@ export function createServer(
   broadcast: WsBroadcast,
   embeddingProvider: EmbeddingProvider | null = null,
   knowledgeSync?: KnowledgeSync,
-  registry?: ProjectsRegistry
+  registry?: ProjectsRegistry,
+  knowledgeDir = ""
 ) {
   const app = new Hono();
 
@@ -256,6 +264,69 @@ export function createServer(
   app.get("/api/projects/export", (c) => {
     if (!registry) return c.json({ error: "Registry unavailable" }, 503);
     return c.text(registry.exportToToml(), 200, { "Content-Type": "text/plain" });
+  });
+
+  // ============================================================================
+  // Project knowledge — markdown files on disk stay the source of truth; the
+  // database is an index rebuilt from them. Every mutation resyncs so a doc
+  // is searchable the moment it's saved rather than at the next search.
+  // ============================================================================
+
+  app.get("/api/projects/:id/knowledge", async (c) => {
+    const docs = await listKnowledgeFiles(knowledgeDir, c.req.param("id"));
+    return c.json(docs);
+  });
+
+  app.get("/api/projects/:id/knowledge/:slug", async (c) => {
+    const doc = await readKnowledgeFile(
+      knowledgeDir,
+      c.req.param("id"),
+      c.req.param("slug")
+    );
+    if (!doc) return c.json({ error: "Not found" }, 404);
+    return c.json(doc);
+  });
+
+  app.put("/api/projects/:id/knowledge/:slug", async (c) => {
+    const projectId = c.req.param("id");
+    const slug = c.req.param("slug");
+    const body = await c.req.json<{ title?: string; body?: string; tags?: string[] }>();
+
+    if (!getProject(store.db, projectId)) {
+      return c.json({ error: "Unknown project" }, 404);
+    }
+    if (!body.body?.trim()) {
+      return c.json({ error: "body is required" }, 400);
+    }
+
+    try {
+      await writeKnowledgeFile(knowledgeDir, projectId, {
+        slug,
+        title: body.title?.trim() || slug,
+        body: body.body,
+        tags: body.tags,
+      });
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+
+    await knowledgeSync?.syncProject(projectId);
+    broadcastProjects();
+    return c.json({ ok: true });
+  });
+
+  app.delete("/api/projects/:id/knowledge/:slug", async (c) => {
+    const projectId = c.req.param("id");
+    const removed = await deleteKnowledgeFile(
+      knowledgeDir,
+      projectId,
+      c.req.param("slug")
+    );
+    if (!removed) return c.json({ error: "Not found" }, 404);
+
+    await knowledgeSync?.syncProject(projectId);
+    broadcastProjects();
+    return c.json({ ok: true });
   });
 
   // Sessions. Ended ones are excluded by default so the console reflects

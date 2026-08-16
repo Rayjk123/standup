@@ -11,6 +11,7 @@ import { SilenceStrip } from "./SilenceStrip";
 import { ProjectEditor } from "./ProjectEditor";
 import { SessionControls } from "./SessionControls";
 import { TranscriptView } from "./TranscriptView";
+import { KnowledgePanel } from "./KnowledgePanel";
 
 interface ProjectsViewProps {
   projects: ProjectWithCounts[];
@@ -32,17 +33,30 @@ export function ProjectsView({
   onDeleteProject,
   onSessionChanged,
 }: ProjectsViewProps) {
-  // Selection comes from the path, not local state, so it survives a refresh
-  // and can be linked to directly.
-  const { sessionId } = useParams();
+  // Selection lives in the path so it survives a refresh and can be linked
+  // to. `kind` distinguishes a project from a session, since both are
+  // selectable into the same detail pane and their ids would otherwise be
+  // ambiguous.
+  const { kind, selectedId } = useParams();
   const navigate = useNavigate();
-  const selectedSession = sessionId ?? sessions[0]?.id ?? null;
-  const setSelectedSession = (id: string) => navigate(`/projects/${id}`);
+
+  const selectedProjectId = kind === "p" ? selectedId : undefined;
+  const selectedSession =
+    kind === "s" ? selectedId : selectedProjectId ? null : sessions[0]?.id ?? null;
+
+  const setSelectedSession = (id: string) => navigate(`/projects/s/${id}`);
+  const setSelectedProject = (id: string) => navigate(`/projects/p/${id}`);
+
   // null = not editing; "" = creating a new project; otherwise a project id.
   const [editing, setEditing] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<"transcript" | "checkpoints">(
     "transcript"
   );
+  const [projectTab, setProjectTab] = useState<"knowledge" | "settings">(
+    "knowledge"
+  );
+
+  const openProject = projects.find((p) => p.id === selectedProjectId);
 
   const getSessionsByProject = (projectId: string) =>
     sessions.filter((s) => s.projectId === projectId);
@@ -99,9 +113,23 @@ export function ProjectsView({
                 >
                   {project.emoji ?? "📦"}
                 </div>
-                <span style={{ fontSize: 13.5, fontWeight: 700 }}>
+                {/* The project itself is selectable, not just its sessions —
+                    it owns knowledge and configuration of its own. */}
+                <button
+                  onClick={() => setSelectedProject(project.id)}
+                  style={{
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    color:
+                      selectedProjectId === project.id ? theme.running : theme.text,
+                  }}
+                >
                   {project.name}
-                </span>
+                </button>
                 {alertCount > 0 && (
                   <span
                     style={{
@@ -118,21 +146,6 @@ export function ProjectsView({
                   </span>
                 )}
                 <span style={{ flex: 1 }} />
-                <button
-                  onClick={() => setEditing(project.id)}
-                  title={`Configure ${project.name}`}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: theme.faint,
-                    cursor: "pointer",
-                    fontSize: 13,
-                    padding: "0 2px",
-                    lineHeight: 1,
-                  }}
-                >
-                  ⚙
-                </button>
               </div>
 
               {/* Knowledge indicator.
@@ -278,7 +291,73 @@ export function ProjectsView({
           overflowY: "auto",
         }}
       >
-        {editing !== null ? (
+        {editing === null && openProject ? (
+          <>
+            <div
+              style={{
+                padding: "18px 20px 0",
+                borderBottom: `1px solid ${theme.edgeSoft}`,
+              }}
+            >
+              <div style={{ display: "flex", gap: 11, alignItems: "center" }}>
+                <span style={{ fontSize: 20 }}>{openProject.emoji ?? "📦"}</span>
+                <span style={{ fontSize: 17, fontWeight: 700 }}>
+                  {openProject.name}
+                </span>
+                <span
+                  style={{ fontFamily: theme.mono, fontSize: 10.5, color: theme.faint }}
+                >
+                  {openProject.repos.length} repo
+                  {openProject.repos.length === 1 ? "" : "s"} · {openProject.branch}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", gap: 2, marginTop: 12 }}>
+                {(["knowledge", "settings"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setProjectTab(t)}
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: "6px 12px",
+                      border: "none",
+                      borderBottom: `2px solid ${
+                        projectTab === t ? theme.running : "transparent"
+                      }`,
+                      background: "none",
+                      color: projectTab === t ? theme.text : theme.faint,
+                      cursor: "pointer",
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {t}
+                    {t === "knowledge" && openProject.knowledgeDocs > 0 && (
+                      <span style={{ color: theme.faint, marginLeft: 6 }}>
+                        {openProject.knowledgeDocs}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {projectTab === "knowledge" ? (
+              <KnowledgePanel projectId={openProject.id} />
+            ) : (
+              <ProjectEditor
+                project={openProject}
+                onSave={async (patch) => onSaveProject(openProject.id, patch)}
+                onDelete={async () => {
+                  const result = await onDeleteProject(openProject.id);
+                  if (!result.error) navigate("/projects");
+                  return result;
+                }}
+                onCancel={() => navigate("/projects")}
+              />
+            )}
+          </>
+        ) : editing !== null ? (
           <ProjectEditor
             project={editing ? projects.find((p) => p.id === editing) : undefined}
             onSave={async (patch) => {

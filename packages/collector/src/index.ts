@@ -80,7 +80,8 @@ const server = createServer(
   wsBroadcast,
   EMBEDDING_PROVIDER,
   knowledgeSync,
-  registry
+  registry,
+  KNOWLEDGE_DIR
 );
 
 export default {

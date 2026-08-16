@@ -191,10 +191,11 @@ export function Console({
               />
             }
           />
-          {/* Session selection lives in the path so it survives a refresh —
-              the same reason the view does. */}
+          {/* Both project and session selection live in the path so they
+              survive a refresh, with distinct prefixes so a project id and a
+              session id can never be confused for one another. */}
           <Route
-            path="/projects/:sessionId?"
+            path="/projects/:kind?/:selectedId?"
             element={
               <ProjectsView
                 projects={projects}

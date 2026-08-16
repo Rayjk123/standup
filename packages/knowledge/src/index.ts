@@ -8,3 +8,12 @@ export {
   type EmbeddingProvider,
 } from "./embeddings.js";
 export type { KnowledgeDoc, KnowledgeChunk } from "./types.js";
+export {
+  listKnowledgeFiles,
+  readKnowledgeFile,
+  writeKnowledgeFile,
+  deleteKnowledgeFile,
+  isValidSlug,
+  type KnowledgeDocFile,
+  type KnowledgeDocInput,
+} from "./writer.js";
