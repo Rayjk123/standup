@@ -8,6 +8,7 @@ import { createServer } from "./server.js";
 import { createWsServer } from "./ws.js";
 import { KnowledgeSync } from "./knowledge-sync.js";
 import { ProjectsRegistry, defaultProjectsPath } from "./projects-registry.js";
+import { reconcileBlockedSessions } from "./reconcile.js";
 
 const COLLECTOR_PORT = parseInt(process.env.COLLECTOR_PORT ?? String(DEFAULT_COLLECTOR_PORT));
 const WS_PORT = parseInt(process.env.WS_PORT ?? String(DEFAULT_WS_PORT));
@@ -54,6 +55,23 @@ knowledgeSync.startWatching((projectId) => {
 console.log(`[knowledge] Watching ${KNOWLEDGE_DIR}`);
 if (!EMBEDDING_PROVIDER) {
   console.log(`[knowledge] EMBEDDING_PROVIDER not set — text search only`);
+}
+
+// Re-derive blocked state from stored events. Blocking is otherwise only
+// noticed as a Notification arrives, so an agent that was already waiting
+// when the collector restarted would stay invisible indefinitely.
+const reblocked = reconcileBlockedSessions(store.db);
+if (reblocked.length > 0) {
+  console.log(
+    `[reconcile] ${reblocked.length} launched session(s) still waiting on you`
+  );
+  for (const ask of reblocked) {
+    wsBroadcast({
+      type: "ask:new",
+      payload: ask,
+      timestamp: new Date().toISOString(),
+    });
+  }
 }
 
 // Create HTTP server for Claude Code hooks
