@@ -55,6 +55,45 @@ export function getEventsBySession(
   }));
 }
 
+/**
+ * The most recent `limit` events, oldest-first.
+ *
+ * Distinct from getEventsBySession, which pages forward from a sequence
+ * number and therefore returns the *oldest* rows when called with afterSeq
+ * 0. Anything reasoning about what an agent is doing right now needs the
+ * tail, and silently got the head instead.
+ */
+export function getRecentEventsBySession(
+  db: Database,
+  sessionId: string,
+  limit = 60
+): HookEvent[] {
+  const rows = db
+    .query(
+      `SELECT * FROM events
+        WHERE session_id = ?
+        ORDER BY seq DESC
+        LIMIT ?`
+    )
+    .all(sessionId, limit) as Array<{
+    id: number;
+    session_id: string;
+    seq: number;
+    type: HookEventType;
+    payload_json: string;
+    created_at: string;
+  }>;
+
+  return rows.reverse().map((row) => ({
+    id: String(row.id),
+    sessionId: row.session_id,
+    seq: row.seq,
+    type: row.type,
+    payload: JSON.parse(row.payload_json),
+    createdAt: new Date(row.created_at),
+  }));
+}
+
 export function getLatestEventSeq(db: Database, sessionId: string): number {
   const row = db
     .query("SELECT COALESCE(MAX(seq), 0) as seq FROM events WHERE session_id = ?")

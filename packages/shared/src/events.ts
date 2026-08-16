@@ -27,10 +27,20 @@ export interface UserPromptSubmitPayload extends BaseHookPayload {
 
 export interface ToolUsePayload extends BaseHookPayload {
   hook_event_name: "PreToolUse" | "PostToolUse";
-  tool_call_id: string;
+  /**
+   * Correlates a Pre with its Post. Verified field name — it is
+   * `tool_use_id`, not `tool_call_id`.
+   *
+   * A PreToolUse whose id never appears in a PostToolUse means the tool
+   * failed: Claude Code does not emit PostToolUse for a failed call. That
+   * absence is the only signal a failure happened, so anything reasoning
+   * about failures has to match on this rather than inspect tool_response.
+   */
+  tool_use_id: string;
   tool_name: string;
   tool_input: Record<string, unknown>;
   tool_response?: unknown; // only on PostToolUse
+  duration_ms?: number; // only on PostToolUse
 }
 
 export interface SubagentPayload extends BaseHookPayload {

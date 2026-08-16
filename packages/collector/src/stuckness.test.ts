@@ -60,7 +60,39 @@ describe("stuckness detection", () => {
     db.close();
   });
 
-  test("fires on consecutive failing shell commands", () => {
+  // Claude Code emits no PostToolUse for a failed tool call, so a failure
+  // looks like a Pre with no matching Post. Verified against real events:
+  // six failing commands produced six PreToolUse and zero PostToolUse.
+  test("fires on consecutive failing shell commands (no PostToolUse)", () => {
+    const db = freshDb();
+    seq = 0;
+
+    for (let i = 0; i < 6; i++) {
+      addToolEvent(db, "PreToolUse", {
+        tool_name: "Bash",
+        tool_input: { command: "does-not-exist" },
+        tool_use_id: `toolu_fail_${i}`,
+      });
+    }
+    // A later completed call, so the trailing Pre isn't treated as in-flight.
+    addToolEvent(db, "PreToolUse", {
+      tool_name: "Read",
+      tool_input: { file_path: "/repo/x.ts" },
+      tool_use_id: "toolu_read",
+    });
+    addToolEvent(db, "PostToolUse", {
+      tool_name: "Read",
+      tool_input: { file_path: "/repo/x.ts" },
+      tool_use_id: "toolu_read",
+      tool_response: "ok",
+    });
+
+    const signal = detectStuckness(db, "s");
+    expect(signal?.topic).toBe("bash");
+    db.close();
+  });
+
+  test("fires when commands complete but exit non-zero", () => {
     const db = freshDb();
     seq = 0;
 
@@ -68,16 +100,40 @@ describe("stuckness detection", () => {
       addToolEvent(db, "PreToolUse", {
         tool_name: "Bash",
         tool_input: { command: "bun test" },
+        tool_use_id: `toolu_exit_${i}`,
       });
       addToolEvent(db, "PostToolUse", {
         tool_name: "Bash",
         tool_input: { command: "bun test" },
+        tool_use_id: `toolu_exit_${i}`,
         tool_response: { is_error: true, output: "exit code 1" },
       });
     }
 
     const signal = detectStuckness(db, "s");
     expect(signal?.topic).toBe("bash");
+    db.close();
+  });
+
+  test("stays quiet on shell commands that succeed", () => {
+    const db = freshDb();
+    seq = 0;
+
+    for (let i = 0; i < 8; i++) {
+      addToolEvent(db, "PreToolUse", {
+        tool_name: "Bash",
+        tool_input: { command: "bun test" },
+        tool_use_id: `toolu_ok_${i}`,
+      });
+      addToolEvent(db, "PostToolUse", {
+        tool_name: "Bash",
+        tool_input: { command: "bun test" },
+        tool_use_id: `toolu_ok_${i}`,
+        tool_response: "7 pass, 0 fail",
+      });
+    }
+
+    expect(detectStuckness(db, "s")).toBeNull();
     db.close();
   });
 

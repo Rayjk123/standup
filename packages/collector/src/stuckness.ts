@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { getEventsBySession } from "@standup/store";
+import { getRecentEventsBySession } from "@standup/store";
 import { STUCKNESS } from "@standup/shared";
 import type { ToolUsePayload } from "@standup/shared";
 
@@ -29,13 +29,13 @@ interface ToolEvent {
   input: Record<string, unknown>;
   response?: unknown;
   isPost: boolean;
+  toolUseId: string;
 }
 
 function recentToolEvents(db: Database, sessionId: string): ToolEvent[] {
-  const events = getEventsBySession(db, sessionId, WINDOW, 0);
-  const tail = events.slice(-WINDOW);
+  const events = getRecentEventsBySession(db, sessionId, WINDOW);
 
-  return tail
+  return events
     .filter((e) => e.type === "PreToolUse" || e.type === "PostToolUse")
     .map((e) => {
       const p = e.payload as unknown as ToolUsePayload;
@@ -45,6 +45,7 @@ function recentToolEvents(db: Database, sessionId: string): ToolEvent[] {
         input: p.tool_input ?? {},
         response: p.tool_response,
         isPost: e.type === "PostToolUse",
+        toolUseId: p.tool_use_id ?? "",
       };
     });
 }
@@ -92,19 +93,40 @@ function repeatedEmptySearch(events: ToolEvent[]): StucknessSignal | null {
   return null;
 }
 
-/** A run of failing shell commands. */
+/**
+ * A run of failing shell commands.
+ *
+ * Failure is detected by a PreToolUse whose tool_use_id never gets a
+ * PostToolUse, because Claude Code does not emit PostToolUse for a failed
+ * tool call. An earlier version of this scanned PostToolUse responses for
+ * error markers and could therefore never fire at all — the events it looked
+ * for do not exist for the case it was trying to catch.
+ *
+ * A Post that *does* arrive is still checked for error text, since a command
+ * can exit non-zero while the tool call itself succeeds.
+ */
 function consecutiveBashFailures(events: ToolEvent[]): StucknessSignal | null {
+  const completed = new Set(
+    events.filter((e) => e.isPost && e.toolUseId).map((e) => e.toolUseId)
+  );
+
+  // The newest Pre may simply still be running rather than have failed.
+  const lastPre = [...events].reverse().find((e) => !e.isPost);
+
   let streak = 0;
 
   for (const event of events) {
-    if (!event.isPost || event.name !== "Bash") continue;
+    if (event.isPost || event.name !== "Bash") continue;
+    if (lastPre && event.seq === lastPre.seq && !completed.has(event.toolUseId)) {
+      continue;
+    }
 
-    const text = responseText(event.response);
-    // Bash tool responses don't carry a structured exit code, so fall back
-    // to the error markers the harness includes on failure.
-    const failed = /"is_error":\s*true|exit code [1-9]|command not found|No such file/i.test(
-      text
-    );
+    const post = events.find((e) => e.isPost && e.toolUseId === event.toolUseId);
+    const failed = post
+      ? /"is_error":\s*true|exit code [1-9]|command not found|No such file/i.test(
+          responseText(post.response)
+        )
+      : true; // no Post ever arrived — the call failed
 
     streak = failed ? streak + 1 : 0;
     if (streak >= STUCKNESS.CONSECUTIVE_BASH_FAILURES) {
