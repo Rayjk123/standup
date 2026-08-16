@@ -34,8 +34,22 @@ interface TranscriptPage {
 
 const PAGE = 40;
 
+/**
+ * Claude Code's own marker for a tool call whose input JSON failed to
+ * parse — passed through verbatim from the transcript. Not meant to be
+ * read as ordinary tool arguments, so it's rendered specially.
+ */
+function unparsedInput(call: ToolCall): { raw: string; len: number } | null {
+  const u = call.input.__unparsedToolInput;
+  if (u && typeof u === "object" && typeof (u as Record<string, unknown>).raw === "string") {
+    return u as { raw: string; len: number };
+  }
+  return null;
+}
+
 /** One-line summary of a tool call — the arguments that identify it. */
 function describeToolCall(call: ToolCall): string {
+  if (unparsedInput(call)) return `${call.name} · ⚠ malformed input`;
   const i = call.input;
   const detail =
     (i.file_path as string) ??
@@ -344,12 +358,26 @@ export function TranscriptView({
                           overflowY: "auto",
                         }}
                       >
-                        {Object.entries(call.input).map(([key, value]) => (
-                          <div key={key} style={{ marginBottom: 6 }}>
-                            <span style={{ color: theme.faint }}>{key}: </span>
-                            {formatInputValue(value)}
-                          </div>
-                        ))}
+                        {(() => {
+                          const bad = unparsedInput(call);
+                          if (bad) {
+                            return (
+                              <div style={{ marginBottom: 6, color: theme.waiting }}>
+                                ⚠ Claude Code couldn't parse this call's input as
+                                JSON ({bad.len} bytes). Raw input:
+                                <div style={{ color: theme.dim, marginTop: 4 }}>
+                                  {bad.raw}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return Object.entries(call.input).map(([key, value]) => (
+                            <div key={key} style={{ marginBottom: 6 }}>
+                              <span style={{ color: theme.faint }}>{key}: </span>
+                              {formatInputValue(value)}
+                            </div>
+                          ));
+                        })()}
                         {call.output ? (
                           <div
                             style={{
