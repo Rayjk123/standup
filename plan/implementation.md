@@ -17,6 +17,7 @@ The design is in `high-level-design.md`.
 | 5 — Experts | ✅ Built & eval-verified | Real retrieval over one shared corpus (knowledge docs + code), region attribution, exchanges recorded and rendered in the feed as their own tier. Eval suite passes **8/8, multi-hop 4/4**. Ad-hoc quality is merely okay — see caveat below. |
 | Launched-session control | ✅ Verified live | Blocked detection, live pane rendering, and answering are confirmed end to end: an `idle_prompt` Notification was reconciled into an ask, Blocked showed the actual dialog, `2` was sent via `send-keys`, the dialog cleared and the agent resumed. |
 | 6 — Proactive nudging | ✅ Verified live | Four heuristics over the stored event stream, nudge-only delivery via `PostToolUse` `additionalContext`, per-session-per-topic cooldown, per-turn cap, and self-exclusion of Standup's own tools. 9/9 unit tests. Confirmed end to end: five deliberately failing shell commands triggered the heuristic and the nudge arrived in the agent's context. |
+| 7 — Knowledge bootstrap | ⬜ Not started | Designed only (Component 4.6). Blocked behind closing Phase 5's ranking gap — adding generated text to a corpus whose ranking is already imperfect makes that harder to diagnose. |
 
 **Projects are now configured in SQLite, not TOML.** The design specified
 `projects.toml` as authoritative for dotfile portability, but that fights
@@ -254,6 +255,56 @@ This phase requires architectural judgment.
 
 ---
 
+## Phase 7 — Knowledge bootstrap
+
+**Model: Opus 4.5** (the research prompt and the scope rule), **Sonnet 4**
+(everything else)
+
+Not started. See Component 4.6 in the design.
+
+| Task | Model | Notes |
+|------|-------|-------|
+| Draft state on knowledge docs (schema + sync) | Sonnet | `status`, `generated_from_sha`, `generated_at`; drafts excluded from search |
+| Bootstrap launch (reuses Phase 4 launcher) | Sonnet | Research prompt into a worktree, writes markdown to the knowledge dir |
+| **The research prompt itself** | **Opus** | The whole phase lives or dies here — see below |
+| Review UI: diff, accept / edit / discard per doc | Sonnet | Make correcting a wrong inference cheap |
+| Staleness detection + regenerate | Sonnet | Compare project HEAD against `generated_from_sha` |
+| Eval: does bootstrapped knowledge improve answers? | **Opus** | Measure, don't assume |
+
+**Why the prompt is the hard part.** Everything else here is plumbing over
+components that already exist. The prompt decides what gets written, and the
+failure mode is not a crash — it is a knowledge base full of plausible,
+derivable, slowly-rotting summaries that outrank real retrieval and quietly
+make answers worse. It has to encode:
+
+- The capture/leave-to-retrieval split from Component 4.6, concretely enough
+  that an agent applies it while writing rather than after
+- A hard prohibition on inventing intent. `overview.md` is a stub with
+  questions for the human, never a confident paraphrase of the README
+- A bias toward what took effort to learn — the thing that would have saved
+  the last agent an hour — over what is merely true
+- Brevity. A long generated doc is more surface area to go stale and more
+  noise in every future retrieval
+
+**Open questions worth resolving before building:**
+
+- Does bootstrapped knowledge actually improve `ask_expert` answers, or does
+  it mostly add competing text? The eval suite from Phase 5 is the instrument;
+  extend it with cases whose answers should come from bootstrapped material
+  and check the multi-hop numbers don't regress.
+- Should generated and human-authored knowledge be weighted differently at
+  retrieval time? Probably yes — a human wrote theirs on purpose — but that is
+  a claim to test, not assume.
+- Is per-document review too heavy for a first run that produces six files? A
+  single accept-all with per-doc edit may be the right default.
+
+**Do not start this before Phase 5's ranking gap is closed.** Retrieval
+currently passes its eval but returns tangential files for some ad-hoc
+questions. Adding a pile of generated text to a corpus whose ranking is
+already imperfect will make that harder to diagnose, not easier.
+
+---
+
 ## Testing Strategy
 
 | Test Type | Model | Notes |
@@ -288,6 +339,7 @@ Phase 3:   Sonnet + Opus (MCP integration)
 Phase 4:   Sonnet (launching)
 Phase 5:   Opus (expert design)
 Phase 6:   Opus (heuristics) + Sonnet (implementation)
+Phase 7:   Opus (research prompt) + Sonnet (plumbing)
 ```
 
 When in doubt: start with Sonnet, escalate to Opus when stuck or when the task

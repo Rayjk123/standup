@@ -266,6 +266,69 @@ Phase 5 experts are about code structure — imports, calls, type relationships.
 Project knowledge is about *intent* — why this exists, how it fits, what to
 avoid. Both are useful; they answer different questions.
 
+## Component 4.6 — Knowledge bootstrap
+
+An empty knowledge base is the normal state, and it is the state in which
+knowledge is least likely to ever get written: nobody sits down to document
+conventions they already hold in their head. So the first time a project is
+wired up, run an agent over the repo and have it write the knowledge base's
+first draft.
+
+**The tension this has to survive.** Component 4.5 draws a sharp line —
+knowledge is for what *cannot* be derived from code, because anything else is
+already answerable by `ripgrep` and `ask_expert`. An agent reading the repo
+can only produce derived material, which is exactly the category that line
+excludes. Get this wrong and the result is a knowledge base that duplicates
+retrieval, competes with it in ranking, and rots the moment the code moves.
+
+That is not an argument against bootstrapping. It is an argument for being
+precise about what to bootstrap:
+
+| Capture | Leave to retrieval |
+|---|---|
+| Toolchain and commands — how to build, test, lint, run | Anything a grep answers directly |
+| Observed conventions — error handling, naming, test layout | File and directory listings |
+| Architecture shape — what talks to what, at module level | Function signatures, API surface |
+| Gotchas mined from READMEs, TODOs, and comment warnings | Anything restated from a single file |
+
+The test for each candidate fact: *would an agent have to read many files to
+infer this?* If one grep answers it, it belongs in retrieval, not knowledge.
+
+**What the agent cannot know.** Business intent, why a project exists, how it
+relates to other projects, what is being sunset — none of this is in the
+repository. The bootstrap must not invent it. It writes `overview.md` as an
+explicit stub naming the questions only the human can answer, rather than
+producing a confident summary of the README. A plausible-but-wrong intent
+document is worse than an empty one, because it will be read as authoritative
+and nobody will think to correct it.
+
+**Generated knowledge is a snapshot and must say so.** Every generated doc
+records that it was generated, from which commit, and when. Staleness is
+surfaced rather than assumed away: when a project's HEAD has moved
+substantially since generation, the console flags the docs as possibly
+outdated and offers a regenerate. Compare with Component 4.5's rule that a
+weak retrieval match is worse than none — the same logic applies with more
+force to a doc that is confidently obsolete.
+
+**Human review before it counts.** Generated docs land in a draft state and
+are excluded from `search_knowledge` until accepted. The knowledge base is the
+one part of the system whose authority comes from a human having written it;
+auto-populating it silently would spend that authority on unreviewed output.
+Review is a diff view with accept, edit, or discard per document — the point
+is to make correcting a wrong inference cheap, not to make approval a
+formality.
+
+**Mechanically it reuses what exists.** The bootstrap is a launched session
+(Component 4) with a research prompt, writing markdown into the project's
+knowledge directory. Existing sync picks the files up, embeds them, and makes
+them searchable. Nothing new is needed in the storage or retrieval path — a
+sign the seam is in the right place.
+
+**Cost is real and should be visible.** This runs an agent across a
+repository, which is neither free nor instant. It is explicitly triggered,
+never automatic on project creation, and the console shows it as a launch
+like any other so it can be watched and stopped.
+
 ## Component 5 — Chat UI
 
 Slack's register, not just its layout: project avatars, bold sender names,
@@ -509,6 +572,20 @@ file; tune them against the eval suite rather than by feel.
 **Phase 6 — Proactive nudging**
 Stuckness heuristics + `additionalContext` nudge. Behind a feature flag. Run it
 in demo mode first and measure the false positive rate before making it default.
+
+**Phase 7 — Knowledge bootstrap**
+Research a newly wired project and write the first draft of its knowledge base:
+toolchain, conventions, architecture shape, gotchas. Runs as a launched session
+so it is visible and stoppable. Output lands as drafts requiring review before
+it becomes searchable, and records the commit it was generated from so
+staleness can be surfaced later. See Component 4.6 — particularly the rule
+about what *not* to capture, which is what keeps this from becoming a second
+retrieval index that rots.
+
+Last because it depends on nearly everything else: launching (4) to run the
+research, knowledge storage (2.5) to hold the output, and retrieval (5) to make
+it worth having. It also benefits from being built once the earlier phases have
+shown which questions agents actually ask.
 
 ---
 
