@@ -185,6 +185,57 @@ export const tools: Tool[] = [
       required: ["slug", "title", "body"],
     },
   },
+  {
+    name: "create_project",
+    description:
+      "Register a new project in the Standup console so its repos are grouped, launchable, and " +
+      "matched to sessions running in them. Use this instead of editing the database directly — it " +
+      "validates the id, re-homes sessions already sitting in 'scratch' whose directory matches the " +
+      "new repos, and refreshes any open console. Fails if a project with the same id already exists.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          description:
+            "Lowercase letters, numbers and hyphens only. Used in worktree paths and branch names, " +
+            "so it can't be changed later.",
+        },
+        name: {
+          type: "string",
+          description: "Display name shown in the console. Defaults to the id.",
+        },
+        emoji: {
+          type: "string",
+          description: "Icon shown next to the project in the console.",
+        },
+        branch: {
+          type: "string",
+          description: "Base branch that launches check out from. Defaults to 'main'.",
+        },
+        repos: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Repo paths for this project. A leading ~ is expanded. Sessions are matched to the " +
+            "project by comparing their working directory against these paths.",
+        },
+        setup: {
+          type: "string",
+          description:
+            "Optional setup command run in a freshly created worktree before the agent starts, " +
+            "e.g. 'bun install'.",
+        },
+        launch_args: {
+          type: "string",
+          description:
+            "Optional extra flags passed to `claude` when the console launches a session for this " +
+            "project, e.g. '--permission-mode acceptEdits'.",
+        },
+      },
+      required: ["id"],
+    },
+  },
 ];
 
 export async function handleToolCall(
@@ -364,6 +415,37 @@ async function dispatch(
           {
             type: "text",
             text: `Draft "${result.slug}" saved for human review. It is not searchable and nobody has read it yet.`,
+          },
+        ],
+      };
+    }
+
+    case "create_project": {
+      const result = await postJson<{
+        id: string;
+        name: string;
+        movedSessions?: number;
+      }>(`${collectorUrl}/api/projects`, {
+        id: args.id,
+        name: args.name,
+        emoji: args.emoji,
+        branch: args.branch,
+        repos: (args.repos as string[] | undefined) ?? [],
+        setup: args.setup,
+        // The tool schema exposes launch_args (snake_case, matching the CLI
+        // flag); the API field is launchArgs. Map it across here.
+        launchArgs: args.launch_args,
+      });
+
+      const moved = result.movedSessions
+        ? ` Re-homed ${result.movedSessions} session(s) from scratch.`
+        : "";
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created project "${result.id}" (${result.name}).${moved}`,
           },
         ],
       };
