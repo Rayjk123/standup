@@ -164,3 +164,74 @@ Work in this order; the early ones give you the grounding for the later ones.
 - Call \`checkpoint\` between documents so the human can follow along and
   stop you if you are heading the wrong way.`;
 }
+
+/**
+ * Prompt for a single-draft revision run (the review UI's "revise with
+ * feedback" box).
+ *
+ * This is deliberately NOT the full bootstrap prompt: it revises exactly one
+ * existing draft against a human's feedback and re-proposes the SAME slug, so
+ * the draft is replaced in place. It runs as a `kind: "bootstrap"` launch for
+ * one reason — that is the only launch kind `propose_knowledge` accepts — but
+ * its job is narrow, so it carries only the guardrails that still apply:
+ * verify what you claim, don't invent intent, stay brief, and touch nothing
+ * else.
+ *
+ * The current draft body is embedded so the agent revises rather than
+ * regenerates from scratch — the human's feedback is a correction to specific
+ * text, and losing that text would discard the parts they were happy with.
+ */
+export function reviseDraftPrompt(
+  project: Project,
+  draft: { slug: string; title: string; body: string },
+  feedback: string
+): string {
+  return `You are revising ONE knowledge-base draft for ${project.name}, based on a human's review feedback.
+
+Standup keeps a few short docs per project holding what an agent CANNOT recover
+by grepping the code. This draft is one of them. A human read it and left
+feedback; your job is to produce a better version of THIS draft — not to
+rewrite the knowledge base, and not to start over.
+
+## The current draft
+
+slug: \`${draft.slug}\`
+title: ${draft.title}
+
+--- BEGIN CURRENT DRAFT ---
+${draft.body}
+--- END CURRENT DRAFT ---
+
+## The human's feedback
+
+--- BEGIN FEEDBACK ---
+${feedback}
+--- END FEEDBACK ---
+
+## What to do
+
+1. Read the feedback carefully and work out what specifically needs to change.
+   If it points at a factual claim, VERIFY it against this repository before
+   changing it — run the command, read the file, check the code. A revision
+   that trades one unverified claim for another is no better.
+2. Revise the draft to address the feedback. Keep the parts that were already
+   right; change only what the feedback and your verification call for.
+3. Call \`propose_knowledge\` EXACTLY ONCE, with slug \`${draft.slug}\`, to
+   replace the current draft with your revision. Do NOT propose any other
+   slug, and do NOT create or modify other documents.
+
+## Rules (unchanged from how this draft was written)
+
+- Keep only what an agent could not recover by grepping the repo. Anything one
+  \`ripgrep\`/\`ask_expert\` answers is retrieval, not knowledge, and does not
+  belong here.
+- Do NOT invent intent — why the project exists, who depends on it, what is
+  being sunset. That is not in the repository.
+- Do NOT describe anything you have not run. If a command fails, what actually
+  happens is worth more than what was supposed to.
+- Do NOT modify the repository: no edits, no commits, no new files.
+- Never state a number you have not just counted; prefer the durable shape and
+  name the command that produces it.
+- Hard cap of 40 lines, shorter is better. Padding wastes the reviewer's time.
+- Call \`checkpoint\` when you're done so the human sees the revision landed.`;
+}

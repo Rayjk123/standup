@@ -239,6 +239,47 @@ const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS idx_launches_project ON launches(project_id);
   CREATE INDEX IF NOT EXISTS idx_launches_worktree ON launches(worktree_path);
   `,
+
+  // Migration 009: projects.launch_args
+  //
+  // Extra CLI flags to pass `claude` when the console launches a session for
+  // a project (e.g. `--permission-mode acceptEdits`). Stored as a single
+  // string, like `setup`, and tokenized into argv at launch. NULL means no
+  // extra flags — never forced.
+  `
+  ALTER TABLE projects ADD COLUMN launch_args TEXT;
+  `,
+
+  // Migration 010: projects.worktree_root
+  //
+  // Per-project override for where launched worktrees are created. NULL falls
+  // back to the global `worktree_root` setting, then STANDUP_WORKTREE_ROOT,
+  // then the built-in default. Lets a project be checked out onto a specific
+  // volume (e.g. a case-sensitive one for Brazil builds).
+  `
+  ALTER TABLE projects ADD COLUMN worktree_root TEXT;
+  `,
+
+  // Migration 011: projects.provision / projects.launch_subdir
+  //
+  // provision replaces `git worktree add` with a custom command that builds a
+  // usable working dir (e.g. `brazil workspace create … --package …`).
+  // launch_subdir is where inside it the agent starts and setup runs (e.g.
+  // `src/<pkg>` for a Brazil workspace). Both NULL → default worktree behavior.
+  `
+  ALTER TABLE projects ADD COLUMN provision TEXT;
+  ALTER TABLE projects ADD COLUMN launch_subdir TEXT;
+  `,
+
+  // Migration 012: launches.provisioned
+  //
+  // Marks a launch whose working dir came from a project `provision` command
+  // rather than `git worktree add`. Cleanup keys off it — a provisioned dir is
+  // a path-guarded `rm -rf`, never `git worktree remove`. Existing rows are
+  // all worktree launches (0), the safe default.
+  `
+  ALTER TABLE launches ADD COLUMN provisioned INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function runMigrations(db: Database): void {

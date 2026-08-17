@@ -1,10 +1,43 @@
 import type { Database } from "bun:sqlite";
+import { realpathSync } from "fs";
 import type { Project } from "@standup/shared";
+
+/**
+ * Expands a leading `~` and resolves symlinks to a canonical absolute path.
+ *
+ * Session cwds and configured repo paths routinely name the same directory
+ * through different routes — a repo stored as `~/ax-workplace/...` expands to
+ * `/Users/me/ax-workplace/...`, but the OS reports a session's cwd as
+ * `/Volumes/ax-workplace/...` when `~/ax-workplace` is a symlink to the
+ * volume. A literal string prefix compares those as different trees and drops
+ * the session into `scratch`. Canonicalizing both sides first is what makes
+ * the match reflect the real filesystem. Falls back to the expanded (but
+ * unresolved) path when the target doesn't exist yet, so matching still works
+ * for a path that isn't on disk.
+ */
+function canonicalPath(p: string): string {
+  const expanded = p.replace(/^~/, process.env.HOME ?? "");
+  try {
+    return realpathSync(expanded);
+  } catch {
+    return expanded;
+  }
+}
+
+/**
+ * True when `target` is `root` or a directory inside it, compared on whole
+ * path segments so `/a/foo` does not match `/a/foobar`.
+ */
+function isWithin(root: string, target: string): boolean {
+  if (target === root) return true;
+  const prefix = root.endsWith("/") ? root : `${root}/`;
+  return target.startsWith(prefix);
+}
 
 export function upsertProject(db: Database, project: Project): void {
   db.run(
-    `INSERT INTO projects (id, name, emoji, icon_path, expert, branch, setup, repos_json, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `INSERT INTO projects (id, name, emoji, icon_path, expert, branch, setup, launch_args, worktree_root, provision, launch_subdir, repos_json, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
        emoji = excluded.emoji,
@@ -12,6 +45,10 @@ export function upsertProject(db: Database, project: Project): void {
        expert = excluded.expert,
        branch = excluded.branch,
        setup = excluded.setup,
+       launch_args = excluded.launch_args,
+       worktree_root = excluded.worktree_root,
+       provision = excluded.provision,
+       launch_subdir = excluded.launch_subdir,
        repos_json = excluded.repos_json,
        updated_at = datetime('now')`,
     [
@@ -22,6 +59,10 @@ export function upsertProject(db: Database, project: Project): void {
       project.expert ?? null,
       project.branch,
       project.setup ?? null,
+      project.launchArgs ?? null,
+      project.worktreeRoot ?? null,
+      project.provision ?? null,
+      project.launchSubdir ?? null,
       JSON.stringify(project.repos),
     ]
   );
@@ -36,6 +77,10 @@ export function getProjects(db: Database): Project[] {
     expert: string | null;
     branch: string;
     setup: string | null;
+    launch_args: string | null;
+    worktree_root: string | null;
+    provision: string | null;
+    launch_subdir: string | null;
     repos_json: string;
   }>;
 
@@ -47,6 +92,10 @@ export function getProjects(db: Database): Project[] {
     expert: row.expert ?? undefined,
     branch: row.branch,
     setup: row.setup ?? undefined,
+    launchArgs: row.launch_args ?? undefined,
+    worktreeRoot: row.worktree_root ?? undefined,
+    provision: row.provision ?? undefined,
+    launchSubdir: row.launch_subdir ?? undefined,
     repos: JSON.parse(row.repos_json),
   }));
 }
@@ -72,14 +121,12 @@ export function rehomeScratchSessions(db: Database, project: Project): string[] 
     .query("SELECT id, cwd FROM sessions WHERE project_id = 'scratch'")
     .all() as Array<{ id: string; cwd: string }>;
 
-  const home = process.env.HOME ?? "";
-  const roots = project.repos.map((r) => r.replace(/^~/, home));
+  const roots = project.repos.map(canonicalPath);
 
   const moved: string[] = [];
   for (const session of stranded) {
-    const matches = roots.some(
-      (root) => session.cwd === root || session.cwd.startsWith(`${root}/`)
-    );
+    const target = canonicalPath(session.cwd);
+    const matches = roots.some((root) => isWithin(root, target));
     if (!matches) continue;
 
     db.run("UPDATE sessions SET project_id = ? WHERE id = ?", [
@@ -109,12 +156,11 @@ export function deleteProject(db: Database, id: string): void {
 
 export function findProjectByCwd(db: Database, cwd: string): Project | null {
   const projects = getProjects(db);
+  const target = canonicalPath(cwd);
 
   for (const project of projects) {
     for (const repo of project.repos) {
-      // Expand ~ to home directory
-      const expandedRepo = repo.replace(/^~/, process.env.HOME ?? "");
-      if (cwd.startsWith(expandedRepo)) {
+      if (isWithin(canonicalPath(repo), target)) {
         return project;
       }
     }

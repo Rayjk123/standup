@@ -26,6 +26,8 @@ const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 const SUMMARIZE_TIMEOUT_MS = 30_000;
 const MAX_TRANSCRIPT_CHARS = 12_000; // keeps the prompt — and its cost — bounded
 const MAX_SUMMARY_CHARS = 280;
+const MAX_TITLE_CHARS = 70; // a title, not a sentence
+const MAX_TITLE_INPUT_CHARS = 4_000; // enough of the first message to title it
 
 /**
  * The one cwd the summarizer subprocess ever runs from — never a real
@@ -105,21 +107,24 @@ export async function maybeAutoCheckpoint(
   return createCheckpoint(db, sessionId, "auto", summary);
 }
 
-async function summarize(transcript: string): Promise<string | null> {
-  const prompt =
-    "Here is a slice of an AI coding agent's conversation with its user. " +
-    "In one sentence, state what was accomplished, decided, or blocked on. " +
-    'If nothing checkpoint-worthy happened yet — routine back-and-forth, no ' +
-    'clear outcome — reply with exactly: NONE\n\n' +
-    transcript;
-
+/**
+ * One `claude -p` Haiku call, returning its trimmed text (or null on any
+ * failure). Always runs from AUTO_CHECKPOINT_CWD — the reserved cwd server.ts
+ * no-ops on — so this subprocess's own SessionStart/Stop hooks don't create a
+ * phantom session or, worse, recurse. Shared by every cheap-model use here
+ * (checkpoint summaries, session titles).
+ */
+async function runHaiku(
+  prompt: string,
+  timeoutMs = SUMMARIZE_TIMEOUT_MS
+): Promise<string | null> {
   mkdirSync(AUTO_CHECKPOINT_CWD, { recursive: true });
 
   const proc = Bun.spawn(
     ["claude", "-p", prompt, "--model", HAIKU_MODEL, "--tools", "", "--output-format", "json"],
     { cwd: AUTO_CHECKPOINT_CWD, stdout: "pipe", stderr: "pipe" }
   );
-  const timer = setTimeout(() => proc.kill(), SUMMARIZE_TIMEOUT_MS);
+  const timer = setTimeout(() => proc.kill(), timeoutMs);
 
   try {
     const stdout = await new Response(proc.stdout).text();
@@ -130,15 +135,69 @@ async function summarize(transcript: string): Promise<string | null> {
     if (parsed.is_error || !parsed.result) return null;
 
     const result = parsed.result.trim();
-    if (!result || result.toUpperCase() === "NONE") return null;
-
-    return result.length > MAX_SUMMARY_CHARS
-      ? `${result.slice(0, MAX_SUMMARY_CHARS - 1)}…`
-      : result;
+    return result || null;
   } catch (err) {
-    console.error("[auto-checkpoint] summarize failed:", err);
+    console.error("[haiku] call failed:", err);
     return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function summarize(transcript: string): Promise<string | null> {
+  const prompt =
+    "Here is a slice of an AI coding agent's conversation with its user. " +
+    "In one sentence, state what was accomplished, decided, or blocked on. " +
+    'If nothing checkpoint-worthy happened yet — routine back-and-forth, no ' +
+    'clear outcome — reply with exactly: NONE\n\n' +
+    transcript;
+
+  const result = await runHaiku(prompt);
+  if (!result || result.toUpperCase() === "NONE") return null;
+
+  return result.length > MAX_SUMMARY_CHARS
+    ? `${result.slice(0, MAX_SUMMARY_CHARS - 1)}…`
+    : result;
+}
+
+/**
+ * A short, task-specific session title generated from the first user message.
+ *
+ * Used in place of "the first 150 characters of the prompt" when
+ * auto-checkpoint is on (the same cheap-model budget the user already opted
+ * into). Returns null on any failure so the caller can fall back to the plain
+ * truncation. Based on the first message only — deliberately not the whole
+ * transcript — so it's cheap and stable, and can run the moment the session
+ * starts rather than waiting for work to accumulate.
+ */
+export async function generateSessionTitle(
+  firstMessage: string
+): Promise<string | null> {
+  const prompt =
+    "Below is the first message a user sent to an AI coding agent. Write a " +
+    "concise title for the session it begins: 3 to 8 words, specific to the " +
+    "task, with no surrounding quotes and no trailing punctuation. Reply with " +
+    "ONLY the title.\n\n" +
+    firstMessage.slice(0, MAX_TITLE_INPUT_CHARS);
+
+  const result = await runHaiku(prompt);
+  return result ? cleanTitle(result) : null;
+}
+
+/**
+ * Normalizes a model-produced title: strips surrounding quotes/backticks and a
+ * trailing period (models add these despite the instruction), then caps the
+ * length. Returns null if nothing usable is left. Pure, so it's unit-testable
+ * without spawning a model.
+ */
+export function cleanTitle(raw: string): string | null {
+  const title = raw
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/[.]+$/, "")
+    .trim();
+  if (!title) return null;
+
+  return title.length > MAX_TITLE_CHARS
+    ? `${title.slice(0, MAX_TITLE_CHARS - 1)}…`
+    : title;
 }

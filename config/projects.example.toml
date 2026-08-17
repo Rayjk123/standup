@@ -14,6 +14,22 @@ repos   = ["~/src/fusion-api", "~/src/fusion-graph"]
 setup   = "bun install && docker compose up -d"
 expert  = "fusion-api"   # retrieval index name, omit if none
 branch  = "main"
+# Extra flags passed to `claude` on every console-launched session for this
+# project. Omit if none. (Model/effort are chosen per-launch, not here.)
+launchArgs = "--permission-mode acceptEdits"
+# Where this project's launched worktrees are created. Omit to use the global
+# default (settable in the UI / STANDUP_WORKTREE_ROOT). ~ is expanded. Point it
+# at a case-sensitive volume if Brazil builds need one.
+worktreeRoot = "~/workplace/standup-worktrees"
+# provision: a command that builds a launch's working dir, REPLACING the default
+# `git worktree add`. Use it when a plain worktree isn't buildable — e.g. a
+# Brazil package, which needs a real workspace. It must create $STANDUP_WORKDIR
+# (pass --name "$STANDUP_WORKDIR_NAME"); it also gets $STANDUP_REPO,
+# $STANDUP_BRANCH, $STANDUP_PROJECT. Omit for a normal git worktree.
+# provision = 'brazil workspace create --name "$STANDUP_WORKDIR_NAME" --versionSet MyVS/mainline --package MyPackage --package MyPackageTests'
+# launchSubdir: where inside the working dir the agent starts (and setup runs).
+# For a provisioned Brazil workspace, the package dir.
+# launchSubdir = "src/MyPackage"
 
 [[project]]
 id      = "content-tools"

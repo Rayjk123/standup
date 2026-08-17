@@ -185,6 +185,79 @@ export const tools: Tool[] = [
       required: ["slug", "title", "body"],
     },
   },
+  {
+    name: "create_project",
+    description:
+      "Register a new project in the Standup console so its repos are grouped, launchable, and " +
+      "matched to sessions running in them. Use this instead of editing the database directly — it " +
+      "validates the id, re-homes sessions already sitting in 'scratch' whose directory matches the " +
+      "new repos, and refreshes any open console. Fails if a project with the same id already exists.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          description:
+            "Lowercase letters, numbers and hyphens only. Used in worktree paths and branch names, " +
+            "so it can't be changed later.",
+        },
+        name: {
+          type: "string",
+          description: "Display name shown in the console. Defaults to the id.",
+        },
+        emoji: {
+          type: "string",
+          description: "Icon shown next to the project in the console.",
+        },
+        branch: {
+          type: "string",
+          description: "Base branch that launches check out from. Defaults to 'main'.",
+        },
+        repos: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Repo paths for this project. A leading ~ is expanded. Sessions are matched to the " +
+            "project by comparing their working directory against these paths.",
+        },
+        setup: {
+          type: "string",
+          description:
+            "Optional setup command run in a freshly created worktree before the agent starts, " +
+            "e.g. 'bun install'.",
+        },
+        launch_args: {
+          type: "string",
+          description:
+            "Optional extra flags passed to `claude` when the console launches a session for this " +
+            "project, e.g. '--permission-mode acceptEdits'.",
+        },
+        worktree_root: {
+          type: "string",
+          description:
+            "Optional path where this project's launched worktrees are created. Overrides the " +
+            "global default; a leading ~ is expanded. Useful for checking out onto a specific " +
+            "(e.g. case-sensitive) volume.",
+        },
+        provision: {
+          type: "string",
+          description:
+            "Optional shell command that builds a launch's working directory, replacing the " +
+            "default `git worktree add` — e.g. `brazil workspace create --name \"$STANDUP_WORKDIR_NAME\" " +
+            "--versionSet VS --package P`. It must create the directory $STANDUP_WORKDIR (also gets " +
+            "$STANDUP_REPO, $STANDUP_BRANCH, $STANDUP_PROJECT). Use for Brazil packages, where a bare " +
+            "worktree can't build.",
+        },
+        launch_subdir: {
+          type: "string",
+          description:
+            "Optional subdirectory of the working dir to start the agent in (and run setup from), " +
+            "e.g. 'src/MyPackage' for a provisioned Brazil workspace.",
+        },
+      },
+      required: ["id"],
+    },
+  },
 ];
 
 export async function handleToolCall(
@@ -364,6 +437,40 @@ async function dispatch(
           {
             type: "text",
             text: `Draft "${result.slug}" saved for human review. It is not searchable and nobody has read it yet.`,
+          },
+        ],
+      };
+    }
+
+    case "create_project": {
+      const result = await postJson<{
+        id: string;
+        name: string;
+        movedSessions?: number;
+      }>(`${collectorUrl}/api/projects`, {
+        id: args.id,
+        name: args.name,
+        emoji: args.emoji,
+        branch: args.branch,
+        repos: (args.repos as string[] | undefined) ?? [],
+        setup: args.setup,
+        // The tool schema exposes snake_case names (matching the CLI flags);
+        // the API fields are camelCase. Map them across here.
+        launchArgs: args.launch_args,
+        worktreeRoot: args.worktree_root,
+        provision: args.provision,
+        launchSubdir: args.launch_subdir,
+      });
+
+      const moved = result.movedSessions
+        ? ` Re-homed ${result.movedSessions} session(s) from scratch.`
+        : "";
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Created project "${result.id}" (${result.name}).${moved}`,
           },
         ],
       };

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Project } from "@standup/shared";
 import { theme } from "./theme";
 
@@ -53,15 +53,33 @@ export function ProjectEditor({
   const [setup, setSetup] = useState(project?.setup ?? "");
   const [branch, setBranch] = useState(project?.branch ?? "main");
   const [expert, setExpert] = useState(project?.expert ?? "");
+  const [launchArgs, setLaunchArgs] = useState(project?.launchArgs ?? "");
+  const [worktreeRoot, setWorktreeRoot] = useState(project?.worktreeRoot ?? "");
+  const [provision, setProvision] = useState(project?.provision ?? "");
+  const [launchSubdir, setLaunchSubdir] = useState(project?.launchSubdir ?? "");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Shown briefly after a successful save. The "Configure" tab keeps this
+  // editor mounted after saving (unlike the new-project flow, which closes
+  // it), so without an explicit confirmation a save there produced no visible
+  // change at all — no way to tell it worked.
+  const [saved, setSaved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Clear the pending "Saved" auto-hide if the editor unmounts first.
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+    };
+  }, []);
 
   async function save() {
     if (busy) return;
     setBusy(true);
     setError(null);
+    setSaved(false);
 
     const patch: Partial<Project> = {
       name: name.trim() || id.trim(),
@@ -73,12 +91,22 @@ export function ProjectEditor({
       setup: setup.trim(),
       branch: branch.trim() || "main",
       expert: expert.trim(),
+      launchArgs: launchArgs.trim(),
+      worktreeRoot: worktreeRoot.trim(),
+      provision: provision.trim(),
+      launchSubdir: launchSubdir.trim(),
     };
     if (isNew) patch.id = id.trim();
 
     try {
       const result = await onSave(patch);
-      if (result.error) setError(result.error);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setSaved(true);
+        if (savedTimer.current) clearTimeout(savedTimer.current);
+        savedTimer.current = setTimeout(() => setSaved(false), 2500);
+      }
     } finally {
       setBusy(false);
     }
@@ -217,6 +245,72 @@ export function ProjectEditor({
             you, with your permissions.
           </div>
         </div>
+
+        <div>
+          <span style={label}>Extra claude flags (optional)</span>
+          <input
+            value={launchArgs}
+            onChange={(e) => setLaunchArgs(e.target.value)}
+            placeholder="--permission-mode acceptEdits"
+            style={{ ...field, fontFamily: theme.mono, fontSize: 12 }}
+          />
+          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            Passed to <code>claude</code> when the console launches a session
+            for this project. Model and effort are chosen per-launch, so set
+            them in the composer, not here.
+          </div>
+        </div>
+
+        <div>
+          <span style={label}>Workspace root (optional)</span>
+          <input
+            value={worktreeRoot}
+            onChange={(e) => setWorktreeRoot(e.target.value)}
+            placeholder="~/workplace/standup-worktrees"
+            style={{ ...field, fontFamily: theme.mono, fontSize: 12 }}
+          />
+          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            Where this project's launched worktrees are created. Overrides the
+            global default; leave blank to use it. Handy for checking out onto a
+            case-sensitive volume. A leading ~ is expanded.
+          </div>
+        </div>
+
+        <div>
+          <span style={label}>Provision command (optional)</span>
+          <textarea
+            value={provision}
+            onChange={(e) => setProvision(e.target.value)}
+            rows={3}
+            placeholder={
+              'brazil workspace create --name "$STANDUP_WORKDIR_NAME" \\\n' +
+              "  --versionSet MyVS/mainline --package MyPackage --package MyPackageTests"
+            }
+            style={{ ...field, fontFamily: theme.mono, fontSize: 12, resize: "vertical" }}
+          />
+          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            Replaces <code>git worktree add</code> for launches. Must create the
+            directory <code>$STANDUP_WORKDIR</code> (pass{" "}
+            <code>--name "$STANDUP_WORKDIR_NAME"</code>). Also gets{" "}
+            <code>$STANDUP_REPO</code>, <code>$STANDUP_BRANCH</code>,{" "}
+            <code>$STANDUP_PROJECT</code>. Leave blank for a normal git worktree.
+          </div>
+        </div>
+
+        <div>
+          <span style={label}>Launch subdirectory (optional)</span>
+          <input
+            value={launchSubdir}
+            onChange={(e) => setLaunchSubdir(e.target.value)}
+            placeholder="src/MyPackage"
+            style={{ ...field, fontFamily: theme.mono, fontSize: 12 }}
+          />
+          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            Where inside the working dir the agent starts and setup runs. For a
+            provisioned Brazil workspace, the package dir (e.g.{" "}
+            <code>src/MyPackage</code>). Leave blank for the working dir itself.
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -230,6 +324,20 @@ export function ProjectEditor({
           }}
         >
           {error}
+        </div>
+      )}
+
+      {saved && !error && (
+        <div
+          style={{
+            fontFamily: theme.mono,
+            fontSize: 11.5,
+            color: theme.checkpoint,
+            marginTop: 16,
+            lineHeight: 1.5,
+          }}
+        >
+          ✓ Saved
         </div>
       )}
 

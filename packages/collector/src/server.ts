@@ -23,6 +23,7 @@ import {
   rehomeScratchSessions,
   findProjectByCwd,
   getPendingAsks,
+  getPendingAsksBySession,
   createAsk,
   getAsk,
   resolveAsk,
@@ -42,6 +43,8 @@ import {
   recordExpertExchange,
   getRecentExpertExchanges,
   getRecentEventsBySession,
+  getSetting,
+  setSetting,
 } from "@standup/store";
 import {
   searchKnowledge,
@@ -82,9 +85,10 @@ import {
   adoptSession,
   captureLaunchOutput,
   sendToLaunch,
+  WORKTREE_ROOT_SETTING,
 } from "./launcher.js";
 import { askExpert, loadRegions } from "./expert.js";
-import { bootstrapPrompt } from "./bootstrap-prompt.js";
+import { bootstrapPrompt, reviseDraftPrompt } from "./bootstrap-prompt.js";
 import { isInternalCwd } from "./internal-cwd.js";
 import { verifyDraft } from "./draft-verify.js";
 import {
@@ -104,6 +108,7 @@ import {
   isAutoCheckpointEnabled,
   setAutoCheckpointEnabled,
   clearAutoCheckpointState,
+  generateSessionTitle,
 } from "./auto-checkpoint.js";
 
 /** Standup's own MCP tools — nudging on these would feed back on itself. */
@@ -157,7 +162,12 @@ export function createServer(
   // var, so it can flip live without a collector restart.
   // ============================================================================
   app.get("/api/settings", (c) => {
-    return c.json({ autoCheckpoint: isAutoCheckpointEnabled(store.db) });
+    return c.json({
+      autoCheckpoint: isAutoCheckpointEnabled(store.db),
+      // "" (not null) so the client can render an empty input rather than
+      // guessing; empty means "fall back to env/default" at launch time.
+      worktreeRoot: getSetting(store.db, WORKTREE_ROOT_SETTING) ?? "",
+    });
   });
 
   app.put("/api/settings", async (c) => {
@@ -165,7 +175,15 @@ export function createServer(
     if (typeof body.autoCheckpoint === "boolean") {
       setAutoCheckpointEnabled(store.db, body.autoCheckpoint);
     }
-    return c.json({ autoCheckpoint: isAutoCheckpointEnabled(store.db) });
+    // A string (including "") sets it; "" clears the override, restoring the
+    // env/default fallback. Trimmed so stray whitespace doesn't become a path.
+    if (typeof body.worktreeRoot === "string") {
+      setSetting(store.db, WORKTREE_ROOT_SETTING, body.worktreeRoot.trim());
+    }
+    return c.json({
+      autoCheckpoint: isAutoCheckpointEnabled(store.db),
+      worktreeRoot: getSetting(store.db, WORKTREE_ROOT_SETTING) ?? "",
+    });
   });
 
   // ============================================================================
@@ -253,6 +271,10 @@ export function createServer(
       setup: body.setup || undefined,
       expert: body.expert || undefined,
       branch: body.branch || "main",
+      launchArgs: body.launchArgs || undefined,
+      worktreeRoot: body.worktreeRoot || undefined,
+      provision: body.provision || undefined,
+      launchSubdir: body.launchSubdir || undefined,
     };
 
     upsertProject(store.db, project);
@@ -286,6 +308,18 @@ export function createServer(
       setup: body.setup !== undefined ? body.setup || undefined : existing.setup,
       expert: body.expert !== undefined ? body.expert || undefined : existing.expert,
       branch: body.branch || existing.branch,
+      launchArgs:
+        body.launchArgs !== undefined ? body.launchArgs || undefined : existing.launchArgs,
+      worktreeRoot:
+        body.worktreeRoot !== undefined
+          ? body.worktreeRoot || undefined
+          : existing.worktreeRoot,
+      provision:
+        body.provision !== undefined ? body.provision || undefined : existing.provision,
+      launchSubdir:
+        body.launchSubdir !== undefined
+          ? body.launchSubdir || undefined
+          : existing.launchSubdir,
     };
 
     upsertProject(store.db, updated);
@@ -519,6 +553,69 @@ export function createServer(
     });
 
     return c.json({ ok: true });
+  });
+
+  // Revise a draft from review feedback (the "revise with feedback" box).
+  //
+  // Runs as a fresh bootstrap-kind launch whose prompt is the current draft +
+  // the human's feedback, told to re-propose the SAME slug — so the draft is
+  // replaced in place (propose_knowledge overwrites a draft of the same slug),
+  // keeping its slug and re-running the fact-check. Bootstrap kind on purpose:
+  // it's the only kind propose_knowledge accepts. This is regenerate-with-
+  // guidance, not a live chat with the original session — see the design
+  // discussion; the original session is usually gone and its worktree cleaned,
+  // and an adopted session couldn't call propose_knowledge anyway (the gate is
+  // bootstrap-only).
+  app.post("/api/projects/:id/knowledge/drafts/:slug/revise", async (c) => {
+    const projectId = c.req.param("id");
+    const slug = c.req.param("slug");
+    const { feedback, model, effort } = await c.req
+      .json<{ feedback?: string; model?: string; effort?: string }>()
+      .catch(() => ({ feedback: undefined, model: undefined, effort: undefined }));
+
+    if (!feedback?.trim()) {
+      return c.json({ error: "feedback is required" }, 400);
+    }
+    if (model && !CLAUDE_MODELS.includes(model as ClaudeModel)) {
+      return c.json({ error: `Unknown model: ${model}` }, 400);
+    }
+    if (effort && !CLAUDE_EFFORTS.includes(effort as ClaudeEffort)) {
+      return c.json({ error: `Unknown effort level: ${effort}` }, 400);
+    }
+
+    const project = getProjects(store.db).find((p) => p.id === projectId);
+    if (!project) {
+      return c.json({ error: `Unknown project: ${projectId}` }, 404);
+    }
+
+    const draft = knowledgeSync?.getDraft(projectId, slug);
+    if (!draft) return c.json({ error: "Not found" }, 404);
+
+    try {
+      const result = await launchSession(store.db, {
+        project,
+        task: reviseDraftPrompt(
+          project,
+          { slug: draft.slug, title: draft.title, body: draft.body },
+          feedback.trim()
+        ),
+        label: `Revise ${slug}.md for ${project.name}`,
+        // Same judgment-work defaults as bootstrap; caller can override.
+        model: (model as ClaudeModel | undefined) ?? "opus",
+        effort: (effort as ClaudeEffort | undefined) ?? "high",
+        kind: "bootstrap",
+      });
+
+      broadcast({
+        type: "launch:started",
+        payload: result.launch,
+        timestamp: new Date().toISOString(),
+      });
+
+      return c.json(result);
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
   });
 
   // Accepts every pending draft that doesn't need a human decision first.
@@ -1205,6 +1302,13 @@ export function createServer(
       summary: string;
     }>();
 
+    // A checkpoint with no summary is meaningless and, worse, hits a NOT NULL
+    // constraint that surfaces as a 500 SQLite crash rather than a usable
+    // error. Reject it cleanly so the agent gets told what went wrong.
+    if (!summary?.trim()) {
+      return c.json({ error: "summary is required" }, 400);
+    }
+
     const session = resolveCallingSession(session_id, cwd);
     if (!session) {
       return c.json(
@@ -1213,7 +1317,7 @@ export function createServer(
       );
     }
 
-    const checkpoint = createCheckpoint(store.db, session.id, "self-reported", summary);
+    const checkpoint = createCheckpoint(store.db, session.id, "self-reported", summary.trim());
 
     broadcast({
       type: "checkpoint:new",
@@ -1623,6 +1727,56 @@ function describePendingTool(store: Store, sessionId: string): string | null {
   return `${p.tool_name}${inputText ? ` — ${inputText.slice(0, 300)}` : ""}`;
 }
 
+/** Longest a plain (non-Haiku) session title runs before it's truncated. */
+const MONITORED_TITLE_MAX = 150;
+
+/**
+ * Titles a session from its first user prompt.
+ *
+ * Only the first prompt titles a session — updateSessionTitle no-ops once a
+ * title is set, and a launched session already carries its task as the title,
+ * so both are guarded here to avoid firing a Haiku call on every later prompt.
+ *
+ * With auto-checkpoint on, spend a cheap Haiku call (the same budget the user
+ * already opted into) to make the title succinct and about the task rather
+ * than the raw first 150 characters. It's async — the hook must return at once
+ * — and falls back to the truncation on failure; the IS-NULL guard in
+ * updateSessionTitle keeps whichever lands first from being clobbered. With it
+ * off, just truncate.
+ */
+function setInitialTitle(
+  store: Store,
+  sessionId: string,
+  prompt: string,
+  broadcast: WsBroadcast
+): void {
+  const session = getSession(store.db, sessionId);
+  if (session?.title) return;
+
+  // Collapse whitespace first, so a multi-line prompt yields a single-line
+  // title rather than a paragraph, then cap the length.
+  const truncated = prompt.replace(/\s+/g, " ").trim().slice(0, MONITORED_TITLE_MAX);
+
+  if (!isAutoCheckpointEnabled(store.db)) {
+    updateSessionTitle(store.db, sessionId, truncated);
+    return;
+  }
+
+  void generateSessionTitle(prompt)
+    .then((title) => {
+      updateSessionTitle(store.db, sessionId, title ?? truncated);
+      // Nudge every client to refetch — titles ride on the sessions list, and
+      // this landed a second or two after the prompt's own status broadcast.
+      const s = getSession(store.db, sessionId);
+      broadcast({
+        type: "session:status",
+        payload: { sessionId, status: s?.status ?? "running" },
+        timestamp: new Date().toISOString(),
+      });
+    })
+    .catch(() => updateSessionTitle(store.db, sessionId, truncated));
+}
+
 function handleHookEvent(
   store: Store,
   payload: HookPayload,
@@ -1686,8 +1840,9 @@ function handleHookEvent(
 
     case "UserPromptSubmit": {
       const p = payload as { prompt: string } & typeof payload;
-      // First prompt becomes the session title; later prompts don't overwrite it.
-      updateSessionTitle(store.db, session_id, p.prompt.slice(0, 100));
+      // First prompt becomes the session title; later prompts don't overwrite
+      // it. Succinct Haiku title when auto-checkpoint is on, else truncated.
+      setInitialTitle(store, session_id, p.prompt, broadcast);
       // A new turn is starting — the session is no longer idle/waiting.
       updateSessionStatus(store.db, session_id, "running");
       resetTurnNudges(session_id);
@@ -1899,31 +2054,53 @@ function handleHookEvent(
           timestamp: new Date().toISOString(),
         });
 
-        const session = getSession(store.db, session_id);
-        const detail =
-          describePendingTool(store, session_id) ??
-          p.message ??
-          (isPermission ? "Permission requested" : "Waiting for your input");
+        // Claude Code re-emits the Notification hook while a prompt sits
+        // unanswered — idle_prompt fires at every turn end, and a permission
+        // prompt re-notifies — so without an idempotency guard a single block
+        // stacks up several pending asks and shows as two (or more) "blocked"
+        // events for the same wait. This is the same duplicate that
+        // reconcileBlockedSessions already guards against at startup; the live
+        // path needs the identical check. If this session already has a
+        // pending ask, the block is surfaced — don't raise another.
+        if (getPendingAsksBySession(store.db, session_id).length === 0) {
+          const session = getSession(store.db, session_id);
+          const detail =
+            describePendingTool(store, session_id) ??
+            p.message ??
+            (isPermission ? "Permission requested" : "Waiting for your input");
 
-        // Surfaced as an ask so it lands in the Blocked view and the alert
-        // strip. Answering it isn't possible from here for a monitored
-        // session — but a launched one can be answered with send input.
-        const ask = createAsk(
-          store.db,
-          session_id,
-          "permission_prompt",
-          launched
-            ? `${detail}\n\n(this session was launched by the console, so nobody is at its terminal)`
-            : detail
-        );
-        broadcast({
-          type: "ask:new",
-          payload: ask,
-          timestamp: new Date().toISOString(),
-        });
+          // Surfaced as an ask so it lands in the Blocked view and the alert
+          // strip. Answering it isn't possible from here for a monitored
+          // session — but a launched one can be answered with send input.
+          const ask = createAsk(
+            store.db,
+            session_id,
+            "permission_prompt",
+            launched
+              ? `${detail}\n\n(this session was launched by the console, so nobody is at its terminal)`
+              : detail
+          );
+          broadcast({
+            type: "ask:new",
+            payload: ask,
+            timestamp: new Date().toISOString(),
+          });
 
-        void pushNotification(session?.title || "Agent needs you", detail);
+          void pushNotification(session?.title || "Agent needs you", detail);
+        }
       }
+
+      // The transcript view refreshes on event:new (see TranscriptView's
+      // eventSignal). A block is exactly when the human opens the session to
+      // see what the agent is stuck on, so the transcript has to refresh here
+      // too. Every other observable hook branch broadcasts this; the
+      // Notification case was the one that didn't, so a freshly blocked
+      // session's last turn stayed absent until the 10s backstop timer.
+      broadcast({
+        type: "event:new",
+        payload: { sessionId: session_id, type: hook_event_name },
+        timestamp: new Date().toISOString(),
+      });
       break;
     }
 
