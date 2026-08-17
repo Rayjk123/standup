@@ -99,15 +99,46 @@ export class KnowledgeStore {
   // because SQLite has no ADD COLUMN IF NOT EXISTS. Idempotent, so it's safe
   // to run unconditionally on every startup, fresh database or not.
   private ensureColumns(): void {
-    const existing = new Set(
-      (this.db.query("PRAGMA table_info(knowledge)").all() as Array<{ name: string }>)
-        .map((c) => c.name)
-    );
+    const columnsOf = (table: string) =>
+      new Set(
+        (this.db.query(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>)
+          .map((c) => c.name)
+      );
+
+    const knowledge = columnsOf("knowledge");
     for (const col of ["generated_from_sha", "generated_at"]) {
-      if (!existing.has(col)) {
+      if (!knowledge.has(col)) {
         this.db.exec(`ALTER TABLE knowledge ADD COLUMN ${col} TEXT`);
       }
     }
+
+    // Adversarial verification results. `verdict` defaults to 'unverified'
+    // rather than 'clean' so an unchecked draft is never mistaken for a
+    // checked one — the two look identical in review otherwise, and the
+    // whole value of the pass is knowing which it is.
+    const drafts = columnsOf("knowledge_drafts");
+    if (!drafts.has("verdict")) {
+      this.db.exec(
+        "ALTER TABLE knowledge_drafts ADD COLUMN verdict TEXT NOT NULL DEFAULT 'unverified'"
+      );
+    }
+    if (!drafts.has("disputes_json")) {
+      this.db.exec("ALTER TABLE knowledge_drafts ADD COLUMN disputes_json TEXT");
+    }
+  }
+
+  /** Records an adversarial verification pass over a draft. */
+  setDraftVerdict(
+    projectId: string,
+    slug: string,
+    verdict: string,
+    disputes: unknown[]
+  ): void {
+    this.db.run(
+      `UPDATE knowledge_drafts SET verdict = ?, disputes_json = ?
+       WHERE project_id = ? AND slug = ?`,
+      [verdict, JSON.stringify(disputes), projectId, slug]
+    );
   }
 
   upsertDoc(doc: KnowledgeDoc): void {

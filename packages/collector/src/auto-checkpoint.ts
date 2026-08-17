@@ -1,7 +1,6 @@
 import { mkdirSync } from "fs";
-import { homedir } from "os";
-import { join } from "path";
 import type { Database } from "bun:sqlite";
+import { AUTO_CHECKPOINT_CWD } from "./internal-cwd.js";
 import { createCheckpoint, getSetting, setSetting } from "@standup/store";
 import type { Checkpoint } from "@standup/shared";
 import { readTranscript, transcriptPathForSession } from "./transcript.js";
@@ -42,13 +41,7 @@ const MAX_SUMMARY_CHARS = 280;
  * happened for real, three generations deep, before the setting was
  * manually flipped back off cut it short.
  */
-export const AUTO_CHECKPOINT_CWD = join(
-  homedir(),
-  ".local",
-  "share",
-  "standup",
-  "internal"
-);
+export { AUTO_CHECKPOINT_CWD };
 
 // Per-session watermark: the transcript message already considered as of the
 // last fire, so a repeated call only sees what's new. In-memory, like the

@@ -104,6 +104,16 @@ export class KnowledgeSync {
     }
   }
 
+  /** Records an adversarial verification pass over a draft (phase-7 Step 4.5). */
+  recordDraftVerdict(
+    projectId: string,
+    slug: string,
+    verdict: string,
+    disputes: unknown[]
+  ): void {
+    this.store.setDraftVerdict(projectId, slug, verdict, disputes);
+  }
+
   async syncAll(): Promise<void> {
     for (const projectId of this.knownProjectIds()) {
       await this.syncProject(projectId);

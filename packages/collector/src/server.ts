@@ -81,6 +81,8 @@ import {
 } from "./launcher.js";
 import { askExpert, loadRegions } from "./expert.js";
 import { bootstrapPrompt } from "./bootstrap-prompt.js";
+import { isInternalCwd } from "./internal-cwd.js";
+import { verifyDraft } from "./draft-verify.js";
 import {
   readTranscript,
   transcriptPathForSession,
@@ -98,7 +100,6 @@ import {
   isAutoCheckpointEnabled,
   setAutoCheckpointEnabled,
   clearAutoCheckpointState,
-  AUTO_CHECKPOINT_CWD,
 } from "./auto-checkpoint.js";
 
 /** Standup's own MCP tools — nudging on these would feed back on itself. */
@@ -1163,6 +1164,21 @@ export function createServer(
     // reconciles knowledge_drafts to match what's now on disk.
     await knowledgeSync?.syncDrafts(projectId);
 
+    // Fact-check in the background. Deliberately not awaited: the bootstrap
+    // agent is blocked inside this tool call, and making it wait ~a minute
+    // per document to be checked would triple the run's wall time for a
+    // result it is not the audience for. The human is, at review — and by
+    // then it has landed.
+    void (async () => {
+      const result = await verifyDraft(slug, body, launch.worktreePath);
+      knowledgeSync?.recordDraftVerdict(projectId, slug, result.verdict, result.disputes);
+      broadcast({
+        type: "knowledge:draft",
+        payload: { projectId, slug, verdict: result.verdict, disputes: result.disputes },
+        timestamp: new Date().toISOString(),
+      });
+    })();
+
     broadcast({
       type: "knowledge:draft",
       payload: {
@@ -1376,7 +1392,10 @@ function handleHookEvent(
   // auto-checkpoint call on itself and recurse without bound — verified
   // live, three generations deep, before manually disabling the setting
   // interrupted it.
-  if (cwd === AUTO_CHECKPOINT_CWD) return null;
+  // Prefix-matched over the reserved root rather than a single path, so a
+  // new internal subprocess is covered by existing;  matching one constant
+  // is what would silently reopen the loop for the next one.
+  if (isInternalCwd(cwd)) return null;
 
   ensureSession(store, session_id, cwd, hook_event_name);
 

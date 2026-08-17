@@ -24,6 +24,32 @@ This trips you up constantly if you don't know it. Verified empirically:
 When in doubt about the MCP layer: start a fresh session. Everything else,
 just save the file.
 
+### Spawning `claude` from inside Standup
+
+Hooks are global, so every `claude` Standup spawns reports back as a session
+unless stopped. Two internal subprocesses exist — auto-checkpoint's summarizer
+and draft verification — and they suppress it differently, for a reason worth
+knowing before adding a third.
+
+- **Reserved cwd** (`isInternalCwd`, prefix-matched under
+  `~/.local/share/standup/internal`) — the collector ignores hooks whose cwd
+  is under it. Sufficient for a subprocess that needs no repository access.
+- **`--setting-sources project --strict-mcp-config`** — hooks live in
+  `~/.claude/settings.json`, the `user` source, so excluding it means they
+  never fire at all. Also drops the MCP registration, which an internal
+  subprocess should not have.
+
+**The cwd guard alone is not enough once `--add-dir` is involved.** A
+subprocess given `--add-dir <repo>` reports *the added directory* as its cwd,
+so it registers as an ordinary session in that repo and walks straight past a
+cwd-based guard. Measured: two verifier runs created two phantom sessions in
+the Standup repo. That matters beyond feed noise — `cwd` is the correlation
+key and is not unique, so a phantom session can absorb correlation intended
+for your real session in that directory.
+
+Flags are per-invocation. Nothing about this makes ordinary or launched
+sessions invisible; `launcher.ts` passes none of them.
+
 ### Testing an MCP tool without a fresh session
 
 The table above is about a *live agent* seeing a tool. The server itself is
