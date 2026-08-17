@@ -208,8 +208,34 @@ empty case but also clamps any corpus whose bm25 magnitudes are below 1, so the
 score stays ~2.6e-6 against a `KNOWLEDGE_RELEVANCE_FLOOR` of 0.15. Only the
 embedding half can carry that case.
 
-So **12/12 requires `EMBEDDING_PROVIDER` set and chunks populated; text-only
-tops out at 11/12.** Check before concluding anything:
+**Correction: "cannot pass on text search alone" is wrong.** It is not
+arithmetic, it is corpus size, and the dependency reaches across projects.
+`bm25()` computes IDF over the whole `knowledge_fts` table and the
+`project_id` filter is applied *after* ranking, so another project's documents
+change this project's scores. With two documents in the table every term is in
+nearly every document, IDF collapses, and the clamp above does the rest. Same
+query, same two standup docs, only the rest of the table differing:
+
+| rows in `knowledge_fts` | `bm25(overview)` | case |
+|---|---|---|
+| 2 (this project only) | -6.6e-06 | FAIL |
+| 5 (+3 rows from another project) | -3.24 | PASS |
+| 6 (after accepting four generated docs) | -1.45 | PASS |
+
+The document's text is identical in all three. So **before trusting any eval
+number, confirm the index holds what you think it does** — orphans included:
+
+```bash
+sqlite3 ~/.local/share/standup/standup.db \
+  "SELECT count(*) FROM knowledge_fts f
+   LEFT JOIN knowledge k ON k.id = f.id WHERE k.id IS NULL;"
+# must be 0. deleteDoc removes both rows; raw DELETE FROM knowledge does not,
+# and the orphans keep skewing IDF for every project.
+```
+
+**12/12 still requires `EMBEDDING_PROVIDER` set and chunks populated** for the
+reasons below; text-only tops out at 11/12 on a two-document corpus. Check
+before concluding anything:
 
 ```bash
 sqlite3 ~/.local/share/standup/standup.db \
@@ -229,6 +255,30 @@ real project's.
 
 Things to know before touching retrieval scoring:
 
+- **The retrieval code is inside the corpus it is measured over.** Editing
+  `expert.ts` changes how `expert.ts` ranks as a *retrieval target*, which was
+  enough to move an unrelated file in and out of the top six. A slot cap
+  appeared to fix a regression and turned out to be doing nothing — the fix was
+  its own added text. Change one thing at a time, and distrust a result that
+  only reproduces on the build that introduced it.
+- **Never write an eval question verbatim into any searched file**, comments
+  included. That file becomes a fixture for its own test case. This has now
+  happened three times: `*.eval.ts` itself (excluded by glob), the plan docs
+  (paraphrased), and a comment in `expert.ts`. The glob only catches the first.
+- **Ranking was nondeterministic until the path tiebreak.** `sort` is stable
+  and ripgrep emits files in parallel order, so equally-scored sources came
+  back in whatever order the threads produced, and any tie straddling
+  `maxSources` flipped between runs of the same query. Fixed in
+  `applyRegionBias`. Re-measure rather than comparing against numbers recorded
+  before it — **run any comparison twice in separate collector processes**, and
+  treat a result that does not reproduce as noise.
+- **A knowledge doc that clears the floor is guaranteed a slot.**
+  `mergeResults` normalizes by the best score, so the top knowledge hit is 1.0
+  by construction, and `KNOWLEDGE_RELEVANCE_FLOOR` is checked on that
+  normalized value. No downstream weight can demote it — measured by sweeping
+  a provenance weight to 0.5 with no effect at all, then off a cliff at 0.3.
+  Knowledge scores 1–3 against code's ~1.4, so docs take the top slots and push
+  code out. That is why accepting four generated docs cost a multi-hop case.
 - **Weights see-saw.** The `design` region weight trades intent questions
   against code-lookup attribution (1.2 fails one, 1.6 fails the other, 1.3
   passes). Always re-run the eval; never hand-tune by feel.

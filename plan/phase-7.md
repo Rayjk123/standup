@@ -460,10 +460,74 @@ worse outcome than a missing badge.
 
 ---
 
-## Step 7 — Does bootstrapped knowledge actually help?
+## Step 7 — Does bootstrapped knowledge actually help? ✅ MEASURED
 
 **Model: Opus.** `implementation.md:291-294` frames this as the phase's real
 question, and it is a measurement, not an assumption.
+
+> **Result: yes for capability, at a real cost. Text-only both sides, four
+> generated docs accepted, every number below reproduced across at least two
+> fresh collector processes.**
+>
+> ```
+> before  11/15  multi-hop 4/4
+> after   14/15  multi-hop 3/4
+> ```
+>
+> | case | before → after | verdict |
+> |---|---|---|
+> | 3 × `capability:` | FAIL → PASS | **real.** Each cites the generated doc as top source, and none of those docs existed before. |
+> | `single-hop: intent from knowledge` | FAIL → PASS | **artifact, discounted.** See the IDF note below — the doc's text did not change. |
+> | `cross-domain: web reads what the collector writes` | PASS → FAIL | **real regression.** Two knowledge docs take the top two slots and push `App.tsx` past `maxSources`. |
+>
+> **The exit criterion is not met: multi-hop is 3/4, not 4/4.** That is the
+> measurement, not a thing to tune away, and the design's central worry is the
+> thing that came true — generated text displacing real retrieval.
+>
+> **Both flips share one mechanism, and it is not document quality.** `bm25()`
+> computes IDF over the whole `knowledge_fts` table. At two documents every
+> term is in nearly every doc, IDF ≈ 0, and `mergeResults`' `Math.max(...
+> scores, 1)` clamp leaves normalized scores around 1e-6 — under the 0.15
+> floor, so *no* knowledge reached the answer at all. Going to six documents
+> lifted `bm25(overview)` from **-6.6e-06 to -1.45** with its text unchanged.
+> Knowledge stopped being invisible, and since a knowledge source scores 1 to 3
+> against a code source's ~1.4, it took slots.
+>
+> So `intent from knowledge` did not start passing because bootstrapping
+> helped; it started passing because the corpus got bigger. Adding six
+> documents of any content would have done it. The three `capability:` cases
+> are immune — they assert a slug that did not exist before.
+>
+> **Neither knob fixes the displacement, and the sweeps say why.** Provenance
+> weight is recorded at `expert.ts`'s `GENERATED_PROVENANCE_WEIGHT`: flat from
+> 1.0 to 0.5, then generated docs vanish entirely by 0.3. A knowledge-slot cap
+> was built and swept and measured no better than none. Both fail for the same
+> upstream reason: `mergeResults` normalizes by the best score, so the top
+> knowledge doc is 1.0 *by construction* whenever anything matches, and the
+> floor is checked before either knob applies. **The lever that would work is
+> the relevance floor, on a scale that does not move with corpus size** — which
+> means fixing the `Math.max(..., 1)` clamp this plan already carries as a
+> known bug. That is its own measured step, not a footnote to this one.
+>
+> Three defects found while measuring, all fixed or recorded:
+>
+> 1. **Retrieval was nondeterministic.** Sort is stable and ripgrep emits files
+>    in parallel order, so tied scores resolved by thread scheduling and any
+>    tie straddling the cutoff flipped between runs. Fixed with a path
+>    tiebreak in `applyRegionBias`. Every eval number recorded before this was
+>    noisy, including Step 0's.
+> 2. **`expert.ts` is in its own corpus.** Adding a function to it changed how
+>    it ranks as a retrieval target, enough to move `App.tsx` in and out of the
+>    top six — which is what a slot cap appeared to fix. Change one thing at a
+>    time, and distrust any result that only reproduces on the build that
+>    introduced it.
+> 3. **An eval question was quoted verbatim in a comment in `expert.ts`**,
+>    making that file a fixture for its own test case. Third instance of this
+>    family in this project. Paraphrased.
+>
+> Left undone deliberately: the two drafts with `replaces_slug` are still
+> pending. Merging them means answering questions only the author can answer,
+> and the `overview` draft says so itself.
 
 Three separate things to measure, against the Step 0 baseline.
 

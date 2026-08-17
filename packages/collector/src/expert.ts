@@ -44,12 +44,48 @@ const KNOWLEDGE_RELEVANCE_FLOOR = 0.15;
  * sweep recorded beside it, the same discipline the relevance floor above
  * follows.
  *
- * Swept over the full suite, text-only, with all six bootstrapped docs
- * accepted. Set by GENERATED_PROVENANCE_WEIGHT in the environment for a sweep.
+ * Swept over the full suite, text-only, with the four bootstrapped docs
+ * accepted, two runs per value, all reproducible:
+ *
+ *   1.0  → 14/15, multi-hop 3/4   ← shipped
+ *   0.85 → 14/15, multi-hop 3/4
+ *   0.7  → 14/15, multi-hop 3/4
+ *   0.5  → 14/15, multi-hop 3/4
+ *   0.3  → 12/15, multi-hop 4/4 — all three capability cases lost
+ *
+ * The design's guess was that this should sit below 1. It measures as no
+ * improvement anywhere, and informatively so: this is not a dial. Everything
+ * from 1.0 down to 0.5 scores identically, and by 0.3 generated docs have
+ * vanished from the results altogether. There is no setting where a generated
+ * doc ranks below code and still gets read.
+ *
+ * The reason is upstream. mergeResults normalizes by the best score, so the
+ * top-ranked knowledge doc is 1.0 by construction whenever anything matches at
+ * all, and the floor above — checked before this weight applies — can never
+ * exclude it. Provenance is the wrong instrument; the lever that would work is
+ * the floor, and it needs a scale that doesn't move with corpus size.
+ *
+ * Kept at 1.0 rather than deleted so the next person to have this idea finds
+ * the measurement instead of repeating it.
  */
 const GENERATED_PROVENANCE_WEIGHT = Number(
   process.env.GENERATED_PROVENANCE_WEIGHT ?? 1
 );
+
+// A ceiling on how many of the six returned sources may be knowledge docs was
+// built and swept here, on the theory that knowledge crowds code out once a
+// project has more than a couple of docs. It measured no better than no cap:
+// 3 and "effectively unlimited" both score 15/15, and only at 2 does anything
+// break. Not in the code.
+//
+// Worth knowing why it looked like it worked. This file is itself in the
+// searched corpus, so adding the cap function changed how expert.ts scores as
+// a *retrieval target* — enough to move it in and out of the top six on a
+// question about the feed, which is what appeared to be the cap taking effect.
+// Removing the function reversed it. Editing retrieval code perturbs the
+// corpus that retrieval is measured over; change one thing at a time and
+// re-measure, and be suspicious of any result that only reproduces on the
+// build that introduced it.
 
 export function defaultExpertsPath(): string {
   return (
@@ -157,7 +193,22 @@ function applyRegionBias(
       }
       return { ...source, score: source.score * multiplier };
     })
-    .sort((a, b) => b.score - a.score);
+    // Ties break on path, not on arrival order. Sort is stable, so without
+    // this the order of equally-scored sources is the order ripgrep emitted
+    // them — and ripgrep searches in parallel, so that order changes between
+    // runs of the same query over the same tree. Any tie straddling the
+    // maxSources cutoff then decides the answer by thread scheduling: the
+    // same question would return a file on one run and drop it on the next.
+    // Caught on the cross-domain case in the eval suite, which flipped between
+    // passing and failing across repeated runs with nothing changed. Every
+    // number taken before this was noisy for the same reason, so re-measure
+    // rather than comparing against a recorded one.
+    //
+    // The wording above is deliberately a description, not a quotation. Eval
+    // questions must never appear verbatim in a searched file: this comment
+    // originally quoted one, and this file promptly started ranking as a
+    // source for it and displacing the file that actually answers it.
+    .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
 }
 
 export interface AskExpertOptions {
