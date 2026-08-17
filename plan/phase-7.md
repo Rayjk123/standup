@@ -319,12 +319,42 @@ Step 7. It pins the parts whose regressions would be *silent*: the six slugs
 (an interface the review, accept and `replaces_slug` paths all key off), the
 intent prohibition, and both stub markers.
 
-**Written but unproven.** No agent has run it yet, and nothing before that
-point is evidence: a prompt that reads well is exactly the failure mode this
-step is guarding against. The next action is one real bootstrap run against
-this repository, then reading the six documents and asking whether you would
-have wanted them. Expect to iterate — treat the first output as a draft of
-the prompt, not of the knowledge base.
+### First real run — what it showed
+
+Run against this repository (Opus/high, 8m47s, six drafts). Read them; the
+summary is that the prompt largely works and fails in one specific way.
+
+**Held up.** It ran every root script rather than describing them, and led
+with what actually breaks. It applied the many-files test — `gotchas` opens
+by deferring to `runbook.md` and then carries only material that spans
+files, synthesising three separate bugs into one principle (`cwd` is the
+correlation key everywhere and is not unique). Both stubs are pure question
+checklists with no invented intent. Spot-checking every load-bearing claim
+in `gotchas` against the code found them all accurate.
+
+**Failed on quantities.** `toolchain` asserted "235 errors" where the real
+figure is 32 — the *shape* was right (which three workspaces fail, and that
+all are TS6059) but the number was invented. Mechanism claims were reliable;
+a counted quantity was not, and a wrong number stated confidently is exactly
+the authority-spending Component 4.6 exists to prevent. The prompt now bans
+uncounted numbers and pushes toward the durable qualitative shape, which is
+also the form that does not go stale when someone adds a file.
+
+**Two findings for later steps, both unprompted:**
+
+- **Accept needs a merge path, not just replace.** Where an accepted doc
+  existed, `replaces_slug` was set correctly — and the agent wrote a warning
+  into the draft body saying that accepting it as a replacement would lose
+  the human's work, framing itself as additions to merge. That is the prompt
+  compensating for a gap in Step 5: a regenerated draft that *supplements*
+  is a different act from one that *replaces*, and the review UI currently
+  models only the latter. Step 5 should offer merge, or `propose_knowledge`
+  should distinguish the two.
+- **Base branch decides what gets documented.** The worktree is cut from
+  `project.branch` (`main`), so the docs describe main and cite a runbook
+  claim already corrected on the working branch. Provenance records the sha,
+  so this is not wrong, only narrow — but bootstrapping a project mid-branch
+  documents the wrong tree. Decide whether the route should take a base.
 
 Two things this prompt is deliberately doing:
 
@@ -356,7 +386,10 @@ by this launch* — link to the launch), the rendered body via the existing
 `Markdown` component, and three actions.
 
 - **Accept** — moves the file, deletes the row, calls `syncProject()` so it
-  is searchable immediately.
+  is searchable immediately. **Where `replaces_slug` is set, accept must not
+  silently overwrite**: the first run showed a regenerated draft is usually
+  a *supplement* to what a human wrote, not a replacement for it. Offer
+  merge (open both, edit into one) alongside replace, and default to merge.
 - **Edit** — opens the existing `DocEditor` (`KnowledgePanel.tsx:298`)
   pre-filled. Saving writes back to `.drafts/`; accepting stays a separate
   click, so editing is not an accidental approval.

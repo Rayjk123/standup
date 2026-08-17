@@ -143,6 +143,17 @@ Work in this order; the early ones give you the grounding for the later ones.
 
 ## Rules
 
+- **Never state a number you have not just counted.** Quantities are both
+  the easiest thing to get wrong and the fastest thing to go stale — an
+  error count changes the moment someone adds a file. Prefer the durable
+  shape: "fails with TS6059 rootDir errors in \`store\`, \`collector\` and
+  \`mcp\`; \`shared\`, \`knowledge\` and \`web\` pass" says more than a total
+  and stays true longer. If a number genuinely carries the point, name the
+  command that produces it so the next reader can recheck instead of
+  trusting you.
+- If you are supplementing a document a human already wrote, say so in the
+  first line and describe what to merge. Do not write a replacement that
+  silently drops their work.
 - Hard cap of 40 lines per document, and shorter is better.
 - If a document would have fewer than five worthwhile lines, propose it with
   only those lines. Padding is worse than brevity.
