@@ -298,7 +298,7 @@ as a normal launch, so you can watch and stop it."*
 
 ---
 
-## Step 4 — The research prompt
+## Step 4 — The research prompt ✅ WRITTEN, UNPROVEN
 
 **Model: Opus.** `implementation.md:274-288` is blunt about why: everything
 else in this phase is plumbing over components that already exist. The prompt
@@ -306,102 +306,25 @@ decides what gets written, and the failure mode is not a crash — it is a
 knowledge base full of plausible, derivable, slowly-rotting summaries that
 outrank real retrieval and quietly make answers worse.
 
-Lives in `packages/collector/src/bootstrap-prompt.ts` as a template function
-over the project. Draft below; expect to iterate against Step 7's numbers.
+**The prompt itself lives in `packages/collector/src/bootstrap-prompt.ts`**,
+as a template function over the project, with its reasoning in the doc
+comment above it. It is deliberately not reproduced here: two copies drift,
+and this file is in the searched corpus, so duplicating the prompt's
+vocabulary competes with the real source for every retrieval about
+bootstrapping. Read it there.
 
-````text
-You are writing the first draft of the knowledge base for {project.name}.
+Guarded by `bootstrap-prompt.test.ts`, which does not attempt to test prompt
+quality — that is judged by reading a real run's output, and measured by
+Step 7. It pins the parts whose regressions would be *silent*: the six slugs
+(an interface the review, accept and `replaces_slug` paths all key off), the
+intent prohibition, and both stub markers.
 
-Standup keeps a small set of docs per project holding what an agent CANNOT
-recover by searching the code. Agents already have `ripgrep` and `ask_expert`
-over this repository. Anything those tools answer is not knowledge — it is
-retrieval. Duplicating it here makes every future search worse: a generated
-summary competes with the real file in ranking, and rots the moment the code
-moves.
-
-Your job is to write the part retrieval cannot cover, and to leave the rest
-alone. Writing less is the harder skill here and the one being asked for.
-
-## The test every line must pass
-
-Before you write a sentence, ask: would an agent have to read MANY files to
-infer this?
-
-If a single `rg` answers it, delete it.
-
-  Capture                              | Leave to retrieval
-  -------------------------------------|------------------------------------
-  How to build, test, lint, run         | Anything a grep answers directly
-  Observed conventions — error handling,| File and directory listings
-  naming, test layout                   |
-  Architecture shape: what talks to what| Function signatures, API surface
-  at module level                       |
-  Gotchas from READMEs, TODOs, and      | Anything restated from a single
-  comment warnings                      | file
-
-## What you must not do
-
-Do NOT write intent. You cannot know why this project exists, what it is
-competing with, which parts are being sunset, or how it relates to other
-projects. None of that is in the repository. A plausible-but-wrong intent
-document is worse than an empty one, because it will be read as authoritative
-and nobody will think to correct it.
-
-If you catch yourself writing "this project aims to", "the goal of this is",
-or "this was built because" — stop. You are inventing.
-
-Do NOT summarize the README. If someone wanted the README they would read it.
-
-Do NOT describe anything you have not verified. Run the build. Run the tests.
-If a documented command fails, that failure is more valuable than the command
-— write down what actually works.
-
-## Deliverables
-
-Call `propose_knowledge` once per document. Call `checkpoint` between
-documents so the human can follow along.
-
-1. `toolchain.md` — how to build, test, lint, and run. Commands you have
-   actually executed, with anything surprising about them. If setup has a
-   step that is easy to miss, that step is the most valuable line in the doc.
-
-2. `architecture.md` — what talks to what, at module level only. The shape a
-   newcomer needs before any individual file makes sense. No file listings,
-   no function signatures.
-
-3. `practices.md` — conventions you can demonstrate hold across MANY files.
-   Error handling, naming, test layout, how new modules get wired in. For
-   each convention, having read enough to be confident it is a convention and
-   not one author's habit is the requirement. If you saw it three times, say
-   so; if you saw it once, leave it out.
-
-4. `gotchas.md` — the highest-value document. Mine READMEs, TODO and FIXME
-   comments, comments that warn ("don't", "note that", "this must", "careful"),
-   and commit messages describing fixes. You are looking for what would have
-   saved the last agent an hour. Prefer one real trap to five true
-   observations.
-
-5. `overview.md` — A STUB. Do not write prose here. Write the questions only
-   a human can answer, as a checklist for them to fill in. For example: what
-   is this for, who uses it, what would break if it stopped, which parts are
-   being sunset. You may note what the repository *appears* to do in one
-   sentence clearly marked as an inference, and nothing more.
-
-6. `connections.md` — A STUB, for the same reason. How this project relates
-   to others is not in this repository. List what you found that HINTS at
-   external relationships — service URLs, shared package names, API clients,
-   deploy config referencing other systems — as questions, not conclusions.
-
-## Rules
-
-- Hard cap 40 lines per document. A long generated doc is more surface area
-  to go stale and more noise in every future retrieval.
-- Write for an agent that lands in this repo tomorrow knowing nothing.
-- Prefer "X because Y" to "X". The reason is the part that is not greppable.
-- If a document would have fewer than five worthwhile lines, propose it
-  anyway with only those lines. Padding is worse than brevity.
-- Do not modify any file in the repository. You are reading and reporting.
-````
+**Written but unproven.** No agent has run it yet, and nothing before that
+point is evidence: a prompt that reads well is exactly the failure mode this
+step is guarding against. The next action is one real bootstrap run against
+this repository, then reading the six documents and asking whether you would
+have wanted them. Expect to iterate — treat the first output as a draft of
+the prompt, not of the knowledge base.
 
 Two things this prompt is deliberately doing:
 
