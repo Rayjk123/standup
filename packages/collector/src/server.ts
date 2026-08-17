@@ -88,7 +88,7 @@ import {
   WORKTREE_ROOT_SETTING,
 } from "./launcher.js";
 import { askExpert, loadRegions } from "./expert.js";
-import { bootstrapPrompt } from "./bootstrap-prompt.js";
+import { bootstrapPrompt, reviseDraftPrompt } from "./bootstrap-prompt.js";
 import { isInternalCwd } from "./internal-cwd.js";
 import { verifyDraft } from "./draft-verify.js";
 import {
@@ -544,6 +544,69 @@ export function createServer(
     });
 
     return c.json({ ok: true });
+  });
+
+  // Revise a draft from review feedback (the "revise with feedback" box).
+  //
+  // Runs as a fresh bootstrap-kind launch whose prompt is the current draft +
+  // the human's feedback, told to re-propose the SAME slug — so the draft is
+  // replaced in place (propose_knowledge overwrites a draft of the same slug),
+  // keeping its slug and re-running the fact-check. Bootstrap kind on purpose:
+  // it's the only kind propose_knowledge accepts. This is regenerate-with-
+  // guidance, not a live chat with the original session — see the design
+  // discussion; the original session is usually gone and its worktree cleaned,
+  // and an adopted session couldn't call propose_knowledge anyway (the gate is
+  // bootstrap-only).
+  app.post("/api/projects/:id/knowledge/drafts/:slug/revise", async (c) => {
+    const projectId = c.req.param("id");
+    const slug = c.req.param("slug");
+    const { feedback, model, effort } = await c.req
+      .json<{ feedback?: string; model?: string; effort?: string }>()
+      .catch(() => ({ feedback: undefined, model: undefined, effort: undefined }));
+
+    if (!feedback?.trim()) {
+      return c.json({ error: "feedback is required" }, 400);
+    }
+    if (model && !CLAUDE_MODELS.includes(model as ClaudeModel)) {
+      return c.json({ error: `Unknown model: ${model}` }, 400);
+    }
+    if (effort && !CLAUDE_EFFORTS.includes(effort as ClaudeEffort)) {
+      return c.json({ error: `Unknown effort level: ${effort}` }, 400);
+    }
+
+    const project = getProjects(store.db).find((p) => p.id === projectId);
+    if (!project) {
+      return c.json({ error: `Unknown project: ${projectId}` }, 404);
+    }
+
+    const draft = knowledgeSync?.getDraft(projectId, slug);
+    if (!draft) return c.json({ error: "Not found" }, 404);
+
+    try {
+      const result = await launchSession(store.db, {
+        project,
+        task: reviseDraftPrompt(
+          project,
+          { slug: draft.slug, title: draft.title, body: draft.body },
+          feedback.trim()
+        ),
+        label: `Revise ${slug}.md for ${project.name}`,
+        // Same judgment-work defaults as bootstrap; caller can override.
+        model: (model as ClaudeModel | undefined) ?? "opus",
+        effort: (effort as ClaudeEffort | undefined) ?? "high",
+        kind: "bootstrap",
+      });
+
+      broadcast({
+        type: "launch:started",
+        payload: result.launch,
+        timestamp: new Date().toISOString(),
+      });
+
+      return c.json(result);
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
   });
 
   // Accepts every pending draft that doesn't need a human decision first.

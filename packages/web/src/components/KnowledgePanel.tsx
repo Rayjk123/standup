@@ -145,6 +145,14 @@ export function KnowledgePanel({
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
   const [acceptAllNote, setAcceptAllNote] = useState<string | null>(null);
 
+  // Which draft (if any) has its feedback box open, and the feedback text.
+  const [reviseSlug, setReviseSlug] = useState<string | null>(null);
+  const [feedbackText, setFeedbackText] = useState("");
+  // slug → the revise launch id we're waiting on. While a slug is here, the
+  // draft shows "revising…"; it clears when the reloaded draft carries that
+  // launch id (the revision landed) or the draft is gone.
+  const [revisePending, setRevisePending] = useState<Record<string, string>>({});
+
   const [bootstrapBusy, setBootstrapBusy] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [bootstrapNote, setBootstrapNote] = useState<string | null>(null);
@@ -197,6 +205,25 @@ export function KnowledgePanel({
       setEditingDraftSlug(null);
     }
   }, [drafts, editingDraftSlug]);
+
+  // Stop showing "revising…" once the revision lands (a reloaded draft now
+  // carries the revise launch's id) or the draft is gone (accepted/discarded).
+  // Driven off the draft list rather than a timer, same as the live-fill above.
+  useEffect(() => {
+    setRevisePending((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      let changed = false;
+      const next = { ...prev };
+      for (const slug of Object.keys(prev)) {
+        const d = drafts.find((x) => x.slug === slug);
+        if (!d || d.generatedByLaunchId === prev[slug]) {
+          delete next[slug];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [drafts]);
 
   async function save(doc: { slug: string; title: string; body: string; tags: string }) {
     setBusy(true);
@@ -333,6 +360,35 @@ export function KnowledgePanel({
         method: "POST",
       });
       await loadDrafts();
+    } finally {
+      setDraftBusyFlag(slug, false);
+    }
+  }
+
+  async function reviseDraft(slug: string, feedback: string) {
+    setDraftBusyFlag(slug, true);
+    setDraftErrors((prev) => ({ ...prev, [slug]: "" }));
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/knowledge/drafts/${encodeURIComponent(slug)}/revise`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ feedback }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.launch?.status === "failed") {
+        setDraftErrors((prev) => ({
+          ...prev,
+          [slug]: data.error ?? data.launch?.error ?? "Revise failed to start",
+        }));
+        return;
+      }
+      // Remember the launch so we can tell when its revision lands.
+      setRevisePending((prev) => ({ ...prev, [slug]: data.launch.id }));
+      setReviseSlug(null);
+      setFeedbackText("");
     } finally {
       setDraftBusyFlag(slug, false);
     }
@@ -678,7 +734,47 @@ export function KnowledgePanel({
                   </div>
                 )}
 
-                {mergeSlug === draft.slug ? (
+                {revisePending[draft.slug] ? (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      background: theme.ground,
+                      border: `1px solid ${theme.running}44`,
+                      borderRadius: 6,
+                      padding: "8px 10px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: theme.running,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span style={{ fontSize: 11.5, color: theme.dim, lineHeight: 1.5, flex: 1 }}>
+                      Revising from your feedback — a new agent is rewriting this
+                      draft and it'll update here when it lands. Watch it in Feed.
+                    </span>
+                    <button
+                      onClick={() =>
+                        setRevisePending((prev) => {
+                          const next = { ...prev };
+                          delete next[draft.slug];
+                          return next;
+                        })
+                      }
+                      title="Stop showing this. The revision keeps running; the draft still updates when it lands."
+                      style={smallButton}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                ) : mergeSlug === draft.slug ? (
                   <div style={{ marginTop: 10 }}>
                     <span style={label}>
                       Merge into {draft.replacesSlug}.md — edit the two versions into one
@@ -714,6 +810,60 @@ export function KnowledgePanel({
                         Save merged doc
                       </button>
                       <button onClick={() => setMergeSlug(null)} style={smallButton}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : reviseSlug === draft.slug ? (
+                  <div style={{ marginTop: 10 }}>
+                    <span style={label}>Tell the agent what to change</span>
+                    <textarea
+                      value={feedbackText}
+                      onChange={(e) => setFeedbackText(e.target.value)}
+                      rows={5}
+                      autoFocus
+                      placeholder={
+                        "e.g. The build command is wrong — verify it against the repo and fix it.\n" +
+                        "Drop the section on X; it just restates a single file."
+                      }
+                      style={{
+                        ...field,
+                        fontFamily: theme.mono,
+                        fontSize: 12,
+                        lineHeight: 1.55,
+                        resize: "vertical",
+                      }}
+                    />
+                    <div style={{ fontSize: 11, color: theme.faint, marginTop: 5, lineHeight: 1.5 }}>
+                      Spins up a fresh agent that rewrites this one draft and
+                      re-proposes it. It verifies against the repo, so it can take
+                      a few minutes.
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <button
+                        onClick={() => void reviseDraft(draft.slug, feedbackText)}
+                        disabled={busyThis || !feedbackText.trim()}
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          color: theme.ground,
+                          background: theme.expert,
+                          border: "none",
+                          borderRadius: 6,
+                          padding: "7px 14px",
+                          cursor: busyThis || !feedbackText.trim() ? "not-allowed" : "pointer",
+                          opacity: busyThis || !feedbackText.trim() ? 0.6 : 1,
+                        }}
+                      >
+                        {busyThis ? "Starting…" : "Send to agent"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setReviseSlug(null);
+                          setFeedbackText("");
+                        }}
+                        style={smallButton}
+                      >
                         Cancel
                       </button>
                     </div>
@@ -776,6 +926,18 @@ export function KnowledgePanel({
                       style={smallButton}
                     >
                       Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        setReviseSlug(draft.slug);
+                        setFeedbackText("");
+                        setMergeSlug(null);
+                      }}
+                      disabled={busyThis}
+                      title="Send feedback to a fresh agent that rewrites this draft and re-proposes it"
+                      style={smallButton}
+                    >
+                      Revise
                     </button>
                     <button
                       onClick={() => void discardDraft(draft.slug)}
