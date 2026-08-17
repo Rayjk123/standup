@@ -42,6 +42,19 @@ guessing. Both are optional; they only affect visibility, not correctness.`;
 export interface LaunchRequest {
   project: Project;
   task: string;
+  /**
+   * Short human-readable name for the launch, when `task` is unsuitable as
+   * one. `task` doubles as the agent's opening prompt and as the row's
+   * display text, which is fine while a prompt is a sentence someone typed
+   * — but a bootstrap run's prompt is a page of instructions, and using it
+   * unlabelled produced a branch named after its first forty characters and
+   * a feed entry that was a wall of text. Launches are meant to be watched
+   * and stopped; that is hard to do when you cannot tell them apart.
+   *
+   * Affects the worktree slug, branch name, and stored task only. The agent
+   * still receives the full `task`.
+   */
+  label?: string;
   /** Passed as `claude --model`; omitted means the CLI's own default. */
   model?: ClaudeModel;
   /** Passed as `claude --effort`; omitted means the CLI's own default. */
@@ -158,10 +171,11 @@ export function tmuxAvailable(): boolean {
  */
 export async function launchSession(
   db: Database,
-  { project, task, model, effort, kind }: LaunchRequest
+  { project, task, label, model, effort, kind }: LaunchRequest
 ): Promise<LaunchResult> {
   const log: string[] = [];
-  const slug = slugify(task);
+  const displayName = label ?? task;
+  const slug = slugify(displayName);
   const branch = `standup/${slug}`;
   const worktreePath = join(WORKTREE_ROOT, project.id, slug);
   const tmuxSession = `standup-${project.id}-${slug}`.slice(0, 100);
@@ -194,7 +208,8 @@ export async function launchSession(
     id: randomUUID(),
     kind,
     projectId: project.id,
-    task,
+    // The label when there is one — this is what the console renders.
+    task: displayName,
     worktreePath,
     branch,
     baseBranch: project.branch,

@@ -822,6 +822,9 @@ export function createServer(
       const result = await launchSession(store.db, {
         project,
         task: bootstrapPrompt(project),
+        // Without this the branch would be named after the prompt's first
+        // forty characters and the feed would show the whole page of it.
+        label: `Bootstrap knowledge for ${project.name}`,
         model: (model as ClaudeModel | undefined) ?? "opus",
         effort: (effort as ClaudeEffort | undefined) ?? "high",
         kind: "bootstrap",
