@@ -31,6 +31,8 @@ interface Args {
   setup?: string;
   launchArgs?: string;
   worktreeRoot?: string;
+  provision?: string;
+  launchSubdir?: string;
   expert?: string;
   repos: string[];
   help?: boolean;
@@ -52,6 +54,10 @@ Options:
                          e.g. "--permission-mode acceptEdits".
   --worktree-root <path> Where this project's launched worktrees are created.
                          Overrides the global default; ~ is expanded.
+  --provision <cmd>      Command that builds a launch's working dir, replacing
+                         'git worktree add'. Must create "$STANDUP_WORKDIR".
+  --launch-subdir <dir>  Subdir of the working dir to start the agent in
+                         (e.g. src/MyPackage for a Brazil workspace).
   --expert <index>       Expert retrieval index name (reserved).
   --repo <path>          A repo path; repeat for multiple. ~ is expanded.
   --help                 Show this message.
@@ -83,6 +89,8 @@ function parseArgs(argv: string[]): Args {
       case "--setup": args.setup = takeValue(); break;
       case "--launch-args": args.launchArgs = takeValue(); break;
       case "--worktree-root": args.worktreeRoot = takeValue(); break;
+      case "--provision": args.provision = takeValue(); break;
+      case "--launch-subdir": args.launchSubdir = takeValue(); break;
       case "--expert": args.expert = takeValue(); break;
       case "--repo": args.repos.push(takeValue()); break;
       case "--help":
@@ -127,6 +135,8 @@ async function main() {
     setup: args.setup,
     launchArgs: args.launchArgs,
     worktreeRoot: args.worktreeRoot,
+    provision: args.provision,
+    launchSubdir: args.launchSubdir,
     expert: args.expert,
     repos: args.repos,
   };

@@ -21,6 +21,15 @@ launchArgs = "--permission-mode acceptEdits"
 # default (settable in the UI / STANDUP_WORKTREE_ROOT). ~ is expanded. Point it
 # at a case-sensitive volume if Brazil builds need one.
 worktreeRoot = "~/workplace/standup-worktrees"
+# provision: a command that builds a launch's working dir, REPLACING the default
+# `git worktree add`. Use it when a plain worktree isn't buildable — e.g. a
+# Brazil package, which needs a real workspace. It must create $STANDUP_WORKDIR
+# (pass --name "$STANDUP_WORKDIR_NAME"); it also gets $STANDUP_REPO,
+# $STANDUP_BRANCH, $STANDUP_PROJECT. Omit for a normal git worktree.
+# provision = 'brazil workspace create --name "$STANDUP_WORKDIR_NAME" --versionSet MyVS/mainline --package MyPackage --package MyPackageTests'
+# launchSubdir: where inside the working dir the agent starts (and setup runs).
+# For a provisioned Brazil workspace, the package dir.
+# launchSubdir = "src/MyPackage"
 
 [[project]]
 id      = "content-tools"

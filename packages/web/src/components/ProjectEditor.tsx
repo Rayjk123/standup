@@ -55,6 +55,8 @@ export function ProjectEditor({
   const [expert, setExpert] = useState(project?.expert ?? "");
   const [launchArgs, setLaunchArgs] = useState(project?.launchArgs ?? "");
   const [worktreeRoot, setWorktreeRoot] = useState(project?.worktreeRoot ?? "");
+  const [provision, setProvision] = useState(project?.provision ?? "");
+  const [launchSubdir, setLaunchSubdir] = useState(project?.launchSubdir ?? "");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +93,8 @@ export function ProjectEditor({
       expert: expert.trim(),
       launchArgs: launchArgs.trim(),
       worktreeRoot: worktreeRoot.trim(),
+      provision: provision.trim(),
+      launchSubdir: launchSubdir.trim(),
     };
     if (isNew) patch.id = id.trim();
 
@@ -269,6 +273,42 @@ export function ProjectEditor({
             Where this project's launched worktrees are created. Overrides the
             global default; leave blank to use it. Handy for checking out onto a
             case-sensitive volume. A leading ~ is expanded.
+          </div>
+        </div>
+
+        <div>
+          <span style={label}>Provision command (optional)</span>
+          <textarea
+            value={provision}
+            onChange={(e) => setProvision(e.target.value)}
+            rows={3}
+            placeholder={
+              'brazil workspace create --name "$STANDUP_WORKDIR_NAME" \\\n' +
+              "  --versionSet MyVS/mainline --package MyPackage --package MyPackageTests"
+            }
+            style={{ ...field, fontFamily: theme.mono, fontSize: 12, resize: "vertical" }}
+          />
+          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            Replaces <code>git worktree add</code> for launches. Must create the
+            directory <code>$STANDUP_WORKDIR</code> (pass{" "}
+            <code>--name "$STANDUP_WORKDIR_NAME"</code>). Also gets{" "}
+            <code>$STANDUP_REPO</code>, <code>$STANDUP_BRANCH</code>,{" "}
+            <code>$STANDUP_PROJECT</code>. Leave blank for a normal git worktree.
+          </div>
+        </div>
+
+        <div>
+          <span style={label}>Launch subdirectory (optional)</span>
+          <input
+            value={launchSubdir}
+            onChange={(e) => setLaunchSubdir(e.target.value)}
+            placeholder="src/MyPackage"
+            style={{ ...field, fontFamily: theme.mono, fontSize: 12 }}
+          />
+          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            Where inside the working dir the agent starts and setup runs. For a
+            provisioned Brazil workspace, the package dir (e.g.{" "}
+            <code>src/MyPackage</code>). Leave blank for the working dir itself.
           </div>
         </div>
       </div>

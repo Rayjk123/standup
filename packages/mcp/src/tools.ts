@@ -239,6 +239,21 @@ export const tools: Tool[] = [
             "global default; a leading ~ is expanded. Useful for checking out onto a specific " +
             "(e.g. case-sensitive) volume.",
         },
+        provision: {
+          type: "string",
+          description:
+            "Optional shell command that builds a launch's working directory, replacing the " +
+            "default `git worktree add` — e.g. `brazil workspace create --name \"$STANDUP_WORKDIR_NAME\" " +
+            "--versionSet VS --package P`. It must create the directory $STANDUP_WORKDIR (also gets " +
+            "$STANDUP_REPO, $STANDUP_BRANCH, $STANDUP_PROJECT). Use for Brazil packages, where a bare " +
+            "worktree can't build.",
+        },
+        launch_subdir: {
+          type: "string",
+          description:
+            "Optional subdirectory of the working dir to start the agent in (and run setup from), " +
+            "e.g. 'src/MyPackage' for a provisioned Brazil workspace.",
+        },
       },
       required: ["id"],
     },
@@ -443,6 +458,8 @@ async function dispatch(
         // the API fields are camelCase. Map them across here.
         launchArgs: args.launch_args,
         worktreeRoot: args.worktree_root,
+        provision: args.provision,
+        launchSubdir: args.launch_subdir,
       });
 
       const moved = result.movedSessions

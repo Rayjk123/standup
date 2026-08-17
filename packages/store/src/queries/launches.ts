@@ -15,6 +15,7 @@ interface LaunchRow {
   error: string | null;
   model: string | null;
   effort: string | null;
+  provisioned: number | null;
   created_at: string;
 }
 
@@ -33,6 +34,7 @@ function toLaunch(row: LaunchRow): Launch {
     error: row.error ?? undefined,
     model: (row.model as Launch["model"]) ?? undefined,
     effort: (row.effort as Launch["effort"]) ?? undefined,
+    provisioned: row.provisioned === 1,
     createdAt: new Date(row.created_at),
   };
 }
@@ -46,8 +48,8 @@ export function createLaunch(
 ): Launch {
   db.run(
     `INSERT INTO launches
-       (id, kind, project_id, task, worktree_path, branch, base_branch, tmux_session, session_id, status, model, effort)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, kind, project_id, task, worktree_path, branch, base_branch, tmux_session, session_id, status, model, effort, provisioned)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       launch.id,
       launch.kind ?? "worktree",
@@ -61,6 +63,7 @@ export function createLaunch(
       launch.status ?? "starting",
       launch.model ?? null,
       launch.effort ?? null,
+      launch.provisioned ? 1 : 0,
     ]
   );
 

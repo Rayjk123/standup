@@ -36,8 +36,8 @@ function isWithin(root: string, target: string): boolean {
 
 export function upsertProject(db: Database, project: Project): void {
   db.run(
-    `INSERT INTO projects (id, name, emoji, icon_path, expert, branch, setup, launch_args, worktree_root, repos_json, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `INSERT INTO projects (id, name, emoji, icon_path, expert, branch, setup, launch_args, worktree_root, provision, launch_subdir, repos_json, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
        emoji = excluded.emoji,
@@ -47,6 +47,8 @@ export function upsertProject(db: Database, project: Project): void {
        setup = excluded.setup,
        launch_args = excluded.launch_args,
        worktree_root = excluded.worktree_root,
+       provision = excluded.provision,
+       launch_subdir = excluded.launch_subdir,
        repos_json = excluded.repos_json,
        updated_at = datetime('now')`,
     [
@@ -59,6 +61,8 @@ export function upsertProject(db: Database, project: Project): void {
       project.setup ?? null,
       project.launchArgs ?? null,
       project.worktreeRoot ?? null,
+      project.provision ?? null,
+      project.launchSubdir ?? null,
       JSON.stringify(project.repos),
     ]
   );
@@ -75,6 +79,8 @@ export function getProjects(db: Database): Project[] {
     setup: string | null;
     launch_args: string | null;
     worktree_root: string | null;
+    provision: string | null;
+    launch_subdir: string | null;
     repos_json: string;
   }>;
 
@@ -88,6 +94,8 @@ export function getProjects(db: Database): Project[] {
     setup: row.setup ?? undefined,
     launchArgs: row.launch_args ?? undefined,
     worktreeRoot: row.worktree_root ?? undefined,
+    provision: row.provision ?? undefined,
+    launchSubdir: row.launch_subdir ?? undefined,
     repos: JSON.parse(row.repos_json),
   }));
 }

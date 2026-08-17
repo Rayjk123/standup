@@ -46,6 +46,15 @@ export function resolveWorktreeRoot(db: Database, project: Project): string {
 const STEP_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
+ * Provisioning gets its own, much longer cap: `brazil workspace create` with
+ * a version-set pull (or any real workspace materialization) routinely runs
+ * many minutes, well past a setup command. Overridable for slower machines.
+ */
+const PROVISION_TIMEOUT_MS = process.env.STANDUP_PROVISION_TIMEOUT_MS
+  ? parseInt(process.env.STANDUP_PROVISION_TIMEOUT_MS)
+  : 30 * 60 * 1000;
+
+/**
  * Appended to a launched agent's opening prompt.
  *
  * Self-reported checkpoints are what make the merged feed readable, but the
@@ -176,21 +185,25 @@ async function run(
 async function runShell(
   script: string,
   cwd: string,
-  log: string[]
+  log: string[],
+  extraEnv?: Record<string, string>,
+  timeoutMs: number = STEP_TIMEOUT_MS
 ): Promise<{ ok: boolean; output: string }> {
-  // Setup commands come from projects.toml and are shell strings by design
-  // ("uv sync && docker compose up -d"), so they need a shell to interpret
-  // them. This is the user's own config running on the user's own machine —
-  // the same trust level as a Makefile — but it is arbitrary code execution,
-  // so it only ever runs on an explicit launch, never on collector startup.
+  // Setup and provision commands come from projects.toml and are shell strings
+  // by design ("uv sync && docker compose up -d"), so they need a shell to
+  // interpret them. This is the user's own config running on the user's own
+  // machine — the same trust level as a Makefile — but it is arbitrary code
+  // execution, so it only ever runs on an explicit launch, never on collector
+  // startup.
   log.push(`$ ${script}`);
 
   const proc = Bun.spawn(["/bin/sh", "-c", script], {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
+    env: extraEnv ? { ...process.env, ...extraEnv } : process.env,
   });
-  const timer = setTimeout(() => proc.kill(), STEP_TIMEOUT_MS);
+  const timer = setTimeout(() => proc.kill(), timeoutMs);
 
   const [stdout, stderr] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -229,10 +242,21 @@ export async function launchSession(
   const log: string[] = [];
   const displayName = label ?? task;
   const slug = slugify(displayName);
-  const branch = `standup/${slug}`;
   const worktreeRoot = resolveWorktreeRoot(db, project);
   const worktreePath = join(worktreeRoot, project.id, slug);
   const tmuxSession = `standup-${project.id}-${slug}`.slice(0, 100);
+
+  // A `provision` command replaces `git worktree add` — the working dir is
+  // whatever that command produces (e.g. a whole Brazil workspace), not a git
+  // worktree, so there's no branch and cleanup can't be a git op.
+  const provisionCmd = project.provision?.trim();
+  const usesProvision = !!provisionCmd;
+  const branch = usesProvision ? "(provisioned — no worktree)" : `standup/${slug}`;
+
+  // Where the agent actually starts and setup runs. For a provisioned Brazil
+  // workspace the package sits at src/<pkg>, so launchSubdir points there.
+  const subdir = project.launchSubdir?.trim();
+  const launchCwd = subdir ? join(worktreePath, subdir) : worktreePath;
 
   const repo = project.repos[0];
   if (!repo) {
@@ -242,7 +266,10 @@ export async function launchSession(
   }
   const repoPath = repo.replace(/^~/, homedir());
 
-  if (!existsSync(repoPath)) {
+  // A provision command materializes its own working dir, so repos[0] need
+  // not be a checkout on disk (it's only used as $STANDUP_REPO context). The
+  // git-worktree path does need it to exist.
+  if (!usesProvision && !existsSync(repoPath)) {
     throw new Error(`Repo path does not exist: ${repoPath}`);
   }
 
@@ -271,34 +298,70 @@ export async function launchSession(
     status: "starting",
     model,
     effort,
+    provisioned: usesProvision,
   });
 
   try {
-    // Verify it's actually a git repo before trying to add a worktree, so
-    // the error names the real problem instead of a git usage message.
-    const isRepo = await run(
-      ["git", "rev-parse", "--is-inside-work-tree"],
-      repoPath,
-      log
-    );
-    if (!isRepo.ok) {
-      throw new Error(`Not a git repository: ${repoPath}`);
-    }
-
     await mkdir(join(worktreeRoot, project.id), { recursive: true });
 
-    const base = project.branch || "HEAD";
-    const worktree = await run(
-      ["git", "worktree", "add", "-b", branch, worktreePath, base],
-      repoPath,
-      log
-    );
-    if (!worktree.ok) {
-      throw new Error(`git worktree add failed: ${worktree.output.slice(0, 300)}`);
+    if (usesProvision) {
+      // The command runs from the parent and must leave a ready directory at
+      // $STANDUP_WORKDIR — for `brazil workspace create` that means
+      // `--name "$STANDUP_WORKDIR_NAME"`, which creates ./<name> here.
+      const provisioned = await runShell(
+        provisionCmd!,
+        join(worktreeRoot, project.id),
+        log,
+        {
+          STANDUP_WORKDIR: worktreePath,
+          STANDUP_WORKDIR_NAME: slug,
+          STANDUP_REPO: repoPath,
+          STANDUP_BRANCH: branch,
+          STANDUP_PROJECT: project.id,
+        },
+        PROVISION_TIMEOUT_MS
+      );
+      if (!provisioned.ok) {
+        throw new Error(`provision command failed: ${provisioned.output.slice(0, 400)}`);
+      }
+      if (!existsSync(worktreePath)) {
+        throw new Error(
+          `provision command exited 0 but did not create ${worktreePath}. ` +
+            `It must produce that exact directory — pass --name "$STANDUP_WORKDIR_NAME" (or create "$STANDUP_WORKDIR").`
+        );
+      }
+    } else {
+      // Verify it's actually a git repo before trying to add a worktree, so
+      // the error names the real problem instead of a git usage message.
+      const isRepo = await run(
+        ["git", "rev-parse", "--is-inside-work-tree"],
+        repoPath,
+        log
+      );
+      if (!isRepo.ok) {
+        throw new Error(`Not a git repository: ${repoPath}`);
+      }
+
+      const base = project.branch || "HEAD";
+      const worktree = await run(
+        ["git", "worktree", "add", "-b", branch, worktreePath, base],
+        repoPath,
+        log
+      );
+      if (!worktree.ok) {
+        throw new Error(`git worktree add failed: ${worktree.output.slice(0, 300)}`);
+      }
+    }
+
+    if (subdir && !existsSync(launchCwd)) {
+      throw new Error(
+        `launchSubdir "${subdir}" does not exist under the working dir (${launchCwd}). ` +
+          `Check the provision command produced it.`
+      );
     }
 
     if (project.setup) {
-      const setup = await runShell(project.setup, worktreePath, log);
+      const setup = await runShell(project.setup, launchCwd, log);
       // Non-fatal: a failed `docker compose up` shouldn't discard a
       // correctly-created worktree. Surface it and let the agent start.
       if (!setup.ok) {
@@ -316,7 +379,7 @@ export async function launchSession(
         "-s",
         tmuxSession,
         "-c",
-        worktreePath,
+        launchCwd,
         "claude",
         ...modelEffortFlags(model, effort),
         // Per-project extra flags (e.g. --permission-mode acceptEdits).
@@ -324,7 +387,7 @@ export async function launchSession(
         ...tokenizeArgs(project.launchArgs),
         task + CHECKPOINT_INSTRUCTION,
       ],
-      worktreePath,
+      launchCwd,
       log
     );
     if (!spawned.ok) {
@@ -567,6 +630,29 @@ export async function cleanupLaunch(
     log.push(
       `Adopted session — left ${launch.worktreePath} untouched (it is the real repository, not a worktree).`
     );
+    return { ok: true, log };
+  }
+
+  // A provisioned working dir (a whole Brazil workspace, a clone, …) isn't a
+  // git worktree — `git worktree remove` can't touch it. Remove the directory
+  // itself, but ONLY if it sits under this project's own worktree root: that
+  // is the guarantee it's a dir Standup created, never a real repo a
+  // misconfigured provision command left pointing elsewhere.
+  if (launch.provisioned) {
+    const ownedPrefixRoot = join(resolveWorktreeRoot(db, project), project.id);
+    const target = launch.worktreePath;
+    if (target && (target === ownedPrefixRoot || target.startsWith(`${ownedPrefixRoot}/`))) {
+      const removed = await run(["rm", "-rf", target], "/", log);
+      if (!removed.ok) {
+        log.push("[warn] failed to remove provisioned dir; remove it manually");
+      }
+    } else {
+      log.push(
+        `[warn] refusing to remove ${target} — it is not under this project's worktree root ` +
+          `(${ownedPrefixRoot}). Remove it by hand if it really is a Standup working dir.`
+      );
+    }
+    updateLaunchStatus(db, launch.id, "cleaned");
     return { ok: true, log };
   }
 

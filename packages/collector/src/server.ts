@@ -273,6 +273,8 @@ export function createServer(
       branch: body.branch || "main",
       launchArgs: body.launchArgs || undefined,
       worktreeRoot: body.worktreeRoot || undefined,
+      provision: body.provision || undefined,
+      launchSubdir: body.launchSubdir || undefined,
     };
 
     upsertProject(store.db, project);
@@ -312,6 +314,12 @@ export function createServer(
         body.worktreeRoot !== undefined
           ? body.worktreeRoot || undefined
           : existing.worktreeRoot,
+      provision:
+        body.provision !== undefined ? body.provision || undefined : existing.provision,
+      launchSubdir:
+        body.launchSubdir !== undefined
+          ? body.launchSubdir || undefined
+          : existing.launchSubdir,
     };
 
     upsertProject(store.db, updated);

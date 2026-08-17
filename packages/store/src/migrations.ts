@@ -259,6 +259,27 @@ const MIGRATIONS = [
   `
   ALTER TABLE projects ADD COLUMN worktree_root TEXT;
   `,
+
+  // Migration 011: projects.provision / projects.launch_subdir
+  //
+  // provision replaces `git worktree add` with a custom command that builds a
+  // usable working dir (e.g. `brazil workspace create … --package …`).
+  // launch_subdir is where inside it the agent starts and setup runs (e.g.
+  // `src/<pkg>` for a Brazil workspace). Both NULL → default worktree behavior.
+  `
+  ALTER TABLE projects ADD COLUMN provision TEXT;
+  ALTER TABLE projects ADD COLUMN launch_subdir TEXT;
+  `,
+
+  // Migration 012: launches.provisioned
+  //
+  // Marks a launch whose working dir came from a project `provision` command
+  // rather than `git worktree add`. Cleanup keys off it — a provisioned dir is
+  // a path-guarded `rm -rf`, never `git worktree remove`. Existing rows are
+  // all worktree launches (0), the safe default.
+  `
+  ALTER TABLE launches ADD COLUMN provisioned INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function runMigrations(db: Database): void {

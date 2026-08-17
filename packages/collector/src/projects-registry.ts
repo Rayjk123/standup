@@ -120,6 +120,10 @@ export class ProjectsRegistry {
           lines.push(`launchArgs = ${JSON.stringify(p.launchArgs)}`);
         if (p.worktreeRoot)
           lines.push(`worktreeRoot = ${JSON.stringify(p.worktreeRoot)}`);
+        if (p.provision)
+          lines.push(`provision = ${JSON.stringify(p.provision)}`);
+        if (p.launchSubdir)
+          lines.push(`launchSubdir = ${JSON.stringify(p.launchSubdir)}`);
         return lines.join("\n");
       })
       .join("\n\n");
