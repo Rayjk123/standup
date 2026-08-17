@@ -84,11 +84,23 @@ export default function App() {
       }
 
       case "checkpoint:new":
-        setCheckpoints((prev) => [message.payload as Checkpoint, ...prev]);
+        setCheckpoints((prev) => {
+          const c = message.payload as Checkpoint;
+          return prev.some((x) => x.id === c.id) ? prev : [c, ...prev];
+        });
         break;
 
       case "ask:new":
-        setAsks((prev) => [message.payload as Ask, ...prev]);
+        // Dedup by id: the same broadcast can reach us more than once — a
+        // socket that reconnects, or two live sockets left by StrictMode/HMR
+        // in dev — and appending blindly stacked the same ask dozens of times,
+        // which read as a flood of duplicate "blocked" events. The server is
+        // the source of truth for how many asks exist; this just refuses to
+        // show one twice.
+        setAsks((prev) => {
+          const ask = message.payload as Ask;
+          return prev.some((a) => a.id === ask.id) ? prev : [ask, ...prev];
+        });
         break;
 
       case "ask:resolved": {
@@ -102,7 +114,10 @@ export default function App() {
         break;
 
       case "expert:exchange":
-        setExpertExchanges((prev) => [message.payload as ExpertExchange, ...prev]);
+        setExpertExchanges((prev) => {
+          const e = message.payload as ExpertExchange;
+          return prev.some((x) => x.id === e.id) ? prev : [e, ...prev];
+        });
         break;
 
       case "session:deleted":
