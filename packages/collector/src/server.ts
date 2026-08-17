@@ -80,6 +80,7 @@ import {
   sendToLaunch,
 } from "./launcher.js";
 import { askExpert, loadRegions } from "./expert.js";
+import { bootstrapPrompt } from "./bootstrap-prompt.js";
 import {
   readTranscript,
   transcriptPathForSession,
@@ -782,6 +783,60 @@ export function createServer(
       // Thrown only for misconfiguration caught before a launch row exists
       // (no repos, missing path); in-flight failures resolve to a "failed"
       // launch row instead.
+      return c.json({ error: (err as Error).message }, 400);
+    }
+  });
+
+  // Starts a knowledge-bootstrap run (phase-7 Step 3). Deliberately its own
+  // route rather than a `kind` flag on POST /launch — it needs a different
+  // model/effort default and, per the design, must never be reachable by
+  // anything automatic (no hook, no auto-run on project creation). It reuses
+  // launchSession wholesale: a bootstrap run gets a real worktree so its
+  // git HEAD is stable for the duration of the run, which is what makes
+  // generated_from_sha (stamped by /api/knowledge/propose) mean something.
+  //
+  // The task string is a Step 4 placeholder — see bootstrap-prompt.ts.
+  app.post("/api/projects/:id/bootstrap-knowledge", async (c) => {
+    const projectId = c.req.param("id");
+    const { model, effort } = await c.req.json<{ model?: string; effort?: string }>().catch(
+      () => ({ model: undefined, effort: undefined })
+    );
+
+    if (model && !CLAUDE_MODELS.includes(model as ClaudeModel)) {
+      return c.json({ error: `Unknown model: ${model}` }, 400);
+    }
+    if (effort && !CLAUDE_EFFORTS.includes(effort as ClaudeEffort)) {
+      return c.json({ error: `Unknown effort level: ${effort}` }, 400);
+    }
+
+    const project = getProjects(store.db).find((p) => p.id === projectId);
+    if (!project) {
+      return c.json({ error: `Unknown project: ${projectId}` }, 404);
+    }
+
+    try {
+      // Opus at high effort by default — deciding what NOT to write is the
+      // whole task (phase-7.md Step 3), so this is judgment work, not the
+      // kind of thing the CLI's own default model should be trusted with.
+      // The caller can still override, same as a normal launch.
+      const result = await launchSession(store.db, {
+        project,
+        task: bootstrapPrompt(project),
+        model: (model as ClaudeModel | undefined) ?? "opus",
+        effort: (effort as ClaudeEffort | undefined) ?? "high",
+        kind: "bootstrap",
+      });
+
+      broadcast({
+        type: "launch:started",
+        payload: result.launch,
+        timestamp: new Date().toISOString(),
+      });
+
+      return c.json(result);
+    } catch (err) {
+      // Same shape as POST /launch: thrown only for misconfiguration caught
+      // before a launch row exists (no repos, missing path).
       return c.json({ error: (err as Error).message }, 400);
     }
   });

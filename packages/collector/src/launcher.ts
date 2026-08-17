@@ -4,7 +4,7 @@ import { existsSync } from "fs";
 import { mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
 import type { Database } from "bun:sqlite";
-import type { ClaudeEffort, ClaudeModel, Launch, Project } from "@standup/shared";
+import type { ClaudeEffort, ClaudeModel, Launch, LaunchKind, Project } from "@standup/shared";
 import { createLaunch, updateLaunchStatus } from "@standup/store";
 
 const WORKTREE_ROOT =
@@ -46,6 +46,14 @@ export interface LaunchRequest {
   model?: ClaudeModel;
   /** Passed as `claude --effort`; omitted means the CLI's own default. */
   effort?: ClaudeEffort;
+  /**
+   * worktree = ordinary launch (the default); bootstrap = a knowledge-
+   * bootstrap run (phase-7 Step 3). Both take the exact same path below —
+   * a real worktree, the setup command, a tmux session — the only
+   * difference is what's recorded on the launch row, which is what lets
+   * propose_knowledge's gate (server.ts) tell them apart.
+   */
+  kind?: LaunchKind;
 }
 
 /** Builds the trailing `--model`/`--effort` flags for a `claude` invocation. */
@@ -150,7 +158,7 @@ export function tmuxAvailable(): boolean {
  */
 export async function launchSession(
   db: Database,
-  { project, task, model, effort }: LaunchRequest
+  { project, task, model, effort, kind }: LaunchRequest
 ): Promise<LaunchResult> {
   const log: string[] = [];
   const slug = slugify(task);
@@ -184,6 +192,7 @@ export async function launchSession(
 
   const launch = createLaunch(db, {
     id: randomUUID(),
+    kind,
     projectId: project.id,
     task,
     worktreePath,

@@ -285,13 +285,16 @@ prompt as the task.
   override available.
 - **Append `CHECKPOINT_INSTRUCTION`** (`launcher.ts:34`) as normal, so the
   run narrates itself into the feed rather than going dark for ten minutes.
-- **Explicitly triggered, never automatic.** A button on the project's
-  Knowledge tab, per `high-level-design.md:326-330`. It shows in the launches
-  list like any other launch and is stoppable with the existing controls.
+- **Explicitly triggered, never automatic**, per `high-level-design.md:326-330`
+  — no hook, no auto-run on project creation. It shows in the launches list
+  like any other launch and is stoppable with the existing controls.
 
-The button needs honest cost copy — this runs an agent across a whole
-repository. Something like *"Reads the repo and drafts ~6 knowledge docs for
-review. Runs as a normal launch, so you can watch and stop it."*
+**The trigger button belongs to Step 5, not here.** Step 3 is the route; the
+button lives on the project's Knowledge tab, which Step 5 already rebuilds
+for draft review, and splitting one component across two steps buys nothing.
+It needs honest cost copy — this runs an agent across a whole repository —
+something like *"Reads the repo and drafts ~6 knowledge docs for review. Runs
+as a normal launch, so you can watch and stop it."*
 
 ---
 
@@ -421,6 +424,9 @@ feels most like real documentation and is most nearly derivable.
 
 Extend `KnowledgePanel.tsx:50`. Drafts get a section above the doc list,
 shown only when drafts exist.
+
+Also carries the **bootstrap trigger button** (moved here from Step 3, whose
+route it calls) with the cost copy described there.
 
 Per draft: title, a provenance line (*generated from `43f6d2c`, 2 hours ago,
 by this launch* — link to the launch), the rendered body via the existing
