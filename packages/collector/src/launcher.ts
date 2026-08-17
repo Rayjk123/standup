@@ -77,6 +77,28 @@ function modelEffortFlags(model?: ClaudeModel, effort?: ClaudeEffort): string[] 
   return flags;
 }
 
+/**
+ * Splits a project's `launchArgs` string into argv tokens for the `claude`
+ * invocation.
+ *
+ * These go straight into the process argv (tmux runs `claude` directly, with
+ * no shell), so a plain whitespace split is wrong: `--append-system-prompt
+ * "be terse"` must stay two tokens, not four. Single and double quotes group
+ * a value; everything else splits on whitespace. Deliberately not a full
+ * shell parser — no variable expansion, globbing, or escapes — because these
+ * are literal CLI flags, not a shell command (that is what `setup` is for).
+ */
+export function tokenizeArgs(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  const tokens: string[] = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    tokens.push(m[1] ?? m[2] ?? m[3]);
+  }
+  return tokens;
+}
+
 export interface LaunchResult {
   launch: Launch;
   /** Human-readable log of what actually ran, surfaced in the UI on failure. */
@@ -265,6 +287,9 @@ export async function launchSession(
         worktreePath,
         "claude",
         ...modelEffortFlags(model, effort),
+        // Per-project extra flags (e.g. --permission-mode acceptEdits).
+        // Ordered before the positional prompt, same as --model/--effort.
+        ...tokenizeArgs(project.launchArgs),
         task + CHECKPOINT_INSTRUCTION,
       ],
       worktreePath,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Project } from "@standup/shared";
 import { theme } from "./theme";
 
@@ -53,15 +53,30 @@ export function ProjectEditor({
   const [setup, setSetup] = useState(project?.setup ?? "");
   const [branch, setBranch] = useState(project?.branch ?? "main");
   const [expert, setExpert] = useState(project?.expert ?? "");
+  const [launchArgs, setLaunchArgs] = useState(project?.launchArgs ?? "");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Shown briefly after a successful save. The "Configure" tab keeps this
+  // editor mounted after saving (unlike the new-project flow, which closes
+  // it), so without an explicit confirmation a save there produced no visible
+  // change at all — no way to tell it worked.
+  const [saved, setSaved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Clear the pending "Saved" auto-hide if the editor unmounts first.
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+    };
+  }, []);
 
   async function save() {
     if (busy) return;
     setBusy(true);
     setError(null);
+    setSaved(false);
 
     const patch: Partial<Project> = {
       name: name.trim() || id.trim(),
@@ -73,12 +88,19 @@ export function ProjectEditor({
       setup: setup.trim(),
       branch: branch.trim() || "main",
       expert: expert.trim(),
+      launchArgs: launchArgs.trim(),
     };
     if (isNew) patch.id = id.trim();
 
     try {
       const result = await onSave(patch);
-      if (result.error) setError(result.error);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setSaved(true);
+        if (savedTimer.current) clearTimeout(savedTimer.current);
+        savedTimer.current = setTimeout(() => setSaved(false), 2500);
+      }
     } finally {
       setBusy(false);
     }
@@ -217,6 +239,21 @@ export function ProjectEditor({
             you, with your permissions.
           </div>
         </div>
+
+        <div>
+          <span style={label}>Extra claude flags (optional)</span>
+          <input
+            value={launchArgs}
+            onChange={(e) => setLaunchArgs(e.target.value)}
+            placeholder="--permission-mode acceptEdits"
+            style={{ ...field, fontFamily: theme.mono, fontSize: 12 }}
+          />
+          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            Passed to <code>claude</code> when the console launches a session
+            for this project. Model and effort are chosen per-launch, so set
+            them in the composer, not here.
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -230,6 +267,20 @@ export function ProjectEditor({
           }}
         >
           {error}
+        </div>
+      )}
+
+      {saved && !error && (
+        <div
+          style={{
+            fontFamily: theme.mono,
+            fontSize: 11.5,
+            color: theme.checkpoint,
+            marginTop: 16,
+            lineHeight: 1.5,
+          }}
+        >
+          ✓ Saved
         </div>
       )}
 

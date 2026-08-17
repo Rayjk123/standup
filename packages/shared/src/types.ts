@@ -11,6 +11,14 @@ export interface Project {
   setup?: string;
   expert?: string; // retrieval index name
   branch: string;
+  /**
+   * Extra CLI flags passed to `claude` when the console launches a session
+   * for this project — e.g. `--permission-mode acceptEdits`. A single string,
+   * tokenized into argv at launch (quotes honored); unset means no extra
+   * flags. Not a shell command — that is `setup`. `--model`/`--effort` are
+   * chosen per-launch in the composer and are not set here.
+   */
+  launchArgs?: string;
 }
 
 export interface ProjectWithCounts extends Project {

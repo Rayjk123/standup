@@ -14,6 +14,9 @@ repos   = ["~/src/fusion-api", "~/src/fusion-graph"]
 setup   = "bun install && docker compose up -d"
 expert  = "fusion-api"   # retrieval index name, omit if none
 branch  = "main"
+# Extra flags passed to `claude` on every console-launched session for this
+# project. Omit if none. (Model/effort are chosen per-launch, not here.)
+launchArgs = "--permission-mode acceptEdits"
 
 [[project]]
 id      = "content-tools"

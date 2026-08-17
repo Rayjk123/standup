@@ -239,6 +239,16 @@ const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS idx_launches_project ON launches(project_id);
   CREATE INDEX IF NOT EXISTS idx_launches_worktree ON launches(worktree_path);
   `,
+
+  // Migration 009: projects.launch_args
+  //
+  // Extra CLI flags to pass `claude` when the console launches a session for
+  // a project (e.g. `--permission-mode acceptEdits`). Stored as a single
+  // string, like `setup`, and tokenized into argv at launch. NULL means no
+  // extra flags — never forced.
+  `
+  ALTER TABLE projects ADD COLUMN launch_args TEXT;
+  `,
 ];
 
 export function runMigrations(db: Database): void {

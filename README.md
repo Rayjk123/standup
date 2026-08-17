@@ -97,6 +97,7 @@ repos   = ["~/src/my-api"]
 setup   = "bun install"
 expert  = "my-api"
 branch  = "main"
+launchArgs = "--permission-mode acceptEdits"   # extra `claude` flags, omit if none
 ```
 
 The collector loads this file on startup and watches it for changes — edits

@@ -3,8 +3,8 @@ import type { Project } from "@standup/shared";
 
 export function upsertProject(db: Database, project: Project): void {
   db.run(
-    `INSERT INTO projects (id, name, emoji, icon_path, expert, branch, setup, repos_json, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `INSERT INTO projects (id, name, emoji, icon_path, expert, branch, setup, launch_args, repos_json, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
        emoji = excluded.emoji,
@@ -12,6 +12,7 @@ export function upsertProject(db: Database, project: Project): void {
        expert = excluded.expert,
        branch = excluded.branch,
        setup = excluded.setup,
+       launch_args = excluded.launch_args,
        repos_json = excluded.repos_json,
        updated_at = datetime('now')`,
     [
@@ -22,6 +23,7 @@ export function upsertProject(db: Database, project: Project): void {
       project.expert ?? null,
       project.branch,
       project.setup ?? null,
+      project.launchArgs ?? null,
       JSON.stringify(project.repos),
     ]
   );
@@ -36,6 +38,7 @@ export function getProjects(db: Database): Project[] {
     expert: string | null;
     branch: string;
     setup: string | null;
+    launch_args: string | null;
     repos_json: string;
   }>;
 
@@ -47,6 +50,7 @@ export function getProjects(db: Database): Project[] {
     expert: row.expert ?? undefined,
     branch: row.branch,
     setup: row.setup ?? undefined,
+    launchArgs: row.launch_args ?? undefined,
     repos: JSON.parse(row.repos_json),
   }));
 }

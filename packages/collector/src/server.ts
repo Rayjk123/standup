@@ -254,6 +254,7 @@ export function createServer(
       setup: body.setup || undefined,
       expert: body.expert || undefined,
       branch: body.branch || "main",
+      launchArgs: body.launchArgs || undefined,
     };
 
     upsertProject(store.db, project);
@@ -287,6 +288,8 @@ export function createServer(
       setup: body.setup !== undefined ? body.setup || undefined : existing.setup,
       expert: body.expert !== undefined ? body.expert || undefined : existing.expert,
       branch: body.branch || existing.branch,
+      launchArgs:
+        body.launchArgs !== undefined ? body.launchArgs || undefined : existing.launchArgs,
     };
 
     upsertProject(store.db, updated);
