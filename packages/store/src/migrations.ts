@@ -249,6 +249,16 @@ const MIGRATIONS = [
   `
   ALTER TABLE projects ADD COLUMN launch_args TEXT;
   `,
+
+  // Migration 010: projects.worktree_root
+  //
+  // Per-project override for where launched worktrees are created. NULL falls
+  // back to the global `worktree_root` setting, then STANDUP_WORKTREE_ROOT,
+  // then the built-in default. Lets a project be checked out onto a specific
+  // volume (e.g. a case-sensitive one for Brazil builds).
+  `
+  ALTER TABLE projects ADD COLUMN worktree_root TEXT;
+  `,
 ];
 
 export function runMigrations(db: Database): void {

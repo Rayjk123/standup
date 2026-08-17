@@ -118,6 +118,8 @@ export class ProjectsRegistry {
         lines.push(`branch  = ${JSON.stringify(p.branch)}`);
         if (p.launchArgs)
           lines.push(`launchArgs = ${JSON.stringify(p.launchArgs)}`);
+        if (p.worktreeRoot)
+          lines.push(`worktreeRoot = ${JSON.stringify(p.worktreeRoot)}`);
         return lines.join("\n");
       })
       .join("\n\n");

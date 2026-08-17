@@ -19,6 +19,14 @@ export interface Project {
    * chosen per-launch in the composer and are not set here.
    */
   launchArgs?: string;
+  /**
+   * Where this project's launched worktrees are created. Overrides the global
+   * `worktreeRoot` setting, which in turn overrides `STANDUP_WORKTREE_ROOT`
+   * and the built-in default. A leading `~` is expanded. Useful when a repo
+   * must be checked out onto a specific volume — e.g. a case-sensitive one so
+   * Brazil builds don't hit `CaseInsensitiveSymlinkingException`.
+   */
+  worktreeRoot?: string;
 }
 
 export interface ProjectWithCounts extends Project {

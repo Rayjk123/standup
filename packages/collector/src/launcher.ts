@@ -5,11 +5,42 @@ import { mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
 import type { Database } from "bun:sqlite";
 import type { ClaudeEffort, ClaudeModel, Launch, LaunchKind, Project } from "@standup/shared";
-import { createLaunch, updateLaunchStatus } from "@standup/store";
+import { createLaunch, updateLaunchStatus, getSetting } from "@standup/store";
 
-const WORKTREE_ROOT =
-  process.env.STANDUP_WORKTREE_ROOT ??
-  join(homedir(), ".local", "share", "standup", "worktrees");
+/** Built-in fallback when nothing else specifies where worktrees go. */
+const DEFAULT_WORKTREE_ROOT = join(
+  homedir(),
+  ".local",
+  "share",
+  "standup",
+  "worktrees"
+);
+
+/** Global-setting key mirrored by GET/PUT /api/settings. */
+export const WORKTREE_ROOT_SETTING = "worktree_root";
+
+/** Expands a leading `~` — unlike a shell, `join`/`mkdir` don't. */
+function expandTilde(p: string): string {
+  return p.startsWith("~") ? join(homedir(), p.slice(1)) : p;
+}
+
+/**
+ * Where a launch's worktree is created, most specific wins:
+ *   1. the project's own `worktreeRoot`
+ *   2. the global `worktree_root` setting (set from the UI)
+ *   3. the STANDUP_WORKTREE_ROOT env var (the original, pre-setting knob)
+ *   4. the built-in default under ~/.local/share
+ *
+ * Exported so the resolution is testable without spawning a real launch.
+ */
+export function resolveWorktreeRoot(db: Database, project: Project): string {
+  const chosen =
+    project.worktreeRoot?.trim() ||
+    getSetting(db, WORKTREE_ROOT_SETTING)?.trim() ||
+    process.env.STANDUP_WORKTREE_ROOT ||
+    DEFAULT_WORKTREE_ROOT;
+  return expandTilde(chosen);
+}
 
 /** Per-step cap so a wedged setup command can't hang the launch forever. */
 const STEP_TIMEOUT_MS = 5 * 60 * 1000;
@@ -199,7 +230,8 @@ export async function launchSession(
   const displayName = label ?? task;
   const slug = slugify(displayName);
   const branch = `standup/${slug}`;
-  const worktreePath = join(WORKTREE_ROOT, project.id, slug);
+  const worktreeRoot = resolveWorktreeRoot(db, project);
+  const worktreePath = join(worktreeRoot, project.id, slug);
   const tmuxSession = `standup-${project.id}-${slug}`.slice(0, 100);
 
   const repo = project.repos[0];
@@ -253,7 +285,7 @@ export async function launchSession(
       throw new Error(`Not a git repository: ${repoPath}`);
     }
 
-    await mkdir(join(WORKTREE_ROOT, project.id), { recursive: true });
+    await mkdir(join(worktreeRoot, project.id), { recursive: true });
 
     const base = project.branch || "HEAD";
     const worktree = await run(

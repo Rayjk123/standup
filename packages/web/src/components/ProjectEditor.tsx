@@ -54,6 +54,7 @@ export function ProjectEditor({
   const [branch, setBranch] = useState(project?.branch ?? "main");
   const [expert, setExpert] = useState(project?.expert ?? "");
   const [launchArgs, setLaunchArgs] = useState(project?.launchArgs ?? "");
+  const [worktreeRoot, setWorktreeRoot] = useState(project?.worktreeRoot ?? "");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +90,7 @@ export function ProjectEditor({
       branch: branch.trim() || "main",
       expert: expert.trim(),
       launchArgs: launchArgs.trim(),
+      worktreeRoot: worktreeRoot.trim(),
     };
     if (isNew) patch.id = id.trim();
 
@@ -252,6 +254,21 @@ export function ProjectEditor({
             Passed to <code>claude</code> when the console launches a session
             for this project. Model and effort are chosen per-launch, so set
             them in the composer, not here.
+          </div>
+        </div>
+
+        <div>
+          <span style={label}>Workspace root (optional)</span>
+          <input
+            value={worktreeRoot}
+            onChange={(e) => setWorktreeRoot(e.target.value)}
+            placeholder="~/workplace/standup-worktrees"
+            style={{ ...field, fontFamily: theme.mono, fontSize: 12 }}
+          />
+          <div style={{ fontSize: 11.5, color: theme.faint, marginTop: 5 }}>
+            Where this project's launched worktrees are created. Overrides the
+            global default; leave blank to use it. Handy for checking out onto a
+            case-sensitive volume. A leading ~ is expanded.
           </div>
         </div>
       </div>

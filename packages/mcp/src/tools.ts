@@ -232,6 +232,13 @@ export const tools: Tool[] = [
             "Optional extra flags passed to `claude` when the console launches a session for this " +
             "project, e.g. '--permission-mode acceptEdits'.",
         },
+        worktree_root: {
+          type: "string",
+          description:
+            "Optional path where this project's launched worktrees are created. Overrides the " +
+            "global default; a leading ~ is expanded. Useful for checking out onto a specific " +
+            "(e.g. case-sensitive) volume.",
+        },
       },
       required: ["id"],
     },
@@ -432,9 +439,10 @@ async function dispatch(
         branch: args.branch,
         repos: (args.repos as string[] | undefined) ?? [],
         setup: args.setup,
-        // The tool schema exposes launch_args (snake_case, matching the CLI
-        // flag); the API field is launchArgs. Map it across here.
+        // The tool schema exposes snake_case names (matching the CLI flags);
+        // the API fields are camelCase. Map them across here.
         launchArgs: args.launch_args,
+        worktreeRoot: args.worktree_root,
       });
 
       const moved = result.movedSessions

@@ -14,6 +14,7 @@ import { SilenceStrip } from "./SilenceStrip";
 import { ProjectEditor } from "./ProjectEditor";
 import { SessionControls } from "./SessionControls";
 import { TranscriptView } from "./TranscriptView";
+import { WorkspaceRootSetting } from "./WorkspaceRootSetting";
 import { KnowledgePanel } from "./KnowledgePanel";
 import { Composer } from "./Composer";
 
@@ -359,6 +360,7 @@ export function ProjectsView({
         >
           + New project
         </button>
+        <WorkspaceRootSetting />
         <div style={{ height: 20 }} />
       </div>
 

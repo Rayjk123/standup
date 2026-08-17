@@ -30,6 +30,7 @@ interface Args {
   branch?: string;
   setup?: string;
   launchArgs?: string;
+  worktreeRoot?: string;
   expert?: string;
   repos: string[];
   help?: boolean;
@@ -49,6 +50,8 @@ Options:
   --setup <cmd>          Setup command run in a fresh worktree before the agent.
   --launch-args <flags>  Extra flags passed to \`claude\` on launch,
                          e.g. "--permission-mode acceptEdits".
+  --worktree-root <path> Where this project's launched worktrees are created.
+                         Overrides the global default; ~ is expanded.
   --expert <index>       Expert retrieval index name (reserved).
   --repo <path>          A repo path; repeat for multiple. ~ is expanded.
   --help                 Show this message.
@@ -79,6 +82,7 @@ function parseArgs(argv: string[]): Args {
       case "--branch": args.branch = takeValue(); break;
       case "--setup": args.setup = takeValue(); break;
       case "--launch-args": args.launchArgs = takeValue(); break;
+      case "--worktree-root": args.worktreeRoot = takeValue(); break;
       case "--expert": args.expert = takeValue(); break;
       case "--repo": args.repos.push(takeValue()); break;
       case "--help":
@@ -122,6 +126,7 @@ async function main() {
     branch: args.branch ?? "main",
     setup: args.setup,
     launchArgs: args.launchArgs,
+    worktreeRoot: args.worktreeRoot,
     expert: args.expert,
     repos: args.repos,
   };

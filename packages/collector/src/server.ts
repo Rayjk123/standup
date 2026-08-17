@@ -43,6 +43,8 @@ import {
   recordExpertExchange,
   getRecentExpertExchanges,
   getRecentEventsBySession,
+  getSetting,
+  setSetting,
 } from "@standup/store";
 import {
   searchKnowledge,
@@ -83,6 +85,7 @@ import {
   adoptSession,
   captureLaunchOutput,
   sendToLaunch,
+  WORKTREE_ROOT_SETTING,
 } from "./launcher.js";
 import { askExpert, loadRegions } from "./expert.js";
 import { bootstrapPrompt } from "./bootstrap-prompt.js";
@@ -158,7 +161,12 @@ export function createServer(
   // var, so it can flip live without a collector restart.
   // ============================================================================
   app.get("/api/settings", (c) => {
-    return c.json({ autoCheckpoint: isAutoCheckpointEnabled(store.db) });
+    return c.json({
+      autoCheckpoint: isAutoCheckpointEnabled(store.db),
+      // "" (not null) so the client can render an empty input rather than
+      // guessing; empty means "fall back to env/default" at launch time.
+      worktreeRoot: getSetting(store.db, WORKTREE_ROOT_SETTING) ?? "",
+    });
   });
 
   app.put("/api/settings", async (c) => {
@@ -166,7 +174,15 @@ export function createServer(
     if (typeof body.autoCheckpoint === "boolean") {
       setAutoCheckpointEnabled(store.db, body.autoCheckpoint);
     }
-    return c.json({ autoCheckpoint: isAutoCheckpointEnabled(store.db) });
+    // A string (including "") sets it; "" clears the override, restoring the
+    // env/default fallback. Trimmed so stray whitespace doesn't become a path.
+    if (typeof body.worktreeRoot === "string") {
+      setSetting(store.db, WORKTREE_ROOT_SETTING, body.worktreeRoot.trim());
+    }
+    return c.json({
+      autoCheckpoint: isAutoCheckpointEnabled(store.db),
+      worktreeRoot: getSetting(store.db, WORKTREE_ROOT_SETTING) ?? "",
+    });
   });
 
   // ============================================================================
@@ -255,6 +271,7 @@ export function createServer(
       expert: body.expert || undefined,
       branch: body.branch || "main",
       launchArgs: body.launchArgs || undefined,
+      worktreeRoot: body.worktreeRoot || undefined,
     };
 
     upsertProject(store.db, project);
@@ -290,6 +307,10 @@ export function createServer(
       branch: body.branch || existing.branch,
       launchArgs:
         body.launchArgs !== undefined ? body.launchArgs || undefined : existing.launchArgs,
+      worktreeRoot:
+        body.worktreeRoot !== undefined
+          ? body.worktreeRoot || undefined
+          : existing.worktreeRoot,
     };
 
     upsertProject(store.db, updated);
