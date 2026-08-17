@@ -25,6 +25,13 @@ export default function App() {
     sessionId: "",
     n: 0,
   });
+  // Same shape as lastEvent, but for knowledge:draft — lets the Knowledge
+  // tab's draft list fill in live while a bootstrap run is in progress
+  // instead of only on next mount.
+  const [draftSignal, setDraftSignal] = useState<{ projectId: string; n: number }>({
+    projectId: "",
+    n: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   // `all=1` includes ended sessions. They're needed in the Projects tab so
@@ -46,6 +53,16 @@ export default function App() {
     fetch("/api/launches")
       .then((r) => r.json())
       .then(setLaunches)
+      .catch(() => {});
+
+  // Projects carry computed counts (knowledgeDocs, pendingDrafts) that only
+  // this endpoint fills in — projects:updated broadcasts the raw registry
+  // list without them, so anything that changes a count refetches here
+  // rather than trusting the socket payload.
+  const refreshProjects = () =>
+    fetch("/api/projects")
+      .then((r) => r.json())
+      .then(setProjects)
       .catch(() => {});
 
   // Runs synchronously per message — unlike storing just the latest message
@@ -97,6 +114,16 @@ export default function App() {
       case "launch:cleaned":
         refreshLaunches();
         break;
+
+      case "knowledge:draft": {
+        const { projectId } = message.payload as { projectId: string };
+        setDraftSignal((prev) => ({ projectId, n: prev.n + 1 }));
+        // Covers both directions: a draft landing bumps pendingDrafts, an
+        // accept bumps knowledgeDocs back down. Either way the sidebar
+        // badge is stale until this runs.
+        refreshProjects();
+        break;
+      }
     }
   }, []);
 
@@ -167,6 +194,7 @@ export default function App() {
       expertExchanges={expertExchanges}
       launches={launches}
       lastEvent={lastEvent}
+      draftSignal={draftSignal}
       onSessionChanged={refreshSessions}
       onLaunchChanged={() => {
         refreshLaunches();

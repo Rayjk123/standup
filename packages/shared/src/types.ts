@@ -16,6 +16,8 @@ export interface Project {
 export interface ProjectWithCounts extends Project {
   /** Knowledge docs indexed for this project. Computed, not persisted. */
   knowledgeDocs: number;
+  /** Pending drafts awaiting review (phase-7 Step 5). Computed, not persisted. */
+  pendingDrafts: number;
 }
 
 export interface ProjectConfig {

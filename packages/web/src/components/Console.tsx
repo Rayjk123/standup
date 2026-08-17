@@ -43,6 +43,7 @@ interface ConsoleProps {
   onLaunchChanged: () => void;
   onSessionChanged: () => void;
   lastEvent: { sessionId: string; n: number };
+  draftSignal: { projectId: string; n: number };
 }
 
 export function Console({
@@ -61,6 +62,7 @@ export function Console({
   onLaunchChanged,
   onSessionChanged,
   lastEvent,
+  draftSignal,
 }: ConsoleProps) {
   // The alert strip is hidden on Blocked, which is the one place it would be
   // redundant. Read from the route rather than tracked separately.
@@ -227,6 +229,7 @@ export function Console({
                 onSessionChanged={onSessionChanged}
                 onLaunch={onLaunch}
                 lastEvent={lastEvent}
+                draftSignal={draftSignal}
               />
             }
           />

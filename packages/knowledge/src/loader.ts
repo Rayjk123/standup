@@ -106,6 +106,13 @@ export class KnowledgeLoader {
           generatedAt: frontmatter.generated_at,
           generatedByLaunchId: frontmatter.generated_by_launch_id,
           replacesSlug: frontmatter.replaces_slug,
+          // The verification pass lives in the database, not the file, so a
+          // draft freshly read off disk always starts here — upsertDraft
+          // deliberately never writes these two columns, so a real verdict
+          // already on the row survives this object overwriting everything
+          // else on resync.
+          verdict: "unverified",
+          disputes: [],
         });
       }
     } catch (err) {

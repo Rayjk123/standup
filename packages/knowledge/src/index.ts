@@ -7,7 +7,13 @@ export {
   embedChunks,
   type EmbeddingProvider,
 } from "./embeddings.js";
-export type { KnowledgeDoc, KnowledgeChunk, KnowledgeDraft } from "./types.js";
+export type {
+  KnowledgeDoc,
+  KnowledgeChunk,
+  KnowledgeDraft,
+  DraftVerdict,
+  DraftDispute,
+} from "./types.js";
 export {
   listKnowledgeFiles,
   readKnowledgeFile,

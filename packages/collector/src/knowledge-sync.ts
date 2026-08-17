@@ -6,6 +6,7 @@ import {
   chunkText,
   embedChunks,
   type EmbeddingProvider,
+  type KnowledgeDraft,
 } from "@standup/knowledge";
 import { getProjects } from "@standup/store";
 
@@ -112,6 +113,26 @@ export class KnowledgeSync {
     disputes: unknown[]
   ): void {
     this.store.setDraftVerdict(projectId, slug, verdict, disputes);
+  }
+
+  /** Pending drafts for the review UI. Delegates straight to the store —
+   * syncDrafts is what keeps this current with `.drafts/` on disk, not this
+   * read itself. */
+  getDrafts(projectId: string): KnowledgeDraft[] {
+    return this.store.getDraftsByProject(projectId);
+  }
+
+  getDraft(projectId: string, slug: string): KnowledgeDraft | null {
+    return this.store.getDraft(projectId, slug);
+  }
+
+  /**
+   * Edited text is a claim that hasn't been checked — a verdict recorded
+   * against the draft's *previous* body would otherwise sit on the card
+   * looking current after the human changed what it says.
+   */
+  resetDraftVerdict(projectId: string, slug: string): void {
+    this.store.setDraftVerdict(projectId, slug, "unverified", []);
   }
 
   async syncAll(): Promise<void> {

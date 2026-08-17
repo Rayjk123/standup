@@ -35,6 +35,7 @@ interface ProjectsViewProps {
     effort?: ClaudeEffort
   ) => Promise<{ error?: string }>;
   lastEvent: { sessionId: string; n: number };
+  draftSignal: { projectId: string; n: number };
 }
 
 export function ProjectsView({
@@ -47,6 +48,7 @@ export function ProjectsView({
   onSessionChanged,
   onLaunch,
   lastEvent,
+  draftSignal,
 }: ProjectsViewProps) {
   // Selection lives in the path so it survives a refresh and can be linked
   // to. `kind` distinguishes a project from a session, since both are
@@ -221,6 +223,34 @@ export function ProjectsView({
                   {project.knowledgeDocs} knowledge doc
                   {project.knowledgeDocs === 1 ? "" : "s"}
                 </div>
+              )}
+
+              {/* Bootstrap can finish while you're on another tab entirely —
+                  without this, a run's output just sits there until you
+                  happen to open Knowledge and look. */}
+              {project.pendingDrafts > 0 && (
+                <button
+                  onClick={() => {
+                    setSelectedProject(project.id);
+                    setProjectTab("knowledge");
+                  }}
+                  title="Generated knowledge drafts awaiting your review"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    background: "none",
+                    border: "none",
+                    padding: "0 14px 6px 45px",
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    color: theme.waiting,
+                    cursor: "pointer",
+                  }}
+                >
+                  {project.pendingDrafts} draft{project.pendingDrafts === 1 ? "" : "s"} awaiting
+                  review
+                </button>
               )}
 
               {/* Sessions */}
@@ -445,7 +475,11 @@ export function ProjectsView({
             ) : (
               <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                 {projectTab === "knowledge" ? (
-                  <KnowledgePanel projectId={openProject.id} />
+                  <KnowledgePanel
+                    projectId={openProject.id}
+                    repos={openProject.repos}
+                    draftSignal={draftSignal}
+                  />
                 ) : (
                   <ProjectEditor
                     project={openProject}

@@ -408,6 +408,8 @@ interface DraftRow {
   generated_by_launch_id: string | null;
   replaces_slug: string | null;
   updated_at: string;
+  verdict: string;
+  disputes_json: string | null;
 }
 
 function rowToDraft(row: DraftRow): KnowledgeDraft {
@@ -424,5 +426,7 @@ function rowToDraft(row: DraftRow): KnowledgeDraft {
     generatedByLaunchId: row.generated_by_launch_id ?? undefined,
     replacesSlug: row.replaces_slug ?? undefined,
     updatedAt: new Date(row.updated_at),
+    verdict: (row.verdict as KnowledgeDraft["verdict"]) ?? "unverified",
+    disputes: row.disputes_json ? JSON.parse(row.disputes_json) : [],
   };
 }

@@ -94,6 +94,8 @@ describe("KnowledgeStore draft CRUD", () => {
       body: "watch out",
       filePath: "/x/.drafts/gotchas.md",
       updatedAt: new Date("2026-08-16T00:00:00Z"),
+      verdict: "unverified",
+      disputes: [],
       ...overrides,
     };
   }
@@ -143,5 +145,46 @@ describe("KnowledgeStore draft CRUD", () => {
     store.deleteDraft("proj", "gotchas");
 
     expect(store.getDraft("proj", "gotchas")).toBeNull();
+  });
+
+  test("a fresh draft defaults to 'unverified' with no disputes, not 'clean'", () => {
+    const db = new Database(":memory:");
+    const store = new KnowledgeStore(db);
+
+    store.upsertDraft(draft());
+
+    const got = store.getDraft("proj", "gotchas");
+    expect(got!.verdict).toBe("unverified");
+    expect(got!.disputes).toEqual([]);
+  });
+
+  test("setDraftVerdict round-trips a disputed verdict with its disputes", () => {
+    const db = new Database(":memory:");
+    const store = new KnowledgeStore(db);
+
+    store.upsertDraft(draft());
+    store.setDraftVerdict("proj", "gotchas", "disputed", [
+      { claim: "235 errors", finding: "actually 32", evidence: "bun run typecheck" },
+    ]);
+
+    const got = store.getDraft("proj", "gotchas");
+    expect(got!.verdict).toBe("disputed");
+    expect(got!.disputes).toEqual([
+      { claim: "235 errors", finding: "actually 32", evidence: "bun run typecheck" },
+    ]);
+  });
+
+  test("re-syncing a draft from disk (upsertDraft again) does not clobber a recorded verdict", () => {
+    // The loader has no way to know the verdict — it only reads the file —
+    // so a resync must not silently downgrade a 'disputed' draft back to
+    // 'unverified' just because the file was re-read unchanged.
+    const db = new Database(":memory:");
+    const store = new KnowledgeStore(db);
+
+    store.upsertDraft(draft());
+    store.setDraftVerdict("proj", "gotchas", "clean", []);
+    store.upsertDraft(draft({ body: "watch out (unchanged content, re-synced)" }));
+
+    expect(store.getDraft("proj", "gotchas")!.verdict).toBe("clean");
   });
 });

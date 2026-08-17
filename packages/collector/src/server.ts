@@ -50,9 +50,12 @@ import {
   writeKnowledgeFile,
   deleteKnowledgeFile,
   writeDraftFile,
+  acceptDraftFile,
+  deleteDraftFile,
   isValidSlug,
   type EmbeddingProvider,
 } from "@standup/knowledge";
+import { resolveAcceptMode, isAcceptAllEligible } from "./draft-accept.js";
 import type {
   ClaudeEffort,
   ClaudeModel,
@@ -204,10 +207,24 @@ export function createServer(
       ).map((r) => [r.project_id, r.n])
     );
 
+    // Same shape as knowledgeDocs above, and for the same reason: a
+    // bootstrap run that finishes while the user is on another tab is
+    // otherwise invisible until they happen to open Knowledge and look.
+    const pendingDraftCounts = new Map(
+      (
+        store.db
+          .query(
+            "SELECT project_id, COUNT(*) AS n FROM knowledge_drafts WHERE status = 'pending' GROUP BY project_id"
+          )
+          .all() as Array<{ project_id: string; n: number }>
+      ).map((r) => [r.project_id, r.n])
+    );
+
     return c.json(
       getProjects(store.db).map((p) => ({
         ...p,
         knowledgeDocs: counts.get(p.id) ?? 0,
+        pendingDrafts: pendingDraftCounts.get(p.id) ?? 0,
       }))
     );
   });
@@ -317,6 +334,191 @@ export function createServer(
   app.get("/api/projects/:id/knowledge", async (c) => {
     const docs = await listKnowledgeFiles(knowledgeDir, c.req.param("id"));
     return c.json(docs);
+  });
+
+  // ============================================================================
+  // Drafts (phase-7 Step 5 review UI) — registered before
+  // GET/PUT/DELETE /api/projects/:id/knowledge/:slug below on purpose. Hono
+  // matches routes in registration order, and ":slug" is a wildcard segment
+  // that would otherwise swallow "drafts" as if someone had a document
+  // literally named that.
+  // ============================================================================
+
+  app.get("/api/projects/:id/knowledge/drafts", async (c) => {
+    const projectId = c.req.param("id");
+    await knowledgeSync?.syncDrafts(projectId);
+    const drafts = knowledgeSync?.getDrafts(projectId) ?? [];
+
+    return c.json(
+      drafts.map((d) => ({
+        ...d,
+        // Resolved here so the review card can link to the launch that
+        // generated it with a single fetch — the draft row only carries the
+        // launch id, not where that launch's session lives.
+        launchSessionId: d.generatedByLaunchId
+          ? getLaunch(store.db, d.generatedByLaunchId)?.sessionId ?? null
+          : null,
+      }))
+    );
+  });
+
+  app.put("/api/projects/:id/knowledge/drafts/:slug", async (c) => {
+    const projectId = c.req.param("id");
+    const slug = c.req.param("slug");
+    const body = await c.req.json<{ title?: string; body?: string; tags?: string[] }>();
+
+    const existing = knowledgeSync?.getDraft(projectId, slug);
+    if (!existing) return c.json({ error: "Not found" }, 404);
+    if (!body.body?.trim()) {
+      return c.json({ error: "body is required" }, 400);
+    }
+
+    try {
+      // Provenance frontmatter is carried over explicitly. writeDraftFile
+      // only writes what it's given, and the point of an edit is changing
+      // the text, not silently dropping where the draft came from.
+      await writeDraftFile(knowledgeDir, projectId, {
+        slug,
+        title: body.title?.trim() || existing.title,
+        body: body.body,
+        tags: body.tags ?? existing.tags,
+        generatedFromSha: existing.generatedFromSha,
+        generatedAt: existing.generatedAt,
+        generatedByLaunchId: existing.generatedByLaunchId,
+        replacesSlug: existing.replacesSlug,
+      });
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+
+    await knowledgeSync?.syncDrafts(projectId);
+    // Edited text is a claim nobody has checked yet — leaving the old
+    // verdict attached would have it read as current when it describes a
+    // body that no longer exists.
+    knowledgeSync?.resetDraftVerdict(projectId, slug);
+
+    broadcast({
+      type: "knowledge:draft",
+      payload: { projectId, slug },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/projects/:id/knowledge/drafts/:slug/accept", async (c) => {
+    const projectId = c.req.param("id");
+    const slug = c.req.param("slug");
+    const body = await c.req
+      .json<{ mode?: string; title?: string; body?: string; tags?: string[] }>()
+      .catch(() => ({ mode: undefined, title: undefined, body: undefined, tags: undefined }));
+
+    const draft = knowledgeSync?.getDraft(projectId, slug);
+    if (!draft) return c.json({ error: "Not found" }, 404);
+
+    const mode = resolveAcceptMode(draft.replacesSlug, body.mode);
+
+    if (mode === "merge") {
+      // The default for a reason: the first real bootstrap run showed a
+      // regenerated draft is usually a supplement to what a human wrote,
+      // not a replacement, so accept needs the human's combined text rather
+      // than silently picking a side.
+      if (!body.body?.trim()) {
+        return c.json(
+          {
+            error:
+              "Merging requires a combined body — edit both versions into one before accepting, or choose replace instead.",
+          },
+          400
+        );
+      }
+      try {
+        // Deliberately written without provenance, unlike the replace path
+        // below (whose rename carries generated_from_sha through). A merged
+        // doc is partly the human's own prose, and staleness only ever flags
+        // docs with a sha — calling someone's edit outdated because the
+        // machine half of it aged is the second-guessing the design warns
+        // against.
+        await writeKnowledgeFile(knowledgeDir, projectId, {
+          slug: draft.replacesSlug!,
+          title: body.title?.trim() || draft.title,
+          body: body.body,
+          tags: body.tags ?? draft.tags,
+        });
+      } catch (err) {
+        return c.json({ error: (err as Error).message }, 400);
+      }
+      await deleteDraftFile(knowledgeDir, projectId, slug);
+    } else {
+      // mode === "replace", or null (nothing to replace — a first-bootstrap
+      // draft) — both are a plain move of the draft file into place.
+      const moved = await acceptDraftFile(knowledgeDir, projectId, slug);
+      if (!moved) return c.json({ error: "Not found" }, 404);
+    }
+
+    await knowledgeSync?.syncProject(projectId);
+    await knowledgeSync?.syncDrafts(projectId);
+    broadcastProjects();
+    broadcast({
+      type: "knowledge:draft",
+      payload: { projectId, slug },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json({ ok: true, mode: mode ?? "accept" });
+  });
+
+  app.post("/api/projects/:id/knowledge/drafts/:slug/discard", async (c) => {
+    const projectId = c.req.param("id");
+    const slug = c.req.param("slug");
+
+    const removed = await deleteDraftFile(knowledgeDir, projectId, slug);
+    if (!removed) return c.json({ error: "Not found" }, 404);
+
+    await knowledgeSync?.syncDrafts(projectId);
+    broadcast({
+      type: "knowledge:draft",
+      payload: { projectId, slug },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json({ ok: true });
+  });
+
+  // Accepts every pending draft that doesn't need a human decision first.
+  // Per phase-7.md Step 5, that is a real subset, not "all of them" —
+  // anything with replaces_slug set would silently overwrite existing work,
+  // and anything the verifier disputed is exactly what review exists to
+  // catch. Both are left pending and reported back so the UI can say why.
+  app.post("/api/projects/:id/knowledge/drafts/accept-all", async (c) => {
+    const projectId = c.req.param("id");
+    const pending = knowledgeSync?.getDrafts(projectId) ?? [];
+
+    const accepted: string[] = [];
+    const skipped: Array<{ slug: string; reason: "replaces" | "disputed" }> = [];
+
+    for (const draft of pending) {
+      if (!isAcceptAllEligible(draft)) {
+        skipped.push({
+          slug: draft.slug,
+          reason: draft.replacesSlug ? "replaces" : "disputed",
+        });
+        continue;
+      }
+      const moved = await acceptDraftFile(knowledgeDir, projectId, draft.slug);
+      if (moved) accepted.push(draft.slug);
+    }
+
+    await knowledgeSync?.syncProject(projectId);
+    await knowledgeSync?.syncDrafts(projectId);
+    broadcastProjects();
+    broadcast({
+      type: "knowledge:draft",
+      payload: { projectId, acceptedAll: true },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json({ accepted, skipped });
   });
 
   app.get("/api/projects/:id/knowledge/:slug", async (c) => {
