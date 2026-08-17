@@ -24,6 +24,31 @@ This trips you up constantly if you don't know it. Verified empirically:
 When in doubt about the MCP layer: start a fresh session. Everything else,
 just save the file.
 
+### Testing an MCP tool without a fresh session
+
+The table above is about a *live agent* seeing a tool. The server itself is
+just a process speaking JSON-RPC over stdio, so you can exercise it directly
+and skip the session dance entirely — which covers tool registration, schema,
+dispatch, and how a collector error surfaces back to the agent:
+
+```bash
+{ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}'
+  echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+  echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+  sleep 2
+} | COLLECTOR_URL=http://localhost:7777 bun run packages/mcp/src/index.ts
+```
+
+Add a `tools/call` line to invoke one for real. Run it with `cwd` set to the
+directory you want the call attributed to — correlation is derived from the
+process's cwd, so this is also how you test a tool that gates on which launch
+the caller is inside.
+
+What this does **not** cover is an agent *choosing* to call the tool, which is
+a prompt question rather than a plumbing one. `~/.claude.json` registers the
+server globally as `bun run <source path>`, so a fresh session anywhere picks
+up a new tool with no build step.
+
 ---
 
 ## Verifying each piece
