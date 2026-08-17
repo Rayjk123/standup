@@ -8,6 +8,16 @@ export interface SearchResult {
   excerpt: string;
   score: number;
   source: "text" | "embedding";
+  /**
+   * True when an agent drafted this doc and a human accepted it, false when a
+   * human wrote it from nothing. Keyed off `generated_from_sha` being present,
+   * so a doc a human merged or edited into shape counts as theirs.
+   *
+   * Exposed because whether provenance should change ranking is a question
+   * worth answering with numbers rather than assuming — the weight that
+   * consumes this lives in the caller, not here.
+   */
+  generated: boolean;
 }
 
 export interface SearchOptions {
@@ -85,7 +95,7 @@ function searchText(
 
   const rows = db
     .query(
-      `SELECT k.slug, k.title, k.body, bm25(knowledge_fts) as score
+      `SELECT k.slug, k.title, k.body, k.generated_from_sha, bm25(knowledge_fts) as score
        FROM knowledge_fts
        JOIN knowledge k ON k.id = knowledge_fts.id
        WHERE knowledge_fts MATCH ? AND k.project_id = ?
@@ -96,6 +106,7 @@ function searchText(
     slug: string;
     title: string;
     body: string;
+    generated_from_sha: string | null;
     score: number;
   }>;
 
@@ -105,6 +116,7 @@ function searchText(
     excerpt: extractExcerpt(row.body, query),
     score: Math.abs(row.score), // BM25 returns negative scores
     source: "text" as const,
+    generated: !!row.generated_from_sha,
   }));
 }
 
@@ -146,6 +158,7 @@ async function searchEmbeddings(
       excerpt: chunk.text.slice(0, 200) + (chunk.text.length > 200 ? "..." : ""),
       score: chunk.score,
       source: "embedding",
+      generated: chunk.generated,
     });
 
     if (results.length >= limit) break;
@@ -194,6 +207,9 @@ function mergeResults(
     excerpt: r.excerpt,
     score: r.textScore * textWeight + r.embeddingScore * embeddingWeight,
     source: r.textScore > r.embeddingScore ? ("text" as const) : ("embedding" as const),
+    // A property of the document, not of how it was found, so the two halves
+    // of a merged hit always agree and there is nothing to reconcile here.
+    generated: r.generated,
   }));
 
   // Sort by final score

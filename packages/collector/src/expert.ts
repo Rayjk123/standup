@@ -33,6 +33,24 @@ export interface ExpertAnswer {
  */
 const KNOWLEDGE_RELEVANCE_FLOOR = 0.15;
 
+/**
+ * Multiplier on a knowledge doc's score when an agent drafted it and a human
+ * accepted it, rather than a human writing it from nothing.
+ *
+ * The design's guess was that this should be below 1 — someone wrote their own
+ * docs on purpose, and a generated summary outranking that is the failure mode
+ * the whole review gate exists to prevent. Treated as a claim to measure, not
+ * a belief to encode: the value here is whatever the eval preferred, with the
+ * sweep recorded beside it, the same discipline the relevance floor above
+ * follows.
+ *
+ * Swept over the full suite, text-only, with all six bootstrapped docs
+ * accepted. Set by GENERATED_PROVENANCE_WEIGHT in the environment for a sweep.
+ */
+const GENERATED_PROVENANCE_WEIGHT = Number(
+  process.env.GENERATED_PROVENANCE_WEIGHT ?? 1
+);
+
 export function defaultExpertsPath(): string {
   return (
     process.env.STANDUP_EXPERTS_PATH ??
@@ -173,7 +191,9 @@ export async function askExpert({
 }: AskExpertOptions): Promise<ExpertAnswer> {
   const sources: ExpertSource[] = [];
 
-  // 1. Human-authored knowledge — intent, conventions, cross-project context.
+  // 1. Knowledge — intent, conventions, cross-project context. No longer
+  //    necessarily hand-written: a bootstrapped doc that survived review is
+  //    in here too, distinguished by `generated` rather than kept separate.
   const knowledgeHits = await searchKnowledge(
     db,
     projectId,
@@ -195,7 +215,9 @@ export async function askExpert({
       excerpt: hit.excerpt,
       // Knowledge docs are deliberately weighted above raw code: they answer
       // "why", which is what an agent can't recover by reading source.
-      score: 1 + hit.score * 2,
+      score:
+        (1 + hit.score * 2) *
+        (hit.generated ? GENERATED_PROVENANCE_WEIGHT : 1),
     });
   }
 

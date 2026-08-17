@@ -304,10 +304,12 @@ export class KnowledgeStore {
     title: string;
     text: string;
     embedding: number[];
+    generated: boolean;
   }> {
     const rows = this.db
       .query(
-        `SELECT kc.id as chunk_id, kc.knowledge_id, k.slug, k.title, kc.text, kc.embedding_json
+        `SELECT kc.id as chunk_id, kc.knowledge_id, k.slug, k.title, kc.text, kc.embedding_json,
+                k.generated_from_sha
          FROM knowledge_chunks kc
          JOIN knowledge k ON k.id = kc.knowledge_id
          WHERE k.project_id = ?`
@@ -319,6 +321,7 @@ export class KnowledgeStore {
       title: string;
       text: string;
       embedding_json: string;
+      generated_from_sha: string | null;
     }>;
 
     return rows.map((row) => ({
@@ -328,6 +331,10 @@ export class KnowledgeStore {
       title: row.title,
       text: row.text,
       embedding: JSON.parse(row.embedding_json),
+      // A sha means an agent wrote this and a human accepted it. Absent means
+      // a human wrote it from nothing. Retrieval is allowed to care about the
+      // difference; see the provenance weight in expert.ts.
+      generated: !!row.generated_from_sha,
     }));
   }
 

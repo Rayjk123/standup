@@ -19,6 +19,20 @@
 const COLLECTOR_URL = process.env.COLLECTOR_URL ?? "http://localhost:7777";
 const CWD = process.env.EVAL_CWD ?? process.cwd();
 
+/**
+ * Names a run so two of them can be compared with `diff` rather than by eye.
+ *
+ * Set it and the suite prints a stable PASS/FAIL block at the end, one line
+ * per case and nothing else. The normal output can't be diffed usefully — a
+ * failing case prints whichever sources it actually got, and those move
+ * between runs for reasons that have nothing to do with what changed.
+ *
+ *   EVAL_LABEL=before bun run eval:expert > /tmp/before.txt
+ *   EVAL_LABEL=after  bun run eval:expert > /tmp/after.txt
+ *   diff <(rg '^>>' /tmp/before.txt) <(rg '^>>' /tmp/after.txt)
+ */
+const EVAL_LABEL = process.env.EVAL_LABEL ?? "";
+
 interface EvalCase {
   name: string;
   question: string;
@@ -114,6 +128,41 @@ const CASES: EvalCase[] = [
     question: "Why is the sqlite database not stored inside the source tree?",
     expectSource: ["index.ts", "runbook.md"],
   },
+
+  // Capability cases (Phase 7, Step 7B).
+  //
+  // These exist to answer one question: does bootstrapped knowledge let the
+  // expert answer things it previously could not? So each one must FAIL with
+  // only hand-written docs in the corpus and PASS once the generated docs are
+  // accepted. A case that passes in both states measures nothing.
+  //
+  // All three were probed against the pre-acceptance corpus before being
+  // written down, and all three returned tangential code and no knowledge doc.
+  // One candidate was cut for passing already — "why can two agents in one
+  // directory write to the same session" surfaces session-id.ts unaided,
+  // because the code genuinely answers it.
+  //
+  // What makes these work is that the answer is an *absence* or a *judgment*:
+  // that no linter exists, that red typecheck output predates you, that
+  // per-session state is in memory and a reload drops it. None of that is
+  // greppable, which is the same property the prompt selects documents for.
+  {
+    name: "capability: knows there is no linter",
+    question: "Is there a linter set up here, and why does that command fail?",
+    expectSource: ["knowledge/toolchain"],
+  },
+  {
+    name: "capability: explains duplicate checkpoints after a reload",
+    question:
+      "Why do duplicate checkpoints show up right after the collector reloads?",
+    expectSource: ["knowledge/gotchas"],
+  },
+  {
+    name: "capability: pre-existing typecheck noise",
+    question:
+      "Should I worry about the red type errors that were already there before my change?",
+    expectSource: ["knowledge/toolchain"],
+  },
 ];
 
 interface ExpertResponse {
@@ -139,6 +188,7 @@ async function main() {
   let multiHopPassed = 0;
   let multiHopTotal = 0;
   const failures: string[] = [];
+  const outcomes: Array<[string, boolean]> = [];
 
   for (const testCase of CASES) {
     if (testCase.multiHop) multiHopTotal++;
@@ -149,6 +199,7 @@ async function main() {
     } catch (err) {
       console.log(`✗ ${testCase.name}\n    request failed: ${(err as Error).message}\n`);
       failures.push(testCase.name);
+      outcomes.push([testCase.name, false]);
       continue;
     }
 
@@ -157,6 +208,8 @@ async function main() {
     );
     const regionOk =
       !testCase.expectRegion || result.region === testCase.expectRegion;
+
+    outcomes.push([testCase.name, sourceHit && regionOk]);
 
     if (sourceHit && regionOk) {
       passed++;
@@ -184,6 +237,16 @@ async function main() {
     `multi-hop: ${multiHopPassed}/${multiHopTotal} — these are the cases the ` +
       `design predicts a topic-partitioned index would lose`
   );
+
+  if (EVAL_LABEL) {
+    // The label names the run in the header only. Prefixing every result line
+    // with it would make the two runs differ on every line and defeat the
+    // point; `>>` is the stable marker to filter on.
+    console.log(`\n--- results: ${EVAL_LABEL} ---`);
+    for (const [name, ok] of outcomes) {
+      console.log(`>> ${ok ? "PASS" : "FAIL"} ${name}`);
+    }
+  }
 
   if (failures.length > 0) {
     console.log(`\nFailing: ${failures.join(", ")}`);
