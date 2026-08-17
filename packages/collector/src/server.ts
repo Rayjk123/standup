@@ -108,6 +108,7 @@ import {
   isAutoCheckpointEnabled,
   setAutoCheckpointEnabled,
   clearAutoCheckpointState,
+  generateSessionTitle,
 } from "./auto-checkpoint.js";
 
 /** Standup's own MCP tools — nudging on these would feed back on itself. */
@@ -1718,6 +1719,56 @@ function describePendingTool(store: Store, sessionId: string): string | null {
   return `${p.tool_name}${inputText ? ` — ${inputText.slice(0, 300)}` : ""}`;
 }
 
+/** Longest a plain (non-Haiku) session title runs before it's truncated. */
+const MONITORED_TITLE_MAX = 150;
+
+/**
+ * Titles a session from its first user prompt.
+ *
+ * Only the first prompt titles a session — updateSessionTitle no-ops once a
+ * title is set, and a launched session already carries its task as the title,
+ * so both are guarded here to avoid firing a Haiku call on every later prompt.
+ *
+ * With auto-checkpoint on, spend a cheap Haiku call (the same budget the user
+ * already opted into) to make the title succinct and about the task rather
+ * than the raw first 150 characters. It's async — the hook must return at once
+ * — and falls back to the truncation on failure; the IS-NULL guard in
+ * updateSessionTitle keeps whichever lands first from being clobbered. With it
+ * off, just truncate.
+ */
+function setInitialTitle(
+  store: Store,
+  sessionId: string,
+  prompt: string,
+  broadcast: WsBroadcast
+): void {
+  const session = getSession(store.db, sessionId);
+  if (session?.title) return;
+
+  // Collapse whitespace first, so a multi-line prompt yields a single-line
+  // title rather than a paragraph, then cap the length.
+  const truncated = prompt.replace(/\s+/g, " ").trim().slice(0, MONITORED_TITLE_MAX);
+
+  if (!isAutoCheckpointEnabled(store.db)) {
+    updateSessionTitle(store.db, sessionId, truncated);
+    return;
+  }
+
+  void generateSessionTitle(prompt)
+    .then((title) => {
+      updateSessionTitle(store.db, sessionId, title ?? truncated);
+      // Nudge every client to refetch — titles ride on the sessions list, and
+      // this landed a second or two after the prompt's own status broadcast.
+      const s = getSession(store.db, sessionId);
+      broadcast({
+        type: "session:status",
+        payload: { sessionId, status: s?.status ?? "running" },
+        timestamp: new Date().toISOString(),
+      });
+    })
+    .catch(() => updateSessionTitle(store.db, sessionId, truncated));
+}
+
 function handleHookEvent(
   store: Store,
   payload: HookPayload,
@@ -1781,8 +1832,9 @@ function handleHookEvent(
 
     case "UserPromptSubmit": {
       const p = payload as { prompt: string } & typeof payload;
-      // First prompt becomes the session title; later prompts don't overwrite it.
-      updateSessionTitle(store.db, session_id, p.prompt.slice(0, 100));
+      // First prompt becomes the session title; later prompts don't overwrite
+      // it. Succinct Haiku title when auto-checkpoint is on, else truncated.
+      setInitialTitle(store, session_id, p.prompt, broadcast);
       // A new turn is starting — the session is no longer idle/waiting.
       updateSessionStatus(store.db, session_id, "running");
       resetTurnNudges(session_id);
