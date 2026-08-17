@@ -91,6 +91,10 @@ function LaunchBody({
   onStopped: () => void;
 }) {
   const failed = launch.status === "failed";
+  // "starting" spans the whole provision/worktree/setup phase, which for a
+  // provisioned Brazil workspace runs for minutes. The tmux session doesn't
+  // exist yet, so no attach/controls — just say what's happening.
+  const starting = launch.status === "starting";
   const modelLabel = session?.liveModel
     ? friendlyModel(session.liveModel)
     : launch.model ?? "default";
@@ -113,6 +117,23 @@ function LaunchBody({
           }}
         >
           ✗ {launch.error ?? "Launch failed"}
+        </div>
+      ) : starting ? (
+        <div
+          style={{
+            fontFamily: theme.mono,
+            fontSize: 10.5,
+            color: theme.running,
+            marginTop: 7,
+          }}
+        >
+          ⧗ {launch.provisioned
+            ? "provisioning workspace… this can take a few minutes"
+            : "starting…"}
+          <span style={{ color: theme.faint }}>
+            {" "}
+            · {modelLabel} / {effortLabel}
+          </span>
         </div>
       ) : (
         <>

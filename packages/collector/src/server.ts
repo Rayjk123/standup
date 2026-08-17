@@ -64,6 +64,7 @@ import type {
   ClaudeEffort,
   ClaudeModel,
   HookPayload,
+  Launch,
   Project,
   Session,
   ToolUsePayload,
@@ -149,6 +150,20 @@ export function createServer(
       timestamp: new Date().toISOString(),
     });
   }
+
+  /**
+   * Pushes a launch row to clients — fired by launchSession's onUpdate at
+   * creation (status "starting") and again when the background provisioning
+   * work lands (running/failed). Every launch: event just tells the client to
+   * refetch, so this both surfaces a launch immediately and updates its state.
+   */
+  const broadcastLaunch = (launch: Launch): void => {
+    broadcast({
+      type: "launch:started",
+      payload: launch,
+      timestamp: new Date().toISOString(),
+    });
+  };
 
   // CORS for local development
   app.use("/*", cors({ origin: "http://localhost:5173" }));
@@ -592,27 +607,25 @@ export function createServer(
     if (!draft) return c.json({ error: "Not found" }, 404);
 
     try {
-      const result = await launchSession(store.db, {
-        project,
-        task: reviseDraftPrompt(
+      const result = await launchSession(
+        store.db,
+        {
           project,
-          { slug: draft.slug, title: draft.title, body: draft.body },
-          feedback.trim()
-        ),
-        label: `Revise ${slug}.md for ${project.name}`,
-        // Same judgment-work defaults as bootstrap; caller can override.
-        model: (model as ClaudeModel | undefined) ?? "opus",
-        effort: (effort as ClaudeEffort | undefined) ?? "high",
-        kind: "bootstrap",
-      });
+          task: reviseDraftPrompt(
+            project,
+            { slug: draft.slug, title: draft.title, body: draft.body },
+            feedback.trim()
+          ),
+          label: `Revise ${slug}.md for ${project.name}`,
+          // Same judgment-work defaults as bootstrap; caller can override.
+          model: (model as ClaudeModel | undefined) ?? "opus",
+          effort: (effort as ClaudeEffort | undefined) ?? "high",
+          kind: "bootstrap",
+        },
+        broadcastLaunch
+      );
 
-      broadcast({
-        type: "launch:started",
-        payload: result.launch,
-        timestamp: new Date().toISOString(),
-      });
-
-      return c.json(result);
+      return c.json({ launch: result.launch });
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400);
     }
@@ -1110,24 +1123,26 @@ export function createServer(
     }
 
     try {
-      const result = await launchSession(store.db, {
-        project,
-        task: task.trim(),
-        model: model as ClaudeModel | undefined,
-        effort: effort as ClaudeEffort | undefined,
-      });
+      // onUpdate broadcasts the launch on creation (status "starting") and
+      // again when the background work lands (running/failed) — so the feed
+      // shows it immediately and this request returns without waiting on a
+      // minutes-long provision.
+      const result = await launchSession(
+        store.db,
+        {
+          project,
+          task: task.trim(),
+          model: model as ClaudeModel | undefined,
+          effort: effort as ClaudeEffort | undefined,
+        },
+        broadcastLaunch
+      );
 
-      broadcast({
-        type: "launch:started",
-        payload: result.launch,
-        timestamp: new Date().toISOString(),
-      });
-
-      return c.json(result);
+      return c.json({ launch: result.launch });
     } catch (err) {
       // Thrown only for misconfiguration caught before a launch row exists
       // (no repos, missing path); in-flight failures resolve to a "failed"
-      // launch row instead.
+      // launch row broadcast via onUpdate instead.
       return c.json({ error: (err as Error).message }, 400);
     }
   });
@@ -1164,24 +1179,22 @@ export function createServer(
       // whole task (phase-7.md Step 3), so this is judgment work, not the
       // kind of thing the CLI's own default model should be trusted with.
       // The caller can still override, same as a normal launch.
-      const result = await launchSession(store.db, {
-        project,
-        task: bootstrapPrompt(project),
-        // Without this the branch would be named after the prompt's first
-        // forty characters and the feed would show the whole page of it.
-        label: `Bootstrap knowledge for ${project.name}`,
-        model: (model as ClaudeModel | undefined) ?? "opus",
-        effort: (effort as ClaudeEffort | undefined) ?? "high",
-        kind: "bootstrap",
-      });
+      const result = await launchSession(
+        store.db,
+        {
+          project,
+          task: bootstrapPrompt(project),
+          // Without this the branch would be named after the prompt's first
+          // forty characters and the feed would show the whole page of it.
+          label: `Bootstrap knowledge for ${project.name}`,
+          model: (model as ClaudeModel | undefined) ?? "opus",
+          effort: (effort as ClaudeEffort | undefined) ?? "high",
+          kind: "bootstrap",
+        },
+        broadcastLaunch
+      );
 
-      broadcast({
-        type: "launch:started",
-        payload: result.launch,
-        timestamp: new Date().toISOString(),
-      });
-
-      return c.json(result);
+      return c.json({ launch: result.launch });
     } catch (err) {
       // Same shape as POST /launch: thrown only for misconfiguration caught
       // before a launch row exists (no repos, missing path).

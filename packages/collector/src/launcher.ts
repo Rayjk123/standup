@@ -143,6 +143,15 @@ export interface LaunchResult {
   launch: Launch;
   /** Human-readable log of what actually ran, surfaced in the UI on failure. */
   log: string[];
+  /**
+   * Resolves when the background provisioning/worktree/setup/tmux work
+   * finishes (the launch row is `running` or `failed` by then). The launch
+   * flow is fire-and-forget — `launchSession` returns as soon as the row
+   * exists so the HTTP request doesn't hang for a minutes-long provision — so
+   * this is only for callers (tests) that need to await completion. Production
+   * endpoints ignore it and rely on the `onUpdate` broadcasts instead.
+   */
+  done?: Promise<void>;
 }
 
 /** Turns a task description into a filesystem/branch-safe slug. */
@@ -237,9 +246,9 @@ export function tmuxAvailable(): boolean {
  */
 export async function launchSession(
   db: Database,
-  { project, task, label, model, effort, kind }: LaunchRequest
+  { project, task, label, model, effort, kind }: LaunchRequest,
+  onUpdate?: (launch: Launch) => void
 ): Promise<LaunchResult> {
-  const log: string[] = [];
   const displayName = label ?? task;
   const slug = slugify(displayName);
   const worktreeRoot = resolveWorktreeRoot(db, project);
@@ -266,18 +275,13 @@ export async function launchSession(
   }
   const repoPath = repo.replace(/^~/, homedir());
 
-  // A provision command materializes its own working dir, so repos[0] need
-  // not be a checkout on disk (it's only used as $STANDUP_REPO context). The
-  // git-worktree path does need it to exist.
+  // Cheap preconditions run synchronously and throw, so the caller can turn a
+  // misconfiguration into a 400 before any launch row exists. A provision
+  // command materializes its own working dir, so repos[0] need not be a
+  // checkout on disk (it's only $STANDUP_REPO context); the worktree path does.
   if (!usesProvision && !existsSync(repoPath)) {
     throw new Error(`Repo path does not exist: ${repoPath}`);
   }
-
-  // Check every precondition before creating anything. These used to be
-  // checked inline, which meant a missing tmux surfaced only *after* the
-  // worktree was created and the setup command had run — leaving an
-  // orphaned worktree and branch behind for a failure that was knowable up
-  // front.
   if (!tmuxAvailable()) {
     throw new Error(
       "tmux is not installed — launches need it to host the session. " +
@@ -301,107 +305,118 @@ export async function launchSession(
     provisioned: usesProvision,
   });
 
-  try {
-    await mkdir(join(worktreeRoot, project.id), { recursive: true });
+  // Surface the launch the moment its row exists, BEFORE the slow work.
+  // Provisioning a Brazil workspace runs for minutes; the launch (and its
+  // task) has to be visible in the feed immediately, not appear only once the
+  // work finishes — and the HTTP request must not hang that whole time.
+  onUpdate?.(launch);
 
-    if (usesProvision) {
-      // The command runs from the parent and must leave a ready directory at
-      // $STANDUP_WORKDIR — for `brazil workspace create` that means
-      // `--name "$STANDUP_WORKDIR_NAME"`, which creates ./<name> here.
-      const provisioned = await runShell(
-        provisionCmd!,
-        join(worktreeRoot, project.id),
-        log,
-        {
-          STANDUP_WORKDIR: worktreePath,
-          STANDUP_WORKDIR_NAME: slug,
-          STANDUP_REPO: repoPath,
-          STANDUP_BRANCH: branch,
-          STANDUP_PROJECT: project.id,
-        },
-        PROVISION_TIMEOUT_MS
-      );
-      if (!provisioned.ok) {
-        throw new Error(`provision command failed: ${provisioned.output.slice(0, 400)}`);
+  // Everything expensive — provision or worktree, setup, tmux — runs detached.
+  // `launchSession` returns as soon as this is kicked off; status transitions
+  // (starting → running/failed) reach the UI through onUpdate, not the return.
+  const done = (async () => {
+    const log: string[] = [];
+    try {
+      await mkdir(join(worktreeRoot, project.id), { recursive: true });
+
+      if (usesProvision) {
+        // Runs from the parent; must leave a ready directory at $STANDUP_WORKDIR
+        // (for `brazil workspace create`, via --root "$STANDUP_WORKDIR").
+        const provisioned = await runShell(
+          provisionCmd!,
+          join(worktreeRoot, project.id),
+          log,
+          {
+            STANDUP_WORKDIR: worktreePath,
+            STANDUP_WORKDIR_NAME: slug,
+            STANDUP_REPO: repoPath,
+            STANDUP_BRANCH: branch,
+            STANDUP_PROJECT: project.id,
+          },
+          PROVISION_TIMEOUT_MS
+        );
+        if (!provisioned.ok) {
+          throw new Error(`provision command failed: ${provisioned.output.slice(0, 400)}`);
+        }
+        if (!existsSync(worktreePath)) {
+          throw new Error(
+            `provision command exited 0 but did not create ${worktreePath}. ` +
+              `It must produce that exact directory — pass --root "$STANDUP_WORKDIR" (or --name "$STANDUP_WORKDIR_NAME").`
+          );
+        }
+      } else {
+        const isRepo = await run(
+          ["git", "rev-parse", "--is-inside-work-tree"],
+          repoPath,
+          log
+        );
+        if (!isRepo.ok) {
+          throw new Error(`Not a git repository: ${repoPath}`);
+        }
+
+        const base = project.branch || "HEAD";
+        const worktree = await run(
+          ["git", "worktree", "add", "-b", branch, worktreePath, base],
+          repoPath,
+          log
+        );
+        if (!worktree.ok) {
+          throw new Error(`git worktree add failed: ${worktree.output.slice(0, 300)}`);
+        }
       }
-      if (!existsSync(worktreePath)) {
+
+      if (subdir && !existsSync(launchCwd)) {
         throw new Error(
-          `provision command exited 0 but did not create ${worktreePath}. ` +
-            `It must produce that exact directory — pass --name "$STANDUP_WORKDIR_NAME" (or create "$STANDUP_WORKDIR").`
+          `launchSubdir "${subdir}" does not exist under the working dir (${launchCwd}). ` +
+            `Check the provision command produced it.`
         );
       }
-    } else {
-      // Verify it's actually a git repo before trying to add a worktree, so
-      // the error names the real problem instead of a git usage message.
-      const isRepo = await run(
-        ["git", "rev-parse", "--is-inside-work-tree"],
-        repoPath,
-        log
-      );
-      if (!isRepo.ok) {
-        throw new Error(`Not a git repository: ${repoPath}`);
+
+      if (project.setup) {
+        const setup = await runShell(project.setup, launchCwd, log);
+        // Non-fatal: a failed `docker compose up` shouldn't discard a
+        // correctly-created worktree. Surface it and let the agent start.
+        if (!setup.ok) {
+          log.push("[warn] setup command failed — starting the session anyway");
+        }
       }
 
-      const base = project.branch || "HEAD";
-      const worktree = await run(
-        ["git", "worktree", "add", "-b", branch, worktreePath, base],
-        repoPath,
-        log
-      );
-      if (!worktree.ok) {
-        throw new Error(`git worktree add failed: ${worktree.output.slice(0, 300)}`);
-      }
-    }
-
-    if (subdir && !existsSync(launchCwd)) {
-      throw new Error(
-        `launchSubdir "${subdir}" does not exist under the working dir (${launchCwd}). ` +
-          `Check the provision command produced it.`
-      );
-    }
-
-    if (project.setup) {
-      const setup = await runShell(project.setup, launchCwd, log);
-      // Non-fatal: a failed `docker compose up` shouldn't discard a
-      // correctly-created worktree. Surface it and let the agent start.
-      if (!setup.ok) {
-        log.push("[warn] setup command failed — starting the session anyway");
-      }
-    }
-
-    // Pass the task as the initial prompt so the agent starts on it, and so
-    // the session title derives from real work rather than being untitled.
-    const spawned = await run(
-      [
-        "tmux",
-        "new-session",
-        "-d",
-        "-s",
-        tmuxSession,
-        "-c",
+      // Pass the task as the initial prompt so the agent starts on it, and so
+      // the session title derives from real work rather than being untitled.
+      const spawned = await run(
+        [
+          "tmux",
+          "new-session",
+          "-d",
+          "-s",
+          tmuxSession,
+          "-c",
+          launchCwd,
+          "claude",
+          ...modelEffortFlags(model, effort),
+          // Per-project extra flags (e.g. --permission-mode acceptEdits).
+          // Ordered before the positional prompt, same as --model/--effort.
+          ...tokenizeArgs(project.launchArgs),
+          task + CHECKPOINT_INSTRUCTION,
+        ],
         launchCwd,
-        "claude",
-        ...modelEffortFlags(model, effort),
-        // Per-project extra flags (e.g. --permission-mode acceptEdits).
-        // Ordered before the positional prompt, same as --model/--effort.
-        ...tokenizeArgs(project.launchArgs),
-        task + CHECKPOINT_INSTRUCTION,
-      ],
-      launchCwd,
-      log
-    );
-    if (!spawned.ok) {
-      throw new Error(`tmux new-session failed: ${spawned.output.slice(0, 300)}`);
-    }
+        log
+      );
+      if (!spawned.ok) {
+        throw new Error(`tmux new-session failed: ${spawned.output.slice(0, 300)}`);
+      }
 
-    updateLaunchStatus(db, launch.id, "running");
-    return { launch: { ...launch, status: "running" }, log };
-  } catch (err) {
-    const message = (err as Error).message;
-    updateLaunchStatus(db, launch.id, "failed", message);
-    log.push(`[error] ${message}`);
-    return { launch: { ...launch, status: "failed", error: message }, log };
-  }
+      updateLaunchStatus(db, launch.id, "running");
+      onUpdate?.({ ...launch, status: "running" });
+    } catch (err) {
+      const message = (err as Error).message;
+      updateLaunchStatus(db, launch.id, "failed", message);
+      log.push(`[error] ${message}`);
+      onUpdate?.({ ...launch, status: "failed", error: message });
+    }
+  })();
+
+  return { launch, log: [], done };
 }
 
 /**

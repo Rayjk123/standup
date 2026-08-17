@@ -37,6 +37,28 @@ function setUpStore(repos: string[] = []): Store {
   return store;
 }
 
+/**
+ * Provisioning is now fire-and-forget: the endpoint returns a "starting"
+ * launch immediately and the worktree/tmux work finishes in the background.
+ * Poll the row until it leaves "starting" so assertions and cleanup run
+ * against the completed launch.
+ */
+async function waitForLaunchStatus(
+  store: Store,
+  id: string,
+  timeoutMs = 20_000
+): Promise<string> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const row = store.db
+      .query("SELECT status FROM launches WHERE id = ?")
+      .get(id) as { status: string } | null;
+    if (row && row.status !== "starting") return row.status;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return "timeout";
+}
+
 const cleanupDirs: string[] = [];
 afterAll(async () => {
   for (const dir of cleanupDirs) {
@@ -184,7 +206,9 @@ describe("POST /api/projects/:id/bootstrap-knowledge — success (fake claude, n
 
       expect(res.status).toBe(200);
       expect(json.launch?.kind).toBe("bootstrap");
-      expect(json.launch?.status).toBe("running");
+      // Async now: the response is the freshly-created row, still "starting" —
+      // the worktree/tmux work runs in the background.
+      expect(json.launch?.status).toBe("starting");
       // Defaults from the route, not the CLI's own default — the whole
       // point per phase-7.md Step 3.
       expect(json.launch?.model).toBe("opus");
@@ -192,6 +216,10 @@ describe("POST /api/projects/:id/bootstrap-knowledge — success (fake claude, n
 
       worktreePath = json.launch?.worktreePath;
       tmuxSession = json.launch?.tmuxSession;
+
+      // Wait for the detached work to finish, then assert it reached running.
+      const finalStatus = await waitForLaunchStatus(store, json.launch!.id);
+      expect(finalStatus).toBe("running");
 
       // Round-trips through the store, not just the response payload.
       const row = store.db
