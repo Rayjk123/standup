@@ -99,7 +99,8 @@ export type WsMessageType =
   | "launch:started"
   | "launch:stopped"
   | "session:deleted"
-  | "launch:cleaned";
+  | "launch:cleaned"
+  | "knowledge:draft";
 
 export interface WsMessage<T = unknown> {
   type: WsMessageType;

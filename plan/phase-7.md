@@ -239,8 +239,11 @@ human review, so the agent does not treat a successful call as publication.
    available inside a bootstrap run. Without this gate, any agent anywhere
    can write into your knowledge base.
 3. `git rev-parse HEAD` in `launch.worktreePath` for the provenance sha.
-4. Validate the slug; reject reserved names that would collide with a doc the
-   human is actively editing.
+4. Validate the slug with `isValidSlug`. Nothing more — an earlier draft of
+   this plan called for rejecting "reserved names", but no such registry
+   exists and inventing one would be wrong anyway: a slug colliding with an
+   accepted doc is the *regenerate* case, handled by `replaces_slug` in step
+   6, not an error.
 5. Write `.drafts/{slug}.md` and upsert the `knowledge_drafts` row.
 6. If an accepted doc with the same slug exists, set `replaces_slug`.
 7. Broadcast so the console updates live.

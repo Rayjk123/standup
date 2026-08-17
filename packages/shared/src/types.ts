@@ -67,7 +67,7 @@ export interface Session {
 
 export type LaunchStatus = "starting" | "running" | "failed" | "cleaned";
 
-export type LaunchKind = "worktree" | "adopted";
+export type LaunchKind = "worktree" | "adopted" | "bootstrap";
 
 /** Aliases accepted by `claude --model`. */
 export type ClaudeModel = "opus" | "sonnet" | "haiku" | "fable";
@@ -77,7 +77,12 @@ export type ClaudeEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface Launch {
   id: string;
-  /** worktree = created its own checkout; adopted = resumed in place. */
+  /**
+   * worktree = created its own checkout; adopted = resumed in place;
+   * bootstrap = a knowledge-bootstrap run in its own worktree (a real
+   * checkout, like worktree, but gated separately — see propose_knowledge's
+   * collector-side check in server.ts).
+   */
   kind: LaunchKind;
   projectId: string;
   task: string;

@@ -199,6 +199,46 @@ const MIGRATIONS = [
   ALTER TABLE launches ADD COLUMN model TEXT;
   ALTER TABLE launches ADD COLUMN effort TEXT;
   `,
+
+  // Migration 008: launches.kind 'bootstrap'
+  //
+  // A bootstrap launch runs the knowledge-bootstrap agent in a real worktree
+  // (a stable git HEAD is the point, not isolation) so propose_knowledge can
+  // stamp provenance from it. It needs its own kind rather than reusing
+  // 'worktree' so the collector-side gate on /api/knowledge/propose (phase-7
+  // Step 2) can require it specifically — without that, any launch could
+  // write into the knowledge base. Same table-recreation as migration 005;
+  // SQLite can't ALTER a CHECK constraint in place.
+  `
+  CREATE TABLE launches_new (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    task TEXT NOT NULL,
+    worktree_path TEXT NOT NULL UNIQUE,
+    branch TEXT NOT NULL,
+    base_branch TEXT,
+    tmux_session TEXT,
+    session_id TEXT,
+    status TEXT NOT NULL DEFAULT 'starting'
+      CHECK (status IN ('starting', 'running', 'failed', 'cleaned')),
+    error TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    kind TEXT NOT NULL DEFAULT 'worktree'
+      CHECK (kind IN ('worktree', 'adopted', 'bootstrap')),
+    model TEXT,
+    effort TEXT
+  );
+  INSERT INTO launches_new
+    (id, project_id, task, worktree_path, branch, base_branch, tmux_session,
+     session_id, status, error, created_at, kind, model, effort)
+    SELECT id, project_id, task, worktree_path, branch, base_branch, tmux_session,
+           session_id, status, error, created_at, kind, model, effort
+    FROM launches;
+  DROP TABLE launches;
+  ALTER TABLE launches_new RENAME TO launches;
+  CREATE INDEX IF NOT EXISTS idx_launches_project ON launches(project_id);
+  CREATE INDEX IF NOT EXISTS idx_launches_worktree ON launches(worktree_path);
+  `,
 ];
 
 export function runMigrations(db: Database): void {

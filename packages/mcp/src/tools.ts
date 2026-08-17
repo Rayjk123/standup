@@ -153,6 +153,38 @@ export const tools: Tool[] = [
       required: ["pattern"],
     },
   },
+  {
+    name: "propose_knowledge",
+    description:
+      "Write a DRAFT knowledge doc for a human to review — this does NOT publish anything. " +
+      "The draft is saved separately from the project's real knowledge base and is invisible to " +
+      "search_knowledge and ask_expert until a human explicitly accepts it. Only usable inside a " +
+      "knowledge-bootstrap run; calling it from an ordinary session will fail.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        slug: {
+          type: "string",
+          description:
+            "Filename-safe id for the doc: letters, numbers and hyphens only, e.g. 'architecture'.",
+        },
+        title: {
+          type: "string",
+          description: "Doc title.",
+        },
+        body: {
+          type: "string",
+          description: "Doc body, in markdown.",
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional tags.",
+        },
+      },
+      required: ["slug", "title", "body"],
+    },
+  },
 ];
 
 export async function handleToolCall(
@@ -313,6 +345,27 @@ async function dispatch(
 
       return {
         content: [{ type: "text", text: formatted + suffix }],
+      };
+    }
+
+    case "propose_knowledge": {
+      const slug = args.slug as string;
+      const title = args.title as string;
+      const body = args.body as string;
+      const tags = args.tags as string[] | undefined;
+
+      const result = await postJson<{ ok: boolean; slug: string }>(
+        `${collectorUrl}/api/knowledge/propose`,
+        { ...(await correlationFields()), slug, title, body, tags }
+      );
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Draft "${result.slug}" saved for human review. It is not searchable and nobody has read it yet.`,
+          },
+        ],
       };
     }
 

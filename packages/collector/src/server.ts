@@ -49,6 +49,8 @@ import {
   readKnowledgeFile,
   writeKnowledgeFile,
   deleteKnowledgeFile,
+  writeDraftFile,
+  isValidSlug,
   type EmbeddingProvider,
 } from "@standup/knowledge";
 import type {
@@ -100,7 +102,7 @@ import {
 
 /** Standup's own MCP tools — nudging on these would feed back on itself. */
 function isExpertTool(toolName: string): boolean {
-  return /(^|__)(ask_expert|search_knowledge|ripgrep|checkpoint|ask_human)$/.test(
+  return /(^|__)(ask_expert|search_knowledge|ripgrep|checkpoint|ask_human|propose_knowledge)$/.test(
     toolName ?? ""
   );
 }
@@ -1001,6 +1003,122 @@ export function createServer(
     const results = await searchKnowledge(store.db, projectId, query, embeddingProvider);
 
     return c.json({ results, project: projectId });
+  });
+
+  // Runs `git rev-parse HEAD` in a launch's own worktree. Provenance is
+  // stamped here rather than trusted from the agent's tool call — that is
+  // the entire reason propose_knowledge is a collector-mediated tool and not
+  // the agent writing a file directly. Returns null (not a thrown error) on
+  // any failure so a git hiccup degrades to an unstamped draft rather than
+  // losing the draft's content.
+  async function gitHeadSha(cwd: string): Promise<string | null> {
+    try {
+      const proc = Bun.spawn(["git", "rev-parse", "HEAD"], {
+        cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+      return proc.exitCode === 0 ? stdout.trim() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  app.post("/api/knowledge/propose", async (c) => {
+    const { session_id, cwd, slug, title, body, tags } = await c.req.json<{
+      session_id?: string;
+      cwd: string;
+      slug: string;
+      title: string;
+      body: string;
+      tags?: string[];
+    }>();
+
+    const session = resolveCallingSession(session_id, cwd);
+    if (!session) {
+      return c.json(
+        { error: `No active session found for cwd "${cwd}". Is the collector running and did this session register at startup?` },
+        400
+      );
+    }
+
+    // The security-relevant gate. Without it, any agent in any session could
+    // write a "draft" into any project's knowledge base — the whole point of
+    // this being a gated tool rather than the agent writing files itself.
+    // Keyed on cwd (a bootstrap launch's worktree), not session_id, so it
+    // can't be bypassed by an unrelated session merely claiming one.
+    const launch = findLaunchByCwd(store.db, cwd);
+    if (!launch || launch.kind !== "bootstrap" || launch.status !== "running") {
+      return c.json(
+        {
+          error:
+            "propose_knowledge is only available inside a running bootstrap knowledge run.",
+        },
+        403
+      );
+    }
+
+    if (!isValidSlug(slug)) {
+      return c.json(
+        { error: "Slug must be letters, numbers and hyphens — it becomes a filename." },
+        400
+      );
+    }
+    if (!title?.trim()) {
+      return c.json({ error: "title is required" }, 400);
+    }
+    if (!body?.trim()) {
+      return c.json({ error: "body is required" }, 400);
+    }
+
+    // The launch's own project, not the session's — a bootstrap worktree
+    // sits outside the project's configured repos, so this is the only
+    // reliable source (see findLaunchByCwd's doc comment in launches.ts).
+    const projectId = launch.projectId;
+
+    const generatedFromSha = await gitHeadSha(launch.worktreePath);
+
+    // An accepted doc with this slug already existing means this draft would
+    // replace it on accept — the regenerate case, distinct from a first
+    // bootstrap where replacesSlug stays unset (see phase-7.md Step 5).
+    const existingDoc = await readKnowledgeFile(knowledgeDir, projectId, slug);
+    const replacesSlug = existingDoc ? slug : undefined;
+
+    try {
+      await writeDraftFile(knowledgeDir, projectId, {
+        slug,
+        title: title.trim(),
+        body,
+        tags,
+        generatedFromSha: generatedFromSha ?? undefined,
+        generatedAt: new Date().toISOString(),
+        generatedByLaunchId: launch.id,
+        replacesSlug,
+      });
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+
+    // Write-then-sync, the same pattern PUT /api/projects/:id/knowledge/:slug
+    // uses for accepted docs: the file is the source of truth, this just
+    // reconciles knowledge_drafts to match what's now on disk.
+    await knowledgeSync?.syncDrafts(projectId);
+
+    broadcast({
+      type: "knowledge:draft",
+      payload: {
+        projectId,
+        slug,
+        title: title.trim(),
+        generatedFromSha,
+        launchId: launch.id,
+        replacesSlug: replacesSlug ?? null,
+      },
+      timestamp: new Date().toISOString(),
+    });
+
+    return c.json({ ok: true, slug });
   });
 
   app.post("/api/ripgrep", async (c) => {

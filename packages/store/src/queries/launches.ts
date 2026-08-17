@@ -3,7 +3,7 @@ import type { Launch, LaunchStatus, LaunchKind } from "@standup/shared";
 
 interface LaunchRow {
   id: string;
-  kind: "worktree" | "adopted";
+  kind: "worktree" | "adopted" | "bootstrap";
   project_id: string;
   task: string;
   worktree_path: string;
