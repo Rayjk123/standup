@@ -147,6 +147,35 @@ matters, since multi-hop is what a topic-partitioned index would lose.
 stale by the time Phase 7 started: the corpus had grown and the real score was
 7/8. An eval result is a measurement with a date on it, not a property.
 
+**The score depends on the embedding index, not just the corpus.** The
+`single-hop: intent from knowledge` case cannot pass on text search alone, and
+this is arithmetic rather than tuning: FTS5 does no stemming, so a question
+asking why Standup "observes" sessions instead of "owning" them matches only
+the common words in `overview.md` — raw bm25 lands around 6.6e-6. `mergeResults`
+then normalises by `Math.max(...scores, 1)`, whose `1` was meant to guard the
+empty case but also clamps any corpus whose bm25 magnitudes are below 1, so the
+score stays ~2.6e-6 against a `KNOWLEDGE_RELEVANCE_FLOOR` of 0.15. Only the
+embedding half can carry that case.
+
+So **12/12 requires `EMBEDDING_PROVIDER` set and chunks populated; text-only
+tops out at 11/12.** Check before concluding anything:
+
+```bash
+sqlite3 ~/.local/share/standup/standup.db \
+  "SELECT k.slug, COUNT(kc.id) FROM knowledge k
+   LEFT JOIN knowledge_chunks kc ON kc.knowledge_id = k.id GROUP BY k.slug;"
+# zeros mean embedding search is dead, whatever the eval says
+```
+
+**Deleting a knowledge doc destroys its embeddings.** `knowledge_chunks` has
+`ON DELETE CASCADE` and `foreign_keys` is ON, so any `deleteDoc` — including
+the one `syncProject` performs for a file that has vanished — drops that doc's
+chunks. Re-syncing regenerates them only if a provider is configured; without
+one they are silently gone and the index is quietly text-only from then on.
+This has already happened once, during test cleanup that otherwise looked
+complete. **Use a throwaway project id for test knowledge docs**, never the
+real project's.
+
 Things to know before touching retrieval scoring:
 
 - **Weights see-saw.** The `design` region weight trades intent questions

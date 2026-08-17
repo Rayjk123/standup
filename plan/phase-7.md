@@ -53,7 +53,15 @@ measurable until it passes.
 > 3. Name bonus rebalanced 0.6 → 0.45, the middle of the passing band.
 >
 > An IDF-weighted coverage was tried and measured no better; not in the code.
-> The baseline for Step 7 is therefore **12/12, multi-hop 4/4**.
+>
+> **Baseline for Step 7: 12/12 with embeddings, 11/12 text-only, multi-hop 4/4
+> either way.** Found while verifying Step 1: `single-hop: intent from
+> knowledge` cannot pass on text search alone — FTS5 does no stemming, so that
+> question's distinguishing words never match, and `mergeResults`' `Math.max(
+> ...scores, 1)` clamp leaves the score four orders of magnitude below the
+> relevance floor. It was passing on the embedding half, and the chunk index
+> has since been cascade-deleted by test cleanup (see the runbook). Record
+> which mode a number was measured in, or it is not comparable.
 
 `implementation.md:29-34` records the symptom: the eval passes 8/8, but an
 ad-hoc question about how a launched session gets matched to its owning
@@ -500,6 +508,15 @@ Run the full eval before accepting any drafts, accept them, run it again.
 The existing eight cases plus Step 0's additions must not regress — **most
 importantly multi-hop, which must stay 4/4.** This is the direct test of the
 design's central worry: does generated text outrank real retrieval?
+
+**Both runs must be in the same embedding mode**, and say which. Text-only
+tops out at 11/12 for a reason unrelated to bootstrapping (see Step 0's note),
+so a before-run with embeddings and an after-run without would manufacture a
+regression that is purely an artifact of the environment. Check
+`knowledge_chunks` is populated before starting, not after being surprised.
+This matters more here than anywhere else in the phase: bootstrapping adds
+*six new docs* to embed, so the after-state depends on the provider actually
+being configured and having run.
 
 The Phase 5 lesson applies with force. `runbook.md:151-155`: the eval file
 itself was in the searched corpus containing every test question verbatim,
