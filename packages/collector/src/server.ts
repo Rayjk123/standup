@@ -1209,6 +1209,13 @@ export function createServer(
       summary: string;
     }>();
 
+    // A checkpoint with no summary is meaningless and, worse, hits a NOT NULL
+    // constraint that surfaces as a 500 SQLite crash rather than a usable
+    // error. Reject it cleanly so the agent gets told what went wrong.
+    if (!summary?.trim()) {
+      return c.json({ error: "summary is required" }, 400);
+    }
+
     const session = resolveCallingSession(session_id, cwd);
     if (!session) {
       return c.json(
@@ -1217,7 +1224,7 @@ export function createServer(
       );
     }
 
-    const checkpoint = createCheckpoint(store.db, session.id, "self-reported", summary);
+    const checkpoint = createCheckpoint(store.db, session.id, "self-reported", summary.trim());
 
     broadcast({
       type: "checkpoint:new",
