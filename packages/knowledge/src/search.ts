@@ -11,7 +11,9 @@ export interface SearchResult {
   /**
    * True when an agent drafted this doc and a human accepted it, false when a
    * human wrote it from nothing. Keyed off `generated_from_sha` being present,
-   * so a doc a human merged or edited into shape counts as theirs.
+   * which means it tracks the same line staleness does: a doc accepted by
+   * merging counts as the human's, a doc they merely edited afterwards stays
+   * generated. See writeKnowledgeFile for why those two go different ways.
    *
    * Exposed because whether provenance should change ranking is a question
    * worth answering with numbers rather than assuming — the weight that

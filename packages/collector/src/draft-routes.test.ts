@@ -254,6 +254,102 @@ describe("POST .../knowledge/drafts/:slug/accept", () => {
   });
 });
 
+describe("PUT .../knowledge/:slug — provenance on edit (phase-7 Step 6 decision)", () => {
+  test("editing an accepted generated doc preserves generated_from_sha", async () => {
+    const id = projectId();
+    const { store } = setUp(id);
+    const knowledgeDir = await tempKnowledgeDir();
+    cleanupDirs.push(knowledgeDir);
+    const knowledgeSync = new KnowledgeSync(store.db, knowledgeDir, null);
+
+    await writeKnowledgeFile(knowledgeDir, id, {
+      slug: "gotchas",
+      title: "Gotchas",
+      body: "generated text",
+      generatedFromSha: "abc123",
+    });
+
+    const app = createServer(store, () => {}, null, knowledgeSync, undefined, knowledgeDir);
+    const res = await app.request(`/api/projects/${id}/knowledge/gotchas`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Gotchas", body: "fixed a typo" }),
+    });
+    expect(res.status).toBe(200);
+
+    const doc = await readKnowledgeFile(knowledgeDir, id, "gotchas");
+    expect(doc?.body).toBe("fixed a typo");
+    // The point: a plain edit is not the same act as disowning where the
+    // text came from, so it must not silently exempt the doc from staleness.
+    expect(doc?.generatedFromSha).toBe("abc123");
+
+    store.close();
+  });
+
+  test("editing a human-authored doc still has no provenance to preserve", async () => {
+    const id = projectId();
+    const { store } = setUp(id);
+    const knowledgeDir = await tempKnowledgeDir();
+    cleanupDirs.push(knowledgeDir);
+    const knowledgeSync = new KnowledgeSync(store.db, knowledgeDir, null);
+
+    await writeKnowledgeFile(knowledgeDir, id, {
+      slug: "conventions",
+      title: "Conventions",
+      body: "written by a person",
+    });
+
+    const app = createServer(store, () => {}, null, knowledgeSync, undefined, knowledgeDir);
+    await app.request(`/api/projects/${id}/knowledge/conventions`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Conventions", body: "edited by the same person" }),
+    });
+
+    const doc = await readKnowledgeFile(knowledgeDir, id, "conventions");
+    expect(doc?.generatedFromSha).toBeUndefined();
+
+    store.close();
+  });
+
+  test("merge-accept drops provenance on purpose, unlike a plain edit", async () => {
+    const id = projectId();
+    const { store } = setUp(id);
+    const knowledgeDir = await tempKnowledgeDir();
+    cleanupDirs.push(knowledgeDir);
+    const knowledgeSync = new KnowledgeSync(store.db, knowledgeDir, null);
+
+    await writeKnowledgeFile(knowledgeDir, id, {
+      slug: "gotchas",
+      title: "Gotchas",
+      body: "human-written original",
+      generatedFromSha: "abc123",
+    });
+    await writeDraftFile(knowledgeDir, id, {
+      slug: "gotchas",
+      title: "Gotchas",
+      body: "regenerated version",
+      generatedFromSha: "def456",
+      replacesSlug: "gotchas",
+    });
+    await knowledgeSync.syncDrafts(id);
+
+    const app = createServer(store, () => {}, null, knowledgeSync, undefined, knowledgeDir);
+    const res = await app.request(`/api/projects/${id}/knowledge/drafts/gotchas/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "merge", body: "combined text" }),
+    });
+    expect(res.status).toBe(200);
+
+    const doc = await readKnowledgeFile(knowledgeDir, id, "gotchas");
+    expect(doc?.body).toBe("combined text");
+    expect(doc?.generatedFromSha).toBeUndefined();
+
+    store.close();
+  });
+});
+
 describe("POST .../knowledge/drafts/:slug/discard", () => {
   test("removes both the file and the row", async () => {
     const id = projectId();

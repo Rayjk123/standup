@@ -56,6 +56,7 @@ import {
   type EmbeddingProvider,
 } from "@standup/knowledge";
 import { resolveAcceptMode, isAcceptAllEligible } from "./draft-accept.js";
+import { computeStaleness, hasProvenance, primaryRepoPath } from "./knowledge-staleness.js";
 import type {
   ClaudeEffort,
   ClaudeModel,
@@ -331,9 +332,42 @@ export function createServer(
   // is searchable the moment it's saved rather than at the next search.
   // ============================================================================
 
+  // Staleness (phase-7 Step 6) is computed here, on every open of the tab,
+  // rather than cached — it's two git commands per generated doc, and
+  // nobody needs the answer while the tab is closed. Only docs carrying a
+  // real generated_from_sha get an opinion at all; a human-authored doc's
+  // staleness is always null.
   app.get("/api/projects/:id/knowledge", async (c) => {
-    const docs = await listKnowledgeFiles(knowledgeDir, c.req.param("id"));
-    return c.json(docs);
+    const projectId = c.req.param("id");
+    const docs = await listKnowledgeFiles(knowledgeDir, projectId);
+
+    const project = getProjects(store.db).find((p) => p.id === projectId);
+    const repoPath = project ? primaryRepoPath(project) : null;
+
+    const withStaleness = await Promise.all(
+      docs.map(async (doc) => {
+        if (!hasProvenance(doc.generatedFromSha)) {
+          return { ...doc, staleness: null };
+        }
+        if (!repoPath) {
+          // Has a sha but nowhere to check it against — same "can't tell"
+          // outcome as a sha git can't resolve, not "not applicable".
+          return {
+            ...doc,
+            staleness: {
+              sha: doc.generatedFromSha,
+              reachable: false,
+              commitsSince: null,
+              filesChanged: null,
+              stale: false,
+            },
+          };
+        }
+        return { ...doc, staleness: await computeStaleness(repoPath, doc.generatedFromSha) };
+      })
+    );
+
+    return c.json(withStaleness);
   });
 
   // ============================================================================
@@ -434,11 +468,13 @@ export function createServer(
       }
       try {
         // Deliberately written without provenance, unlike the replace path
-        // below (whose rename carries generated_from_sha through). A merged
-        // doc is partly the human's own prose, and staleness only ever flags
-        // docs with a sha — calling someone's edit outdated because the
-        // machine half of it aged is the second-guessing the design warns
-        // against.
+        // below (whose rename carries generated_from_sha through) and unlike
+        // a plain PUT .../knowledge/:slug edit (which round-trips it — see
+        // writeKnowledgeFile's doc comment). A merged doc is partly the
+        // human's own prose in a way a typo fix isn't, and staleness only
+        // ever flags docs with a sha — calling someone's merge outdated
+        // because the machine half of it aged is the second-guessing the
+        // design warns against.
         await writeKnowledgeFile(knowledgeDir, projectId, {
           slug: draft.replacesSlug!,
           title: body.title?.trim() || draft.title,
@@ -543,12 +579,21 @@ export function createServer(
       return c.json({ error: "body is required" }, 400);
     }
 
+    // Carried over explicitly (phase-7 Step 6) — see writeKnowledgeFile's
+    // doc comment. Editing text is a smaller act than the merge-accept path
+    // below (which drops provenance on purpose), and losing it here would
+    // make a typo fix silently exempt a generated doc from staleness for
+    // good.
+    const existing = await readKnowledgeFile(knowledgeDir, projectId, slug);
+
     try {
       await writeKnowledgeFile(knowledgeDir, projectId, {
         slug,
         title: body.title?.trim() || slug,
         body: body.body,
         tags: body.tags,
+        generatedFromSha: existing?.generatedFromSha,
+        generatedAt: existing?.generatedAt,
       });
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400);

@@ -5,6 +5,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import {
   writeDraftFile,
+  writeKnowledgeFile,
   acceptDraftFile,
   deleteDraftFile,
   readKnowledgeFile,
@@ -13,6 +14,49 @@ import {
 async function tempKnowledgeDir(): Promise<string> {
   return mkdtemp(join(tmpdir(), "standup-knowledge-"));
 }
+
+describe("writeKnowledgeFile / readKnowledgeFile — provenance round-trip", () => {
+  test("generatedFromSha/generatedAt survive a write-then-read (phase-7 Step 6)", async () => {
+    const dir = await tempKnowledgeDir();
+    try {
+      await writeKnowledgeFile(dir, "proj", {
+        slug: "gotchas",
+        title: "Gotchas",
+        body: "generated text",
+        generatedFromSha: "abc123",
+        generatedAt: "2026-08-16T00:00:00.000Z",
+      });
+
+      const raw = await readFile(join(dir, "proj", "gotchas.md"), "utf-8");
+      expect(raw).toContain("generated_from_sha: abc123");
+
+      const doc = await readKnowledgeFile(dir, "proj", "gotchas");
+      expect(doc?.generatedFromSha).toBe("abc123");
+      expect(doc?.generatedAt).toBe("2026-08-16T00:00:00.000Z");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a doc written without provenance has none — undefined, not empty string", async () => {
+    const dir = await tempKnowledgeDir();
+    try {
+      await writeKnowledgeFile(dir, "proj", {
+        slug: "conventions",
+        title: "Conventions",
+        body: "written by a person",
+      });
+
+      const raw = await readFile(join(dir, "proj", "conventions.md"), "utf-8");
+      expect(raw).not.toContain("generated_from_sha");
+
+      const doc = await readKnowledgeFile(dir, "proj", "conventions");
+      expect(doc?.generatedFromSha).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("writeDraftFile", () => {
   test("rejects an invalid slug the same way writeKnowledgeFile does", async () => {

@@ -16,6 +16,10 @@ export interface KnowledgeDocInput {
   title: string;
   body: string;
   tags?: string[];
+  // Provenance — see writeKnowledgeFile's doc comment for who is responsible
+  // for carrying this over on an edit, and why.
+  generatedFromSha?: string;
+  generatedAt?: string;
 }
 
 export interface KnowledgeDocFile {
@@ -24,6 +28,8 @@ export interface KnowledgeDocFile {
   body: string;
   tags: string[];
   updatedAt: Date;
+  generatedFromSha?: string;
+  generatedAt?: string;
 }
 
 /**
@@ -72,7 +78,12 @@ export async function readKnowledgeFile(
   try {
     const raw = await readFile(path, "utf-8");
     const { data, content } = matter(raw);
-    const frontmatter = data as { title?: string; tags?: string[] };
+    const frontmatter = data as {
+      title?: string;
+      tags?: string[];
+      generated_from_sha?: string;
+      generated_at?: string;
+    };
     const { mtime } = await Bun.file(path).stat();
 
     return {
@@ -81,12 +92,30 @@ export async function readKnowledgeFile(
       body: content.trim(),
       tags: frontmatter.tags ?? [],
       updatedAt: mtime,
+      // undefined (not ""), same empty-string-is-not-NULL discipline as
+      // loader.ts — Step 6 keys "is this generated" off exactly this.
+      generatedFromSha: frontmatter.generated_from_sha,
+      generatedAt: frontmatter.generated_at,
     };
   } catch {
     return null;
   }
 }
 
+/**
+ * Writes only what `doc` carries — it does not look up what's already on
+ * disk, so whether an edit preserves `generated_from_sha` is entirely the
+ * caller's decision. The general PUT /api/projects/:id/knowledge/:slug route
+ * round-trips it explicitly, reading the existing file first and passing its
+ * provenance back through, because a typo fix on a generated doc shouldn't
+ * silently make staleness forget the doc was generated at all — staleness
+ * keys "is this generated" off exactly this field, and losing it on the
+ * first edit anyone makes would make the feature nearly useless. The
+ * merge-accept path in server.ts calls this *without* provenance on purpose
+ * instead: merging is combining two documents' worth of content into one, a
+ * large enough act that the result is fairly called partly the human's own,
+ * unlike a plain edit.
+ */
 export async function writeKnowledgeFile(
   knowledgeDir: string,
   projectId: string,
@@ -106,6 +135,8 @@ export async function writeKnowledgeFile(
   const contents = matter.stringify(doc.body.trim() + "\n", {
     title: doc.title,
     ...(doc.tags?.length ? { tags: doc.tags } : {}),
+    ...(doc.generatedFromSha ? { generated_from_sha: doc.generatedFromSha } : {}),
+    ...(doc.generatedAt ? { generated_at: doc.generatedAt } : {}),
   });
 
   await writeFile(docPath(knowledgeDir, projectId, doc.slug), contents, "utf-8");
@@ -123,8 +154,7 @@ export async function deleteKnowledgeFile(
 }
 
 export interface KnowledgeDraftInput extends KnowledgeDocInput {
-  generatedFromSha?: string;
-  generatedAt?: string;
+  // generatedFromSha/generatedAt come from KnowledgeDocInput.
   generatedByLaunchId?: string;
   replacesSlug?: string;
 }

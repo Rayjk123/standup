@@ -4,12 +4,27 @@ import { theme } from "./theme";
 import { Markdown } from "./Markdown";
 import { lineDiff } from "./lineDiff";
 
+/** Mirrors Staleness in packages/collector/src/knowledge-staleness.ts. Null
+ *  means the doc has no generated_from_sha — human-authored, no opinion. */
+interface Staleness {
+  sha: string;
+  reachable: boolean;
+  commitsSince: number | null;
+  filesChanged: number | null;
+  stale: boolean;
+}
+
 interface KnowledgeDoc {
   slug: string;
   title: string;
   body: string;
   tags: string[];
   updatedAt: string;
+  generatedFromSha?: string;
+  generatedAt?: string;
+  // Optional, not just nullable: DocEditor constructs a KnowledgeDoc-shaped
+  // object for an in-review draft without ever fetching staleness for it.
+  staleness?: Staleness | null;
 }
 
 interface SearchResult {
@@ -385,6 +400,23 @@ export function KnowledgePanel({
     } finally {
       setBootstrapBusy(false);
     }
+  }
+
+  // Regenerate (phase-7 Step 6) reuses the same bootstrap launch as a fresh
+  // run — there's no separate route or in-place update. Because accepted
+  // docs already exist, every proposed draft will get replaces_slug set, so
+  // review renders as a diff this time. The confirm exists because "possibly
+  // outdated" reads as an invitation to click without knowing what happens.
+  async function regenerate() {
+    if (
+      !confirm(
+        "This starts a new bootstrap run over the whole project — the same agent run as the Bootstrap button above. " +
+          "Nothing changes in place: you'll get new drafts to review, and where one would replace an existing doc, review shows it as a diff."
+      )
+    ) {
+      return;
+    }
+    await triggerBootstrap();
   }
 
   if (editing || creating) {
@@ -845,9 +877,17 @@ export function KnowledgePanel({
         </div>
       ) : (
         docs.map((doc) => (
-          <button
+          // A div, not a button — the Regenerate button below needs to sit
+          // inside this without nesting a <button> inside a <button>, which
+          // is invalid HTML and breaks click handling in some browsers.
+          <div
             key={doc.slug}
+            role="button"
+            tabIndex={0}
             onClick={() => setEditing(doc)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") setEditing(doc);
+            }}
             style={{
               display: "block",
               width: "100%",
@@ -897,7 +937,55 @@ export function KnowledgePanel({
             >
               {doc.body}
             </div>
-          </button>
+
+            {/* Staleness (phase-7 Step 6) — only ever shown for a doc with
+                real provenance; the raw commit count is surfaced even below
+                the threshold because it's more useful than the verdict. */}
+            {doc.staleness && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginTop: 6,
+                  fontSize: 11,
+                  color: doc.staleness.stale ? theme.stalled : theme.faint,
+                }}
+              >
+                <span>
+                  {doc.staleness.reachable
+                    ? `generated ${doc.staleness.commitsSince} commit${doc.staleness.commitsSince === 1 ? "" : "s"} ago` +
+                      (doc.staleness.filesChanged
+                        ? ` (${doc.staleness.filesChanged} file${doc.staleness.filesChanged === 1 ? "" : "s"} touched since)`
+                        : "") +
+                      (doc.staleness.stale ? " — possibly outdated" : "")
+                    : "generated from an unknown commit"}
+                </span>
+                {doc.staleness.stale && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void regenerate();
+                    }}
+                    disabled={bootstrapBusy}
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 600,
+                      color: theme.stalled,
+                      background: "none",
+                      border: `1px solid ${theme.stalled}55`,
+                      borderRadius: 4,
+                      padding: "2px 7px",
+                      cursor: bootstrapBusy ? "not-allowed" : "pointer",
+                      opacity: bootstrapBusy ? 0.6 : 1,
+                    }}
+                  >
+                    Regenerate
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         ))
       )}
     </div>
