@@ -23,6 +23,7 @@ import {
   rehomeScratchSessions,
   findProjectByCwd,
   getPendingAsks,
+  getPendingAsksBySession,
   createAsk,
   getAsk,
   resolveAsk,
@@ -1899,31 +1900,53 @@ function handleHookEvent(
           timestamp: new Date().toISOString(),
         });
 
-        const session = getSession(store.db, session_id);
-        const detail =
-          describePendingTool(store, session_id) ??
-          p.message ??
-          (isPermission ? "Permission requested" : "Waiting for your input");
+        // Claude Code re-emits the Notification hook while a prompt sits
+        // unanswered — idle_prompt fires at every turn end, and a permission
+        // prompt re-notifies — so without an idempotency guard a single block
+        // stacks up several pending asks and shows as two (or more) "blocked"
+        // events for the same wait. This is the same duplicate that
+        // reconcileBlockedSessions already guards against at startup; the live
+        // path needs the identical check. If this session already has a
+        // pending ask, the block is surfaced — don't raise another.
+        if (getPendingAsksBySession(store.db, session_id).length === 0) {
+          const session = getSession(store.db, session_id);
+          const detail =
+            describePendingTool(store, session_id) ??
+            p.message ??
+            (isPermission ? "Permission requested" : "Waiting for your input");
 
-        // Surfaced as an ask so it lands in the Blocked view and the alert
-        // strip. Answering it isn't possible from here for a monitored
-        // session — but a launched one can be answered with send input.
-        const ask = createAsk(
-          store.db,
-          session_id,
-          "permission_prompt",
-          launched
-            ? `${detail}\n\n(this session was launched by the console, so nobody is at its terminal)`
-            : detail
-        );
-        broadcast({
-          type: "ask:new",
-          payload: ask,
-          timestamp: new Date().toISOString(),
-        });
+          // Surfaced as an ask so it lands in the Blocked view and the alert
+          // strip. Answering it isn't possible from here for a monitored
+          // session — but a launched one can be answered with send input.
+          const ask = createAsk(
+            store.db,
+            session_id,
+            "permission_prompt",
+            launched
+              ? `${detail}\n\n(this session was launched by the console, so nobody is at its terminal)`
+              : detail
+          );
+          broadcast({
+            type: "ask:new",
+            payload: ask,
+            timestamp: new Date().toISOString(),
+          });
 
-        void pushNotification(session?.title || "Agent needs you", detail);
+          void pushNotification(session?.title || "Agent needs you", detail);
+        }
       }
+
+      // The transcript view refreshes on event:new (see TranscriptView's
+      // eventSignal). A block is exactly when the human opens the session to
+      // see what the agent is stuck on, so the transcript has to refresh here
+      // too. Every other observable hook branch broadcasts this; the
+      // Notification case was the one that didn't, so a freshly blocked
+      // session's last turn stayed absent until the 10s backstop timer.
+      broadcast({
+        type: "event:new",
+        payload: { sessionId: session_id, type: hook_event_name },
+        timestamp: new Date().toISOString(),
+      });
       break;
     }
 
