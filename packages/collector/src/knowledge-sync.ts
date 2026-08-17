@@ -80,6 +80,30 @@ export class KnowledgeSync {
     }
   }
 
+  /**
+   * Reconciles `.drafts/` against knowledge_drafts, the same shape as
+   * syncProject but deliberately does not chunk or embed. That's not a TODO —
+   * a draft is listed for review, never retrieved, so spending an embedding
+   * call on text that might be deleted or rewritten before anyone reads it
+   * would be pure waste, and skipping it is what keeps bootstrap cheap to
+   * re-run.
+   */
+  async syncDrafts(projectId: string): Promise<void> {
+    const drafts = await this.loader.loadDrafts(projectId);
+    const seenSlugs = new Set<string>();
+
+    for (const draft of drafts) {
+      seenSlugs.add(draft.slug);
+      this.store.upsertDraft(draft);
+    }
+
+    for (const stored of this.store.getDraftsByProject(projectId)) {
+      if (!seenSlugs.has(stored.slug)) {
+        this.store.deleteDraft(projectId, stored.slug);
+      }
+    }
+  }
+
   async syncAll(): Promise<void> {
     for (const projectId of this.knownProjectIds()) {
       await this.syncProject(projectId);

@@ -1,4 +1,4 @@
-import { readFile, writeFile, unlink, mkdir, readdir } from "fs/promises";
+import { readFile, writeFile, unlink, mkdir, readdir, rename } from "fs/promises";
 import { existsSync } from "fs";
 import { join, basename } from "path";
 import matter from "gray-matter";
@@ -37,6 +37,10 @@ export function isValidSlug(slug: string): boolean {
 
 function docPath(knowledgeDir: string, projectId: string, slug: string): string {
   return join(knowledgeDir, projectId, `${slug}.md`);
+}
+
+function draftPath(knowledgeDir: string, projectId: string, slug: string): string {
+  return join(knowledgeDir, projectId, ".drafts", `${slug}.md`);
 }
 
 export async function listKnowledgeFiles(
@@ -113,6 +117,70 @@ export async function deleteKnowledgeFile(
   slug: string
 ): Promise<boolean> {
   const path = docPath(knowledgeDir, projectId, slug);
+  if (!existsSync(path)) return false;
+  await unlink(path);
+  return true;
+}
+
+export interface KnowledgeDraftInput extends KnowledgeDocInput {
+  generatedFromSha?: string;
+  generatedAt?: string;
+  generatedByLaunchId?: string;
+  replacesSlug?: string;
+}
+
+export async function writeDraftFile(
+  knowledgeDir: string,
+  projectId: string,
+  draft: KnowledgeDraftInput
+): Promise<void> {
+  if (!isValidSlug(draft.slug)) {
+    throw new Error(
+      "Slug must be letters, numbers and hyphens — it becomes a filename."
+    );
+  }
+
+  const dir = join(knowledgeDir, projectId, ".drafts");
+  await mkdir(dir, { recursive: true });
+
+  const contents = matter.stringify(draft.body.trim() + "\n", {
+    title: draft.title,
+    ...(draft.tags?.length ? { tags: draft.tags } : {}),
+    ...(draft.generatedFromSha ? { generated_from_sha: draft.generatedFromSha } : {}),
+    ...(draft.generatedAt ? { generated_at: draft.generatedAt } : {}),
+    ...(draft.generatedByLaunchId ? { generated_by_launch_id: draft.generatedByLaunchId } : {}),
+    ...(draft.replacesSlug ? { replaces_slug: draft.replacesSlug } : {}),
+  });
+
+  await writeFile(draftPath(knowledgeDir, projectId, draft.slug), contents, "utf-8");
+}
+
+/**
+ * Moves `.drafts/{slug}.md` up to `{slug}.md`. A plain rename rather than a
+ * read-and-rewrite, deliberately: re-serializing through gray-matter would
+ * risk reformatting the provenance frontmatter the point of this function is
+ * to preserve.
+ */
+export async function acceptDraftFile(
+  knowledgeDir: string,
+  projectId: string,
+  slug: string
+): Promise<boolean> {
+  const from = draftPath(knowledgeDir, projectId, slug);
+  if (!existsSync(from)) return false;
+
+  const to = docPath(knowledgeDir, projectId, slug);
+  await mkdir(join(knowledgeDir, projectId), { recursive: true });
+  await rename(from, to);
+  return true;
+}
+
+export async function deleteDraftFile(
+  knowledgeDir: string,
+  projectId: string,
+  slug: string
+): Promise<boolean> {
+  const path = draftPath(knowledgeDir, projectId, slug);
   if (!existsSync(path)) return false;
   await unlink(path);
   return true;

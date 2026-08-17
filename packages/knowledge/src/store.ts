@@ -1,11 +1,18 @@
 import type { Database } from "bun:sqlite";
-import type { KnowledgeDoc, KnowledgeChunk } from "./types.js";
+import type { KnowledgeDoc, KnowledgeChunk, KnowledgeDraft } from "./types.js";
 
 export class KnowledgeStore {
   constructor(private db: Database) {
     this.ensureTables();
   }
 
+  // Knowledge schema lives entirely here rather than in packages/store's
+  // migrations.ts. runMigrations runs inside createStore, which the collector
+  // calls before KnowledgeSync ever constructs a KnowledgeStore — a migration
+  // that ALTERed `knowledge` would run against a database that doesn't have
+  // the table yet on a fresh install and throw. ensureTables runs lazily, the
+  // first time a KnowledgeStore is constructed, by which point the table (if
+  // any) already exists.
   private ensureTables(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS knowledge (
@@ -18,6 +25,8 @@ export class KnowledgeStore {
         embedding_json TEXT,
         file_path TEXT NOT NULL,
         updated_at TEXT DEFAULT (datetime('now')),
+        generated_from_sha TEXT,
+        generated_at TEXT,
         UNIQUE(project_id, slug)
       );
 
@@ -40,7 +49,65 @@ export class KnowledgeStore {
       );
 
       CREATE INDEX IF NOT EXISTS idx_chunks_knowledge ON knowledge_chunks(knowledge_id);
+
+      -- A draft is listed for review, never retrieved semantically — no
+      -- embedding_json column, no FTS table, no chunks relation. That
+      -- absence is structural, not an oversight: searchText queries
+      -- knowledge_fts and searchEmbeddings queries knowledge_chunks, and
+      -- neither has any path to this table, so a draft cannot leak into an
+      -- agent's context even if a future call site forgets this constraint
+      -- exists.
+      CREATE TABLE IF NOT EXISTS knowledge_drafts (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        tags_json TEXT,
+        file_path TEXT NOT NULL,
+
+        -- Provenance, stamped by the collector rather than the agent.
+        generated_from_sha TEXT,
+        generated_at TEXT,
+        generated_by_launch_id TEXT,
+
+        -- Review state. 'pending' is the only state a row lives in for long:
+        -- accept moves the file and deletes the row, discard deletes both.
+        status TEXT NOT NULL DEFAULT 'pending'
+          CHECK (status IN ('pending', 'accepted', 'discarded')),
+
+        -- Set on regenerate: the accepted doc this draft would overwrite.
+        -- NULL on a first bootstrap, which is why review shows a preview
+        -- then and a diff only on regeneration.
+        replaces_slug TEXT,
+
+        reviewed_at TEXT,
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(project_id, slug)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_knowledge_drafts_project
+        ON knowledge_drafts(project_id);
     `);
+
+    this.ensureColumns();
+  }
+
+  // CREATE TABLE IF NOT EXISTS silently does nothing when the table is
+  // already there, so a database that predates generated_from_sha/
+  // generated_at needs those columns added explicitly. PRAGMA-checked
+  // because SQLite has no ADD COLUMN IF NOT EXISTS. Idempotent, so it's safe
+  // to run unconditionally on every startup, fresh database or not.
+  private ensureColumns(): void {
+    const existing = new Set(
+      (this.db.query("PRAGMA table_info(knowledge)").all() as Array<{ name: string }>)
+        .map((c) => c.name)
+    );
+    for (const col of ["generated_from_sha", "generated_at"]) {
+      if (!existing.has(col)) {
+        this.db.exec(`ALTER TABLE knowledge ADD COLUMN ${col} TEXT`);
+      }
+    }
   }
 
   upsertDoc(doc: KnowledgeDoc): void {
@@ -48,15 +115,17 @@ export class KnowledgeStore {
     // compares this against a fresh stat() to decide whether to skip
     // re-embedding an unchanged file on every lazy resync.
     this.db.run(
-      `INSERT INTO knowledge (id, project_id, slug, title, body, tags_json, embedding_json, file_path, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO knowledge (id, project_id, slug, title, body, tags_json, embedding_json, file_path, updated_at, generated_from_sha, generated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(project_id, slug) DO UPDATE SET
          title = excluded.title,
          body = excluded.body,
          tags_json = excluded.tags_json,
          embedding_json = excluded.embedding_json,
          file_path = excluded.file_path,
-         updated_at = excluded.updated_at`,
+         updated_at = excluded.updated_at,
+         generated_from_sha = excluded.generated_from_sha,
+         generated_at = excluded.generated_at`,
       [
         doc.id,
         doc.projectId,
@@ -67,6 +136,8 @@ export class KnowledgeStore {
         doc.embedding ? JSON.stringify(doc.embedding) : null,
         doc.filePath,
         doc.updatedAt.toISOString(),
+        doc.generatedFromSha ?? null,
+        doc.generatedAt ?? null,
       ]
     );
 
@@ -109,6 +180,8 @@ export class KnowledgeStore {
       embedding_json: string | null;
       file_path: string;
       updated_at: string;
+      generated_from_sha: string | null;
+      generated_at: string | null;
     }>;
 
     return rows.map((row) => ({
@@ -121,6 +194,8 @@ export class KnowledgeStore {
       embedding: row.embedding_json ? JSON.parse(row.embedding_json) : undefined,
       filePath: row.file_path,
       updatedAt: new Date(row.updated_at),
+      generatedFromSha: row.generated_from_sha ?? undefined,
+      generatedAt: row.generated_at ?? undefined,
     }));
   }
 
@@ -137,6 +212,8 @@ export class KnowledgeStore {
       embedding_json: string | null;
       file_path: string;
       updated_at: string;
+      generated_from_sha: string | null;
+      generated_at: string | null;
     } | null;
 
     if (!row) return null;
@@ -151,6 +228,8 @@ export class KnowledgeStore {
       embedding: row.embedding_json ? JSON.parse(row.embedding_json) : undefined,
       filePath: row.file_path,
       updatedAt: new Date(row.updated_at),
+      generatedFromSha: row.generated_from_sha ?? undefined,
+      generatedAt: row.generated_at ?? undefined,
     };
   }
 
@@ -220,4 +299,99 @@ export class KnowledgeStore {
       embedding: JSON.parse(row.embedding_json),
     }));
   }
+
+  // Draft rows are always upserted as 'pending' — a row that has moved to
+  // 'accepted' or 'discarded' is deleted immediately by the caller (see the
+  // status column's comment in ensureTables), so there is no accepted/
+  // discarded state for an upsert to preserve or clobber.
+  upsertDraft(draft: KnowledgeDraft): void {
+    this.db.run(
+      `INSERT INTO knowledge_drafts
+         (id, project_id, slug, title, body, tags_json, file_path,
+          generated_from_sha, generated_at, generated_by_launch_id,
+          replaces_slug, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(project_id, slug) DO UPDATE SET
+         title = excluded.title,
+         body = excluded.body,
+         tags_json = excluded.tags_json,
+         file_path = excluded.file_path,
+         generated_from_sha = excluded.generated_from_sha,
+         generated_at = excluded.generated_at,
+         generated_by_launch_id = excluded.generated_by_launch_id,
+         replaces_slug = excluded.replaces_slug,
+         updated_at = excluded.updated_at`,
+      [
+        draft.id,
+        draft.projectId,
+        draft.slug,
+        draft.title,
+        draft.body,
+        draft.tags ? JSON.stringify(draft.tags) : null,
+        draft.filePath,
+        draft.generatedFromSha ?? null,
+        draft.generatedAt ?? null,
+        draft.generatedByLaunchId ?? null,
+        draft.replacesSlug ?? null,
+        draft.updatedAt.toISOString(),
+      ]
+    );
+  }
+
+  getDraftsByProject(projectId: string): KnowledgeDraft[] {
+    const rows = this.db
+      .query(
+        "SELECT * FROM knowledge_drafts WHERE project_id = ? AND status = 'pending' ORDER BY slug"
+      )
+      .all(projectId) as DraftRow[];
+
+    return rows.map(rowToDraft);
+  }
+
+  getDraft(projectId: string, slug: string): KnowledgeDraft | null {
+    const row = this.db
+      .query("SELECT * FROM knowledge_drafts WHERE project_id = ? AND slug = ?")
+      .get(projectId, slug) as DraftRow | null;
+
+    return row ? rowToDraft(row) : null;
+  }
+
+  deleteDraft(projectId: string, slug: string): void {
+    this.db.run(
+      "DELETE FROM knowledge_drafts WHERE project_id = ? AND slug = ?",
+      [projectId, slug]
+    );
+  }
+}
+
+interface DraftRow {
+  id: string;
+  project_id: string;
+  slug: string;
+  title: string;
+  body: string;
+  tags_json: string | null;
+  file_path: string;
+  generated_from_sha: string | null;
+  generated_at: string | null;
+  generated_by_launch_id: string | null;
+  replaces_slug: string | null;
+  updated_at: string;
+}
+
+function rowToDraft(row: DraftRow): KnowledgeDraft {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    slug: row.slug,
+    title: row.title,
+    body: row.body,
+    tags: row.tags_json ? JSON.parse(row.tags_json) : undefined,
+    filePath: row.file_path,
+    generatedFromSha: row.generated_from_sha ?? undefined,
+    generatedAt: row.generated_at ?? undefined,
+    generatedByLaunchId: row.generated_by_launch_id ?? undefined,
+    replacesSlug: row.replaces_slug ?? undefined,
+    updatedAt: new Date(row.updated_at),
+  };
 }
