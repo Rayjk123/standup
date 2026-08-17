@@ -1,6 +1,6 @@
 import { homedir } from "os";
 import { join } from "path";
-import { existsSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, renameSync, realpathSync } from "fs";
 import { mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
 import type { Database } from "bun:sqlite";
@@ -231,6 +231,73 @@ export function tmuxAvailable(): boolean {
   return Bun.spawnSync(["which", "tmux"]).exitCode === 0;
 }
 
+interface ClaudeConfig {
+  projects?: Record<string, Record<string, unknown>>;
+  [k: string]: unknown;
+}
+
+/**
+ * Returns a copy of a ~/.claude.json object with `hasTrustDialogAccepted` set
+ * for each given directory — the same state clicking "Yes, I trust this
+ * folder" persists. Pure, so the merge is unit-testable without touching the
+ * real file. Other per-project keys are preserved.
+ */
+export function withTrustedDirs(config: ClaudeConfig, dirs: string[]): ClaudeConfig {
+  const projects = { ...(config.projects ?? {}) };
+  for (const dir of dirs) {
+    projects[dir] = { ...(projects[dir] ?? {}), hasTrustDialogAccepted: true };
+  }
+  return { ...config, projects };
+}
+
+/**
+ * Pre-accepts Claude Code's workspace-trust dialog for a launch's working
+ * directory.
+ *
+ * A launched agent has no human at its pane, and every worktree/provisioned
+ * dir is a new path Claude Code hasn't seen — so without this it hangs on the
+ * "Is this a project you trust?" dialog forever and never starts (no
+ * SessionStart, no session, nothing in the feed). This writes the trust flag
+ * the way clicking "Yes" would.
+ *
+ * Both the path as passed and its realpath are trusted, since Claude Code keys
+ * trust by the resolved cwd. Defensive: a missing config is created, but an
+ * unparseable one is left untouched — never clobber the user's real config;
+ * the launch just falls back to showing the dialog. Atomic temp-file rename so
+ * a crash mid-write can't truncate the shared file.
+ */
+function trustLaunchDir(launchCwd: string, log: string[]): void {
+  const configPath = join(homedir(), ".claude.json");
+
+  const dirs = new Set<string>([launchCwd]);
+  try {
+    dirs.add(realpathSync(launchCwd));
+  } catch {
+    // launchCwd should exist by now; the plain-path key is still written.
+  }
+
+  let config: ClaudeConfig = {};
+  if (existsSync(configPath)) {
+    try {
+      config = JSON.parse(readFileSync(configPath, "utf8")) as ClaudeConfig;
+    } catch {
+      log.push(
+        "[warn] ~/.claude.json is unparseable — skipping trust pre-accept; the agent may sit on the folder-trust dialog"
+      );
+      return;
+    }
+  }
+
+  try {
+    const updated = withTrustedDirs(config, [...dirs]);
+    const tmp = `${configPath}.standup-${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(updated, null, 2));
+    renameSync(tmp, configPath);
+  } catch (err) {
+    log.push(`[warn] couldn't pre-accept folder trust: ${(err as Error).message}`);
+  }
+}
+
 /**
  * Creates an isolated worktree for a task, runs the project's setup command
  * in it, and starts a detached tmux session running `claude` there.
@@ -380,6 +447,11 @@ export async function launchSession(
           log.push("[warn] setup command failed — starting the session anyway");
         }
       }
+
+      // A launched agent has nobody to click through Claude Code's
+      // folder-trust dialog, and this cwd is a path it's never seen — so
+      // pre-accept trust or it hangs on the dialog and never starts.
+      trustLaunchDir(launchCwd, log);
 
       // Pass the task as the initial prompt so the agent starts on it, and so
       // the session title derives from real work rather than being untitled.
