@@ -10,6 +10,7 @@ import type {
   ClaudeEffort,
   ClaudeModel,
 } from "@standup/shared";
+import { LuReply, LuArrowUpRight, LuX, LuClock, LuCircleX } from "react-icons/lu";
 import { theme, friendlyModel } from "./theme";
 import { Replier } from "./Replier";
 import { Composer } from "./Composer";
@@ -22,11 +23,13 @@ function actionBtn(active: boolean): React.CSSProperties {
     background: active ? theme.edge : "none",
     border: "none",
     cursor: "pointer",
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 1,
-    padding: "3px 5px",
+    padding: "4px 5px",
     borderRadius: 5,
-    color: theme.dim,
+    color: active ? theme.text : theme.dim,
+    display: "flex",
+    alignItems: "center",
   };
 }
 
@@ -129,9 +132,12 @@ function LaunchBody({
             color: theme.waiting,
             marginTop: 7,
             lineHeight: 1.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
           }}
         >
-          ✗ {launch.error ?? "Launch failed"}
+          <LuCircleX style={{ flexShrink: 0 }} /> {launch.error ?? "Launch failed"}
         </div>
       ) : starting ? (
         <div
@@ -140,13 +146,16 @@ function LaunchBody({
             fontSize: 10.5,
             color: theme.running,
             marginTop: 7,
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
           }}
         >
-          ⧗ {launch.provisioned
+          <LuClock style={{ flexShrink: 0 }} />{" "}
+          {launch.provisioned
             ? "provisioning workspace… this can take a few minutes"
             : "starting…"}
           <span style={{ color: theme.faint }}>
-            {" "}
             · {modelLabel} / {effortLabel}
           </span>
         </div>
@@ -158,11 +167,13 @@ function LaunchBody({
               fontSize: 10.5,
               color: theme.running,
               marginTop: 7,
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
             }}
           >
-            ⧗ worktree {launch.branch} · agent running
+            <LuClock style={{ flexShrink: 0 }} /> worktree {launch.branch} · agent running
             <span style={{ color: theme.faint }}>
-              {" "}
               · {modelLabel} / {effortLabel}
             </span>
           </div>
@@ -523,12 +534,12 @@ export function FeedView({
                     title="Reply / steer"
                     style={actionBtn(replyingId === item.data.id)}
                   >
-                    💬
+                    <LuReply />
                   </button>
                 )}
                 {canOpen && (
                   <button onClick={openInProjects} title="Open in Projects" style={actionBtn(false)}>
-                    ↗
+                    <LuArrowUpRight />
                   </button>
                 )}
                 {isAsk && (
@@ -537,7 +548,7 @@ export function FeedView({
                     title="Dismiss without answering — the agent's wait ends as if it had timed out."
                     style={actionBtn(false)}
                   >
-                    ×
+                    <LuX />
                   </button>
                 )}
               </div>
