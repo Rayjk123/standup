@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LuCheck, LuArrowLeftRight, LuSquare, LuTrash2 } from "react-icons/lu";
 import type { Session } from "@standup/shared";
 import { theme } from "./theme";
 
@@ -14,6 +15,9 @@ const linkButton: React.CSSProperties = {
   cursor: "pointer",
   fontSize: 12,
   color: theme.faint,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
 };
 
 /**
@@ -86,8 +90,17 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
 
   if (freed) {
     return (
-      <div style={{ fontFamily: theme.mono, fontSize: 11, color: theme.checkpoint }}>
-        ✓ deleted · {freed}
+      <div
+        style={{
+          fontFamily: theme.mono,
+          fontSize: 11,
+          color: theme.checkpoint,
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+        }}
+      >
+        <LuCheck /> deleted · {freed}
       </div>
     );
   }
@@ -122,7 +135,7 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
             converting monitored → owned. Only offered where it can work. */}
         {!owned && ended && (
           <button onClick={() => void adopt()} disabled={busy} style={linkButton}>
-            {busy ? "adopting…" : "⇄ adopt"}
+            {busy ? "adopting…" : <><LuArrowLeftRight /> adopt</>}
           </button>
         )}
 
@@ -131,7 +144,7 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
             onClick={() => setConfirm(confirm === "stop" ? null : "stop")}
             style={{ ...linkButton, color: theme.waiting }}
           >
-            ■ stop
+            <LuSquare /> stop
           </button>
         )}
 
@@ -144,7 +157,7 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
           }
           style={{ ...linkButton, opacity: ended ? 1 : 0.45 }}
         >
-          🗑 delete
+          <LuTrash2 /> delete
         </button>
       </div>
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { LuArrowLeft, LuCheck } from "react-icons/lu";
 import type { Project } from "@standup/shared";
 import { theme } from "./theme";
 
@@ -138,9 +139,12 @@ export function ProjectEditor({
           cursor: "pointer",
           fontSize: 12.5,
           color: theme.faint,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
         }}
       >
-        ← Back
+        <LuArrowLeft /> Back
       </button>
 
       <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 18 }}>
@@ -335,9 +339,12 @@ export function ProjectEditor({
             color: theme.checkpoint,
             marginTop: 16,
             lineHeight: 1.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
           }}
         >
-          ✓ Saved
+          <LuCheck /> Saved
         </div>
       )}
 

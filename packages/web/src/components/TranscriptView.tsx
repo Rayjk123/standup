@@ -1,4 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
+import {
+  LuChevronDown,
+  LuChevronRight,
+  LuArrowUp,
+  LuTriangleAlert,
+} from "react-icons/lu";
 import { theme } from "./theme";
 import { Markdown } from "./Markdown";
 
@@ -225,9 +231,13 @@ export function TranscriptView({
             fontFamily: theme.mono,
             fontSize: 10.5,
             color: expandAll ? theme.text : theme.faint,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
           }}
         >
-          {expandAll ? "▾ collapse all" : "▸ expand all"}
+          {expandAll ? <LuChevronDown /> : <LuChevronRight />}
+          {expandAll ? "collapse all" : "expand all"}
         </button>
         {page.hasMore && (
           <button
@@ -240,9 +250,12 @@ export function TranscriptView({
               fontFamily: theme.mono,
               fontSize: 10.5,
               color: theme.running,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
             }}
           >
-            ↑ load earlier
+            <LuArrowUp /> load earlier
           </button>
         )}
       </div>
@@ -333,13 +346,26 @@ export function TranscriptView({
                         color: theme.faint,
                         cursor: "pointer",
                         userSelect: "none",
-                        overflow: expanded ? "visible" : "hidden",
-                        textOverflow: expanded ? "clip" : "ellipsis",
-                        whiteSpace: expanded ? "normal" : "nowrap",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
                       }}
                     >
-                      {expanded ? "⌄" : "⟩"}{" "}
-                      {expanded ? call.name : describeToolCall(call)}
+                      {expanded ? (
+                        <LuChevronDown style={{ flexShrink: 0 }} />
+                      ) : (
+                        <LuChevronRight style={{ flexShrink: 0 }} />
+                      )}
+                      <span
+                        style={{
+                          overflow: expanded ? "visible" : "hidden",
+                          textOverflow: expanded ? "clip" : "ellipsis",
+                          whiteSpace: expanded ? "normal" : "nowrap",
+                          minWidth: 0,
+                        }}
+                      >
+                        {expanded ? call.name : describeToolCall(call)}
+                      </span>
                     </div>
                     {expanded && (
                       <div
@@ -363,8 +389,9 @@ export function TranscriptView({
                           if (bad) {
                             return (
                               <div style={{ marginBottom: 6, color: theme.waiting }}>
-                                ⚠ Claude Code couldn't parse this call's input as
-                                JSON ({bad.len} bytes). Raw input:
+                                <LuTriangleAlert style={{ verticalAlign: "-2px" }} /> Claude
+                                Code couldn't parse this call's input as JSON ({bad.len}{" "}
+                                bytes). Raw input:
                                 <div style={{ color: theme.dim, marginTop: 4 }}>
                                   {bad.raw}
                                 </div>

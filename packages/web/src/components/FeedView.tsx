@@ -10,7 +10,18 @@ import type {
   ClaudeEffort,
   ClaudeModel,
 } from "@standup/shared";
-import { LuReply, LuArrowUpRight, LuX, LuClock, LuCircleX } from "react-icons/lu";
+import {
+  LuReply,
+  LuArrowUpRight,
+  LuX,
+  LuClock,
+  LuCircleX,
+  LuInbox,
+  LuCircleCheck,
+  LuBot,
+  LuBox,
+  LuCheck,
+} from "react-icons/lu";
 import { theme, friendlyModel } from "./theme";
 import { Replier } from "./Replier";
 import { Composer } from "./Composer";
@@ -408,8 +419,8 @@ export function FeedView({
             color: theme.dim,
           }}
         >
-          <div style={{ fontSize: 30, marginBottom: 10 }}>
-            {blockedOnly ? "🌤️" : "📭"}
+          <div style={{ fontSize: 30, marginBottom: 10, display: "flex" }}>
+            {blockedOnly ? <LuCircleCheck /> : <LuInbox />}
           </div>
           <div style={{ fontSize: 14 }}>
             {blockedOnly ? "Nothing blocked. Every agent is moving." : "No activity yet."}
@@ -569,7 +580,7 @@ export function FeedView({
                 flexShrink: 0,
               }}
             >
-              {isAutoCheckpoint ? "🤖" : (project?.emoji ?? "📦")}
+              {isAutoCheckpoint ? <LuBot /> : (project?.emoji ?? <LuBox />)}
             </div>
 
             {/* Content */}
@@ -676,8 +687,17 @@ export function FeedView({
               {/* Confirmation of a reply/reaction already sent, when the reply
                   box isn't open (e.g. a one-tap emoji reaction). */}
               {steerable && replies[item.data.id] && replyingId !== item.data.id && (
-                <div style={{ fontSize: 11.5, color: theme.checkpoint, marginTop: 5 }}>
-                  ✓ you: {replies[item.data.id]}
+                <div
+                  style={{
+                    fontSize: 11.5,
+                    color: theme.checkpoint,
+                    marginTop: 5,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  <LuCheck /> you: {replies[item.data.id]}
                 </div>
               )}
 
@@ -820,9 +840,12 @@ function BlockSummary({ askId }: { askId: string }) {
           color: theme.expert,
           fontWeight: 600,
           marginBottom: 4,
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
         }}
       >
-        🤖 why it's blocked
+        <LuBot /> why it's blocked
       </div>
       <div style={{ fontSize: 12.5, lineHeight: 1.5, color: theme.text }}>{summary}</div>
     </div>

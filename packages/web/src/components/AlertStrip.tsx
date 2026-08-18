@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { LuArrowRight } from "react-icons/lu";
 import type { Ask, Session, Project } from "@standup/shared";
 import { theme } from "./theme";
 
@@ -106,8 +107,17 @@ export function AlertStrip({
         oldest blocked {formatQuiet(oldestSeconds)}
       </span>
       <span style={{ flex: 1 }} />
-      <span style={{ fontSize: 12.5, color: theme.waiting, fontWeight: 600 }}>
-        Review →
+      <span
+        style={{
+          fontSize: 12.5,
+          color: theme.waiting,
+          fontWeight: 600,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        Review <LuArrowRight />
       </span>
     </button>
   );

@@ -1,4 +1,11 @@
 import { useState } from "react";
+import {
+  LuChevronDown,
+  LuChevronRight,
+  LuCornerDownLeft,
+  LuSquare,
+  LuRefreshCw,
+} from "react-icons/lu";
 import type { ClaudeEffort, ClaudeModel, Launch } from "@standup/shared";
 import { theme } from "./theme";
 
@@ -17,6 +24,9 @@ const linkButton: React.CSSProperties = {
   cursor: "pointer",
   fontSize: 12,
   color: theme.faint,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
 };
 
 /**
@@ -115,11 +125,12 @@ export function LaunchControls({ launch, onStopped }: LaunchControlsProps) {
     <div style={{ marginTop: 9 }}>
       <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <button onClick={() => (output ? setOutput(null) : void loadOutput())} style={linkButton}>
-          {output ? "▾ hide output" : "▸ view output"}
+          {output ? <LuChevronDown /> : <LuChevronRight />}
+          {output ? "hide output" : "view output"}
         </button>
 
         <button onClick={() => setComposing((v) => !v)} style={linkButton}>
-          ↩ send input
+          <LuCornerDownLeft /> send input
         </button>
 
         <select
@@ -188,7 +199,7 @@ export function LaunchControls({ launch, onStopped }: LaunchControlsProps) {
             onClick={() => setConfirmStop(true)}
             style={{ ...linkButton, color: theme.waiting }}
           >
-            ■ stop
+            <LuSquare /> stop
           </button>
         )}
       </div>
@@ -241,7 +252,7 @@ export function LaunchControls({ launch, onStopped }: LaunchControlsProps) {
           </pre>
           <div style={{ display: "flex", gap: 12, marginTop: 6, alignItems: "center" }}>
             <button onClick={() => void loadOutput()} style={linkButton}>
-              ↻ refresh
+              <LuRefreshCw /> refresh
             </button>
             {!alive && (
               <span style={{ fontFamily: theme.mono, fontSize: 10.5, color: theme.faint }}>

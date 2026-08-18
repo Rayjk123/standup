@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { LuArrowLeft } from "react-icons/lu";
 import { theme } from "./theme";
 import { Markdown } from "./Markdown";
 import { lineDiff } from "./lineDiff";
@@ -1239,9 +1240,12 @@ function DocEditor({
           cursor: "pointer",
           fontSize: 12.5,
           color: theme.faint,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
         }}
       >
-        ← All knowledge
+        <LuArrowLeft /> All knowledge
       </button>
 
       <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>

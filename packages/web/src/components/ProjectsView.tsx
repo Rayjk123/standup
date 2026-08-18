@@ -9,6 +9,7 @@ import type {
   ClaudeEffort,
   ClaudeModel,
 } from "@standup/shared";
+import { LuBox, LuCircleX, LuArrowLeftRight } from "react-icons/lu";
 import { theme, statusColors, friendlyModel } from "./theme";
 import { SilenceStrip } from "./SilenceStrip";
 import { ProjectEditor } from "./ProjectEditor";
@@ -155,7 +156,7 @@ export function ProjectsView({
                     fontSize: 12,
                   }}
                 >
-                  {project.emoji ?? "📦"}
+                  {project.emoji ?? <LuBox />}
                 </div>
                 {/* The project itself is selectable, not just its sessions —
                     it owns knowledge and configuration of its own. */}
@@ -281,12 +282,12 @@ export function ProjectsView({
                         style={{
                           display: "flex",
                           gap: 6,
-                          alignItems: "baseline",
+                          alignItems: "center",
                           fontSize: 12,
                           color: theme.waiting,
                         }}
                       >
-                        <span>✗</span>
+                        <LuCircleX style={{ flexShrink: 0 }} />
                         <span
                           style={{
                             flex: 1,
@@ -406,13 +407,14 @@ export function ProjectsView({
                           <span
                             title="Standup owns this session's terminal"
                             style={{
-                              fontFamily: theme.mono,
-                              fontSize: 9,
+                              fontSize: 11,
                               color: theme.checkpoint,
                               flexShrink: 0,
+                              display: "flex",
+                              alignItems: "center",
                             }}
                           >
-                            ⇄
+                            <LuArrowLeftRight />
                           </span>
                         )}
                       </div>
@@ -480,7 +482,9 @@ export function ProjectsView({
               }}
             >
               <div style={{ display: "flex", gap: 11, alignItems: "center" }}>
-                <span style={{ fontSize: 20 }}>{openProject.emoji ?? "📦"}</span>
+                <span style={{ fontSize: 20, display: "inline-flex" }}>
+                  {openProject.emoji ?? <LuBox />}
+                </span>
                 <span style={{ fontSize: 17, fontWeight: 700 }}>
                   {openProject.name}
                 </span>
@@ -626,7 +630,7 @@ export function ProjectsView({
                     fontSize: 15,
                   }}
                 >
-                  {selectedProject?.emoji ?? "📦"}
+                  {selectedProject?.emoji ?? <LuBox />}
                 </div>
                 <span style={{ fontSize: 17, fontWeight: 700 }}>
                   {selected.title || "Untitled"}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LuCheck, LuClock, LuCornerDownLeft } from "react-icons/lu";
 import { theme } from "./theme";
 
 export type ReplyTarget = "ask" | "checkpoint";
@@ -79,11 +80,20 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
             fontSize: 10,
             marginTop: 4,
             color: isAsk ? theme.checkpoint : theme.stalled,
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
           }}
         >
-          {isAsk
-            ? "✓ delivered · agent unblocked"
-            : "⧖ queued · delivers at the next turn boundary"}
+          {isAsk ? (
+            <>
+              <LuCheck /> delivered · agent unblocked
+            </>
+          ) : (
+            <>
+              <LuClock /> queued · delivers at the next turn boundary
+            </>
+          )}
         </div>
       </div>
     );
@@ -174,9 +184,12 @@ export function Replier({ target, options, reply, onReply }: ReplierProps) {
             cursor: "pointer",
             fontSize: 12.5,
             color: theme.faint,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
           }}
         >
-          ↩ steer
+          <LuCornerDownLeft /> steer
         </button>
       ) : (
         <input

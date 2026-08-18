@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LuCheck } from "react-icons/lu";
 import { theme } from "./theme";
 
 /**
@@ -80,8 +81,18 @@ export function WorkspaceRootSetting() {
         }}
       />
       {saved && (
-        <div style={{ fontFamily: theme.mono, fontSize: 10, color: theme.checkpoint, marginTop: 4 }}>
-          ✓ Saved — applies to new launches.
+        <div
+          style={{
+            fontFamily: theme.mono,
+            fontSize: 10,
+            color: theme.checkpoint,
+            marginTop: 4,
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <LuCheck /> Saved — applies to new launches.
         </div>
       )}
     </div>
