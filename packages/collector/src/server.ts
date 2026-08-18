@@ -2003,30 +2003,29 @@ function handleHookEvent(
         timestamp: new Date().toISOString(),
       });
 
-      // Auto-checkpointing — off by default (real cost per call, see
-      // auto-checkpoint.ts). Fired without awaiting: it shells out to
-      // `claude -p` and takes seconds, and the hook response must not wait
-      // on that or every turn boundary gets slower for the agent.
+      // Auto-checkpointing + turn-end classification — off by default (real
+      // cost per call, see auto-checkpoint.ts). Fired without awaiting: it
+      // shells out to `claude -p` and takes seconds, and the hook response
+      // must not wait on that or every turn boundary gets slower for the
+      // agent. Run sequentially in one task so the classifier can dedupe its
+      // feed entry against whatever auto-checkpoint already wrote.
       if (isAutoCheckpointEnabled(store.db)) {
-        void maybeAutoCheckpoint(store.db, session_id)
-          .then((checkpoint) => {
-            if (!checkpoint) return;
-            broadcast({
-              type: "checkpoint:new",
-              payload: checkpoint,
-              timestamp: new Date().toISOString(),
-            });
-          })
-          .catch((err) => {
-            console.error(`[auto-checkpoint] ${session_id.slice(0, 8)}:`, err);
-          });
+        void (async () => {
+          try {
+            const checkpoint = await maybeAutoCheckpoint(store.db, session_id);
+            if (checkpoint) {
+              broadcast({
+                type: "checkpoint:new",
+                payload: checkpoint,
+                timestamp: new Date().toISOString(),
+              });
+            }
 
-        // Classify the turn end (needs-you / done / idle) and reflect it.
-        // Async for the same reason as auto-checkpoint. This is what surfaces
-        // a monitored session that needs input — the coarse launched/monitored
-        // default can't tell "asked a question" from "just stopped".
-        void classifyTurnEnd(store.db, session_id)
-          .then((result) => {
+            // Classify the turn end (needs-you / done / idle) and reflect it.
+            // This is what surfaces a monitored session that needs input — the
+            // coarse launched/monitored default can't tell "asked a question"
+            // from "just stopped".
+            const result = await classifyTurnEnd(store.db, session_id);
             if (!result) return;
             const session = getSession(store.db, session_id);
 
@@ -2059,19 +2058,34 @@ function handleHookEvent(
             } else if (result.state === "done") {
               // Only from idle — never stomp a status the session moved on to
               // (a new turn started, or it's already waiting on something).
-              const current = getSession(store.db, session_id);
-              if (current?.status !== "idle") return;
+              if (session?.status !== "idle") return;
               updateSessionStatus(store.db, session_id, "done");
               broadcast({
                 type: "session:status",
                 payload: { sessionId: session_id, status: "done" },
                 timestamp: new Date().toISOString(),
               });
+              // Make "done" visible in the feed. If auto-checkpoint already
+              // wrote a checkpoint for this turn, that's the entry — don't
+              // duplicate it; otherwise record the completion as one.
+              if (!checkpoint) {
+                const doneCheckpoint = createCheckpoint(
+                  store.db,
+                  session_id,
+                  "auto",
+                  `✓ Done — ${result.reason}`
+                );
+                broadcast({
+                  type: "checkpoint:new",
+                  payload: doneCheckpoint,
+                  timestamp: new Date().toISOString(),
+                });
+              }
             }
-          })
-          .catch((err) => {
-            console.error(`[classify] ${session_id.slice(0, 8)}:`, err);
-          });
+          } catch (err) {
+            console.error(`[turn-end] ${session_id.slice(0, 8)}:`, err);
+          }
+        })();
       }
       break;
     }
