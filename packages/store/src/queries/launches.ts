@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Launch, LaunchStatus, LaunchKind } from "@standup/shared";
+import { canonicalPath, isWithin } from "./projects.js";
 
 interface LaunchRow {
   id: string;
@@ -115,20 +116,40 @@ export function getLaunches(db: Database): Launch[] {
  * path is shared by every plain session anyone starts there afterward.
  * `status != 'cleaned'` additionally excludes a launch whose worktree has
  * since been removed.
+ *
+ * Paths are canonicalized (realpath, `~` expanded) on both sides before
+ * comparing — exactly as findProjectByCwd does. A launch's worktree_path is
+ * stored from the configured worktree root (e.g. `~/workplace/...`) while a
+ * session's cwd is reported by the OS as the resolved realpath (e.g.
+ * `/Volumes/workplace/...` when that root is a symlinked mount). A literal
+ * string compare treats those as different trees, so the SessionStart hook
+ * never attaches and the launch is stranded sessionless, rendering forever as
+ * "provisioning workspace…". Canonicalizing is what makes the match reflect
+ * the real filesystem. The match runs in JS because each row's stored path
+ * must be resolved individually.
  */
 export function findLaunchByCwd(db: Database, cwd: string): Launch | null {
-  const row = db
+  const rows = db
     .query(
       `SELECT l.* FROM launches l
        LEFT JOIN sessions s ON s.id = l.session_id
-       WHERE (? = l.worktree_path OR ? LIKE l.worktree_path || '/%')
-         AND l.status != 'cleaned'
-         AND (l.session_id IS NULL OR s.ended_at IS NULL)
-       ORDER BY length(l.worktree_path) DESC, l.created_at DESC
-       LIMIT 1`
+       WHERE l.status != 'cleaned'
+         AND (l.session_id IS NULL OR s.ended_at IS NULL)`
     )
-    .get(cwd, cwd) as LaunchRow | null;
-  return row ? toLaunch(row) : null;
+    .all() as LaunchRow[];
+
+  const target = canonicalPath(cwd);
+  const match = rows
+    .filter((row) => isWithin(canonicalPath(row.worktree_path), target))
+    // Deepest worktree_path wins (a nested launch beats an ancestor), then
+    // most recent — mirrors the old SQL ORDER BY.
+    .sort((a, b) => {
+      const byDepth = b.worktree_path.length - a.worktree_path.length;
+      if (byDepth !== 0) return byDepth;
+      return b.created_at.localeCompare(a.created_at);
+    })[0];
+
+  return match ? toLaunch(match) : null;
 }
 
 /**

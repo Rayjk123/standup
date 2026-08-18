@@ -15,7 +15,7 @@ import type { Project } from "@standup/shared";
  * unresolved) path when the target doesn't exist yet, so matching still works
  * for a path that isn't on disk.
  */
-function canonicalPath(p: string): string {
+export function canonicalPath(p: string): string {
   const expanded = p.replace(/^~/, process.env.HOME ?? "");
   try {
     return realpathSync(expanded);
@@ -28,7 +28,7 @@ function canonicalPath(p: string): string {
  * True when `target` is `root` or a directory inside it, compared on whole
  * path segments so `/a/foo` does not match `/a/foobar`.
  */
-function isWithin(root: string, target: string): boolean {
+export function isWithin(root: string, target: string): boolean {
   if (target === root) return true;
   const prefix = root.endsWith("/") ? root : `${root}/`;
   return target.startsWith(prefix);
