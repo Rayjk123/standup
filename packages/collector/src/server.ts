@@ -110,6 +110,7 @@ import {
   setAutoCheckpointEnabled,
   clearAutoCheckpointState,
   generateSessionTitle,
+  explainBlock,
 } from "./auto-checkpoint.js";
 
 /** Standup's own MCP tools — nudging on these would feed back on itself. */
@@ -971,6 +972,22 @@ export function createServer(
   app.get("/api/asks/pending", (c) => {
     const asks = getPendingAsks(store.db);
     return c.json(asks);
+  });
+
+  // A cheap-model "why is this blocked / what are the options" summary for the
+  // feed's Blocked filter. Returns { summary: null } when auto-checkpoint is
+  // off (no model call is spent then) or nothing usable comes back; cached
+  // per ask, so this is safe for the client to call once per rendered ask.
+  app.get("/api/asks/:id/explain", async (c) => {
+    const ask = getAsk(store.db, c.req.param("id"));
+    if (!ask) return c.json({ error: "Not found" }, 404);
+    const summary = await explainBlock(store.db, {
+      id: ask.id,
+      sessionId: ask.sessionId,
+      question: ask.question,
+      options: ask.options,
+    });
+    return c.json({ summary });
   });
 
   app.post("/api/asks/:id/resolve", async (c) => {

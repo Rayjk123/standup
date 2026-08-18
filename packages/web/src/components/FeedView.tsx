@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type {
   Checkpoint,
   Ask,
@@ -14,6 +14,7 @@ import { theme, friendlyModel } from "./theme";
 import { Replier } from "./Replier";
 import { Composer } from "./Composer";
 import { LaunchControls } from "./LaunchControls";
+import { SessionScreen } from "./SessionScreen";
 
 /**
  * Renders the agent's question and what retrieval returned, attributed to a
@@ -183,6 +184,7 @@ interface FeedViewProps {
   projects: Project[];
   onSteer: (sessionId: string, body: string) => Promise<void>;
   onResolveAsk: (askId: string, answer: string) => Promise<{ error?: string }>;
+  onDismissAsk: (askId: string) => Promise<{ error?: string }>;
   onLaunch: (
     projectId: string,
     task: string,
@@ -201,6 +203,7 @@ export function FeedView({
   projects,
   onSteer,
   onResolveAsk,
+  onDismissAsk,
   onLaunch,
   onLaunchChanged,
 }: FeedViewProps) {
@@ -210,6 +213,13 @@ export function FeedView({
   const [replies, setReplies] = useState<Record<string, string>>({});
 
   const navigate = useNavigate();
+
+  // "Blocked" is a filter on the feed, not a separate view — the alert strip
+  // deep-links here with ?filter=blocked, and the toggle sets/clears it. When
+  // on, only asks (agents waiting on you) show.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const blockedOnly = searchParams.get("filter") === "blocked";
+  const pendingAskCount = asks.filter((a) => a.status === "pending").length;
 
   // The merged feed carries checkpoints, asks, and expert exchanges — never
   // raw tool calls. That separation is enforced here, at the query, not in
@@ -242,6 +252,24 @@ export function FeedView({
       new Date(b.data.createdAt).getTime()
   );
 
+  // The "Needs you" filter narrows the same feed to just asks — no separate
+  // view, no tab to hunt through.
+  const visibleItems = blockedOnly
+    ? feedItems.filter((i) => i.type === "ask")
+    : feedItems;
+
+  const setFilter = (on: boolean) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (on) next.set("filter", "blocked");
+        else next.delete("filter");
+        return next;
+      },
+      { replace: true }
+    );
+  };
+
   const getSession = (sessionId: string) =>
     sessions.find((s) => s.id === sessionId);
   const getProject = (projectId: string) =>
@@ -249,17 +277,70 @@ export function FeedView({
 
   // Keep the newest item in view as the feed grows, rather than leaving the
   // reader scrolled up at the oldest item every time the list re-renders.
+  // Not while filtered to blocked — that list is a to-do queue, not a thread,
+  // and yanking it to the bottom on every change fights the reader.
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (blockedOnly) return;
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [feedItems.length]);
+  }, [visibleItems.length, blockedOnly]);
 
   // Column layout so the composer stays pinned below a scrolling feed
   // rather than scrolling away with it.
+  const tab = (label: string, on: boolean, active: boolean, count?: number) => (
+    <button
+      onClick={() => setFilter(on)}
+      style={{
+        fontSize: 12,
+        fontWeight: 600,
+        padding: "4px 11px",
+        borderRadius: 999,
+        border: `1px solid ${active ? theme.waiting : theme.edge}`,
+        background: active ? `${theme.waiting}1A` : "transparent",
+        color: active ? theme.waiting : theme.faint,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      {label}
+      {count !== undefined && count > 0 && (
+        <span
+          style={{
+            fontFamily: theme.mono,
+            fontSize: 9.5,
+            background: active ? theme.waiting : theme.edge,
+            color: active ? theme.ground : theme.dim,
+            borderRadius: 8,
+            padding: "0px 5px",
+            fontWeight: 700,
+          }}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {feedItems.length === 0 ? (
+      {/* Filter toggle — Blocked is a lens on the feed, not a separate tab. */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          padding: "8px 20px",
+          borderBottom: `1px solid ${theme.edgeSoft}`,
+        }}
+      >
+        {tab("All", false, !blockedOnly)}
+        {tab("Needs you", true, blockedOnly, pendingAskCount)}
+      </div>
+
+      {visibleItems.length === 0 ? (
         <div
           style={{
             flex: 1,
@@ -271,18 +352,24 @@ export function FeedView({
             color: theme.dim,
           }}
         >
-          <div style={{ fontSize: 30, marginBottom: 10 }}>📭</div>
-          <div style={{ fontSize: 14 }}>No activity yet.</div>
-          <div style={{ fontSize: 12.5, color: theme.faint, marginTop: 4 }}>
-            Checkpoints and asks from agents will appear here — or start work below.
+          <div style={{ fontSize: 30, marginBottom: 10 }}>
+            {blockedOnly ? "🌤️" : "📭"}
           </div>
+          <div style={{ fontSize: 14 }}>
+            {blockedOnly ? "Nothing blocked. Every agent is moving." : "No activity yet."}
+          </div>
+          {!blockedOnly && (
+            <div style={{ fontSize: 12.5, color: theme.faint, marginTop: 4 }}>
+              Checkpoints and asks from agents will appear here — or start work below.
+            </div>
+          )}
         </div>
       ) : (
         <div
           ref={scrollRef}
           style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "8px 0" }}
         >
-          {feedItems.map((item) => {
+          {visibleItems.map((item) => {
         const session = getSession(item.data.sessionId);
         const isAsk = item.type === "ask";
         const isExpert = item.type === "expert";
@@ -385,6 +472,30 @@ export function FeedView({
                     minute: "2-digit",
                   })}
                 </span>
+                {isAsk && (
+                  <>
+                    <span style={{ flex: 1 }} />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void onDismissAsk(item.data.id);
+                      }}
+                      title="Dismiss without answering — the agent's wait ends as if it had timed out."
+                      style={{
+                        background: "none",
+                        border: `1px solid ${theme.edge}`,
+                        borderRadius: 4,
+                        padding: "0 6px",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        lineHeight: 1.6,
+                        color: theme.faint,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </>
+                )}
               </div>
 
               {(isAsk || isExpert || isLaunch || isAutoCheckpoint) && (
@@ -410,6 +521,18 @@ export function FeedView({
                 </div>
               )}
 
+              {/* For a blocked ask: an at-a-glance read of why it stopped —
+                  a Haiku "why it's blocked / options" summary (only when
+                  auto-checkpoint is on) and the last couple of transcript
+                  messages — shown above the question so you have context
+                  before you answer. */}
+              {isAsk && item.data.sessionId && (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <BlockSummary askId={item.data.id} />
+                  <AskContext sessionId={item.data.sessionId} />
+                </div>
+              )}
+
               {isExpert ? (
                 <ExpertBody exchange={item.data as ExpertExchange} />
               ) : isLaunch ? (
@@ -425,6 +548,35 @@ export function FeedView({
                   {item.type === "checkpoint"
                     ? (item.data as Checkpoint).summary
                     : (item.data as Ask).question}
+                </div>
+              )}
+
+              {/* A prompt-ask only knows the agent is waiting; the actual
+                  question is on its terminal, so show the pane. Plus a direct
+                  link into the full session (the row click does this too, but
+                  the reply/context areas stop propagation). */}
+              {isAsk && (
+                <div onClick={(e) => e.stopPropagation()}>
+                  {(item.data as Ask).kind === "permission_prompt" && (
+                    <SessionScreen sessionId={item.data.sessionId} />
+                  )}
+                  {session && (
+                    <button
+                      onClick={() => navigate(`/projects/s/${session.id}`)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        marginTop: 6,
+                        cursor: "pointer",
+                        fontFamily: theme.mono,
+                        fontSize: 11,
+                        color: theme.running,
+                      }}
+                    >
+                      Open session →
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -469,6 +621,124 @@ export function FeedView({
       )}
 
       <Composer projects={projects} onLaunch={onLaunch} />
+    </div>
+  );
+}
+
+/**
+ * The last couple of real messages from a blocked session's transcript —
+ * quick context on what the agent was doing when it stopped to ask, so you
+ * can answer without opening the full session. Read-only; a failure just
+ * renders nothing.
+ */
+function AskContext({ sessionId }: { sessionId: string }) {
+  const [msgs, setMsgs] = useState<{ role: string; text: string }[] | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/sessions/${sessionId}/transcript?limit=6`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((page) => {
+        if (!alive || !page) return;
+        const recent = (page.messages ?? [])
+          .filter((m: { text?: string }) => m.text?.trim())
+          .slice(-3)
+          .map((m: { role: string; text: string }) => ({ role: m.role, text: m.text }));
+        setMsgs(recent);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [sessionId]);
+
+  if (!msgs || msgs.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        background: theme.ground,
+        border: `1px solid ${theme.edgeSoft}`,
+        borderRadius: 6,
+        padding: "8px 10px",
+        margin: "6px 0",
+        maxHeight: 150,
+        overflowY: "auto",
+      }}
+    >
+      {msgs.map((m, i) => (
+        <div
+          key={i}
+          style={{
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: theme.dim,
+            marginBottom: i === msgs.length - 1 ? 0 : 6,
+          }}
+        >
+          <span
+            style={{
+              fontWeight: 600,
+              color: m.role === "user" ? theme.faint : theme.checkpoint,
+            }}
+          >
+            {m.role === "user" ? "you: " : "claude: "}
+          </span>
+          {m.text.length > 240 ? `${m.text.slice(0, 240)}…` : m.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A cheap-model summary of why a session is blocked and what the options are.
+ * Only present when auto-checkpoint is on — the endpoint returns null (and
+ * spends no model call) otherwise — so this quietly renders nothing when off.
+ */
+function BlockSummary({ askId }: { askId: string }) {
+  const [summary, setSummary] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/asks/${askId}/explain`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d?.summary) setSummary(d.summary);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [askId]);
+
+  if (!summary) return null;
+
+  return (
+    <div
+      style={{
+        background: theme.surface,
+        border: `1px solid ${theme.edgeSoft}`,
+        borderLeft: `3px solid ${theme.expert}`,
+        borderRadius: 6,
+        padding: "8px 11px",
+        margin: "6px 0",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: theme.mono,
+          fontSize: 9,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: theme.expert,
+          fontWeight: 600,
+          marginBottom: 4,
+        }}
+      >
+        🤖 why it's blocked
+      </div>
+      <div style={{ fontSize: 12.5, lineHeight: 1.5, color: theme.text }}>{summary}</div>
     </div>
   );
 }

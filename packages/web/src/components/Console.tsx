@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, NavLink, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, NavLink } from "react-router-dom";
 import type {
   Session,
   Project,
@@ -11,13 +11,12 @@ import type {
   ClaudeModel,
 } from "@standup/shared";
 import { FeedView } from "./FeedView";
-import { BlockedView } from "./BlockedView";
 import { ProjectsView } from "./ProjectsView";
 import { AlertStrip } from "./AlertStrip";
 import { AutoCheckpointToggle } from "./AutoCheckpointToggle";
 import { theme } from "./theme";
 
-const VIEWS = ["feed", "blocked", "projects"] as const;
+const VIEWS = ["feed", "projects"] as const;
 
 interface ConsoleProps {
   projects: ProjectWithCounts[];
@@ -64,10 +63,6 @@ export function Console({
   lastEvent,
   draftSignal,
 }: ConsoleProps) {
-  // The alert strip is hidden on Blocked, which is the one place it would be
-  // redundant. Read from the route rather than tracked separately.
-  const onBlockedView = useLocation().pathname.startsWith("/blocked");
-
   const pendingAsks = asks.filter((a) => a.status === "pending");
   const stalledSessions = sessions.filter((s) => s.status === "stalled");
 
@@ -151,34 +146,16 @@ export function Console({
               })}
             >
               {v}
-              {v === "blocked" && pendingAsks.length > 0 && (
-                <span
-                  style={{
-                    fontFamily: theme.mono,
-                    fontSize: 9.5,
-                    background: theme.waiting,
-                    color: theme.ground,
-                    borderRadius: 8,
-                    padding: "1px 6px",
-                    fontWeight: 700,
-                  }}
-                >
-                  {pendingAsks.length}
-                </span>
-              )}
             </NavLink>
           ))}
         </div>
       </div>
 
-      {/* Redundant on Blocked, which already lists everything it summarizes */}
-      {!onBlockedView && (
-        <AlertStrip
-          pendingAsks={pendingAsks}
-          sessions={sessions}
-          projects={projects}
-        />
-      )}
+      <AlertStrip
+        pendingAsks={pendingAsks}
+        sessions={sessions}
+        projects={projects}
+      />
 
       {/* Main content */}
       <div style={{ flex: 1, overflow: "hidden" }}>
@@ -196,23 +173,15 @@ export function Console({
                 projects={projects}
                 onSteer={onSteer}
                 onResolveAsk={onResolveAsk}
+                onDismissAsk={onDismissAsk}
                 onLaunch={onLaunch}
                 onLaunchChanged={onLaunchChanged}
               />
             }
           />
-          <Route
-            path="/blocked"
-            element={
-              <BlockedView
-                asks={pendingAsks}
-                sessions={sessions}
-                projects={projects}
-                onResolveAsk={onResolveAsk}
-                onDismissAsk={onDismissAsk}
-              />
-            }
-          />
+          {/* /blocked is gone — it's a filter on the feed now. Redirect any
+              old links (e.g. the alert strip's) to the filtered feed. */}
+          <Route path="/blocked" element={<Navigate to="/feed?filter=blocked" replace />} />
           {/* Both project and session selection live in the path so they
               survive a refresh, with distinct prefixes so a project id and a
               session id can never be confused for one another. */}

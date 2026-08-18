@@ -67,7 +67,7 @@ export function AlertStrip({
 
   return (
     <button
-      onClick={() => navigate("/blocked")}
+      onClick={() => navigate("/feed?filter=blocked")}
       style={{
         width: "100%",
         display: "flex",

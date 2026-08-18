@@ -190,6 +190,62 @@ export async function generateSessionTitle(
  * length. Returns null if nothing usable is left. Pure, so it's unit-testable
  * without spawning a model.
  */
+// Per-ask cache so "why is this blocked?" costs one Haiku call, not one per
+// feed render. In-memory like the other live state here; a restart just
+// recomputes on next view. Never grows unbounded in practice — keyed by ask
+// id, and asks resolve.
+const blockExplanations = new Map<string, string>();
+
+/**
+ * A one- or two-sentence summary of why a session is blocked and what the
+ * user's options are, from its recent transcript plus the pending question.
+ *
+ * Gated on auto-checkpoint (returns null, spending no model call, when off) —
+ * it reuses the same cheap-model budget the user already opted into. Cached
+ * per ask id. Used by the Blocked filter in the feed to explain a wait at a
+ * glance rather than making the human open the session to reconstruct it.
+ */
+export async function explainBlock(
+  db: Database,
+  ask: { id: string; sessionId: string; question: string; options?: string[] }
+): Promise<string | null> {
+  if (!isAutoCheckpointEnabled(db)) return null;
+
+  const cached = blockExplanations.get(ask.id);
+  if (cached) return cached;
+
+  const path = transcriptPathForSession(db, ask.sessionId);
+  const page = path ? await readTranscript(path, 30) : null;
+  const transcript = (page?.messages ?? [])
+    .map((m) => {
+      const tools = m.toolCalls.map((c) => c.name).join(", ");
+      const parts = [m.text, tools && `[used: ${tools}]`].filter(Boolean);
+      return parts.length ? `${m.role}: ${parts.join(" ")}` : null;
+    })
+    .filter((line): line is string => !!line)
+    .join("\n\n")
+    .slice(-MAX_TRANSCRIPT_CHARS);
+
+  const optionsLine = ask.options?.length
+    ? `\nOffered options: ${ask.options.join(" / ")}`
+    : "";
+  const prompt =
+    "An AI coding agent paused and is waiting on its user. Using the recent " +
+    "conversation and the exact thing it's asking, explain in 1-2 sentences why " +
+    "it is blocked and what the user's options are. Be concrete and brief, with " +
+    "no preamble.\n\n" +
+    `Recent conversation:\n${transcript || "(none captured)"}\n\n` +
+    `What it's asking:\n${ask.question}${optionsLine}`;
+
+  const result = await runHaiku(prompt);
+  if (!result) return null;
+
+  const summary =
+    result.length > MAX_SUMMARY_CHARS ? `${result.slice(0, MAX_SUMMARY_CHARS - 1)}…` : result;
+  blockExplanations.set(ask.id, summary);
+  return summary;
+}
+
 export function cleanTitle(raw: string): string | null {
   const title = raw
     .replace(/^["'`]+|["'`]+$/g, "")
