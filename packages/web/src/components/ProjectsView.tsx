@@ -97,6 +97,13 @@ export function ProjectsView({
   // show beyond the working directory itself.
   const selectedLaunch = launches.find((l) => l.sessionId === selectedSession);
 
+  // Clears a sessionless launch (failed provisioning, or an abandoned
+  // "starting"). The launch:cleaned broadcast refreshes the list, so the row
+  // drops on its own — no local state to manage.
+  const dismissLaunch = (id: string) => {
+    void fetch(`/api/launches/${id}/cleanup`, { method: "POST" }).catch(() => {});
+  };
+
   return (
     <div style={{ display: "flex", height: "100%" }}>
       {/* Project list */}
@@ -114,6 +121,15 @@ export function ProjectsView({
           const alertCount = projectSessions.filter(
             (s) => s.status === "waiting" || s.status === "stalled"
           ).length;
+          // Launches that have no session yet — still provisioning, or failed
+          // before the agent ever started. Without surfacing these here, a
+          // provision failure (e.g. an expired git credential) is invisible in
+          // the project you launched from: no session is ever created, so the
+          // only trace is a card in the Feed. Excludes cleaned ones and any
+          // that have since attached a session (those show as sessions below).
+          const projectLaunches = launches.filter(
+            (l) => l.projectId === project.id && !l.sessionId && l.status !== "cleaned"
+          );
 
           return (
             <div key={project.id} style={{ marginBottom: 3 }}>
@@ -254,8 +270,76 @@ export function ProjectsView({
                 </button>
               )}
 
+              {/* Sessionless launches — provisioning in progress, or failed
+                  before any session existed. Shown here so a launch failure
+                  isn't invisible from the project you started it in. */}
+              {projectLaunches.map((launch) => (
+                <div key={launch.id} style={{ padding: "3px 12px 6px 45px" }}>
+                  {launch.status === "failed" ? (
+                    <>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 6,
+                          alignItems: "baseline",
+                          fontSize: 12,
+                          color: theme.waiting,
+                        }}
+                      >
+                        <span>✗</span>
+                        <span
+                          style={{
+                            flex: 1,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {launch.task || "Launch"} failed
+                        </span>
+                        <button
+                          onClick={() => dismissLaunch(launch.id)}
+                          title="Dismiss this failed launch"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            padding: 0,
+                            cursor: "pointer",
+                            color: theme.faint,
+                            fontSize: 13,
+                            lineHeight: 1,
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      {launch.error && (
+                        <div
+                          style={{
+                            fontFamily: theme.mono,
+                            fontSize: 10.5,
+                            color: theme.faint,
+                            marginTop: 2,
+                            lineHeight: 1.4,
+                            maxHeight: 48,
+                            overflow: "hidden",
+                          }}
+                        >
+                          {launch.error.slice(0, 200)}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 12, color: theme.running }}>
+                      ⧗ {launch.provisioned ? "provisioning workspace…" : "starting…"}{" "}
+                      <span style={{ color: theme.faint }}>{launch.task}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+
               {/* Sessions */}
-              {projectSessions.length === 0 ? (
+              {projectSessions.length === 0 && projectLaunches.length === 0 ? (
                 <div
                   style={{
                     padding: "2px 14px 8px 45px",
