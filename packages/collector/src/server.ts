@@ -111,6 +111,7 @@ import {
   clearAutoCheckpointState,
   generateSessionTitle,
   explainBlock,
+  classifyTurnEnd,
 } from "./auto-checkpoint.js";
 
 /** Standup's own MCP tools — nudging on these would feed back on itself. */
@@ -2019,6 +2020,58 @@ function handleHookEvent(
           .catch((err) => {
             console.error(`[auto-checkpoint] ${session_id.slice(0, 8)}:`, err);
           });
+
+        // Classify the turn end (needs-you / done / idle) and reflect it.
+        // Async for the same reason as auto-checkpoint. This is what surfaces
+        // a monitored session that needs input — the coarse launched/monitored
+        // default can't tell "asked a question" from "just stopped".
+        void classifyTurnEnd(store.db, session_id)
+          .then((result) => {
+            if (!result) return;
+            const session = getSession(store.db, session_id);
+
+            if (result.state === "needs_you") {
+              // One ask per block — the same idempotency guard the live
+              // Notification path uses.
+              if (getPendingAsksBySession(store.db, session_id).length > 0) return;
+              const launched = isLaunchedSession(store.db, session_id);
+              const note = launched
+                ? "\n\n(launched by the console — nobody is at its terminal)"
+                : "\n\n(running in your own terminal — answer it there)";
+              const ask = createAsk(
+                store.db,
+                session_id,
+                "permission_prompt",
+                `${result.reason}${note}`
+              );
+              updateSessionStatus(store.db, session_id, "waiting");
+              broadcast({
+                type: "ask:new",
+                payload: ask,
+                timestamp: new Date().toISOString(),
+              });
+              broadcast({
+                type: "session:status",
+                payload: { sessionId: session_id, status: "waiting" },
+                timestamp: new Date().toISOString(),
+              });
+              void pushNotification(session?.title || "Agent needs you", result.reason);
+            } else if (result.state === "done") {
+              // Only from idle — never stomp a status the session moved on to
+              // (a new turn started, or it's already waiting on something).
+              const current = getSession(store.db, session_id);
+              if (current?.status !== "idle") return;
+              updateSessionStatus(store.db, session_id, "done");
+              broadcast({
+                type: "session:status",
+                payload: { sessionId: session_id, status: "done" },
+                timestamp: new Date().toISOString(),
+              });
+            }
+          })
+          .catch((err) => {
+            console.error(`[classify] ${session_id.slice(0, 8)}:`, err);
+          });
       }
       break;
     }
@@ -2076,7 +2129,15 @@ function handleHookEvent(
       const isIdle = p.notification_type === "idle_prompt";
       const launched = isLaunchedSession(store.db, session_id);
 
-      if (isPermission || (isIdle && launched)) {
+      // When auto-checkpoint is on, the Stop turn-end classifier decides
+      // needs-you/done/idle for every session (launched and monitored), so the
+      // coarse "launched idle → needs-you" rule stands down to avoid
+      // double-flagging a launch the classifier judged done or idle. A real
+      // permission_prompt is a mid-turn tool gate, not a turn end, so it always
+      // surfaces regardless.
+      const idleNeedsYou = isIdle && launched && !isAutoCheckpointEnabled(store.db);
+
+      if (isPermission || idleNeedsYou) {
         updateSessionStatus(store.db, session_id, "waiting");
         broadcast({
           type: "session:status",

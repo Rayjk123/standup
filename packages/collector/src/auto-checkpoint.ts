@@ -246,6 +246,76 @@ export async function explainBlock(
   return summary;
 }
 
+/**
+ * Classifies how a session's turn ended: is the agent waiting on the human,
+ * finished, or just idle mid-exchange? Drives the feed's needs-you surfacing
+ * (for launched AND monitored sessions) and the distinct 'done' status.
+ *
+ * Gated on auto-checkpoint — returns null (no model call) when off, in which
+ * case the collector keeps its coarse default (launched idle → needs-you,
+ * monitored → nothing). Reads the recent transcript, not the whole thing.
+ */
+export async function classifyTurnEnd(
+  db: Database,
+  sessionId: string
+): Promise<{ state: "needs_you" | "done" | "idle"; reason: string } | null> {
+  if (!isAutoCheckpointEnabled(db)) return null;
+
+  const path = transcriptPathForSession(db, sessionId);
+  if (!path) return null;
+
+  const page = await readTranscript(path, 12);
+  const transcript = page.messages
+    .slice(-6)
+    .map((m) => {
+      const tools = m.toolCalls.map((c) => c.name).join(", ");
+      const parts = [m.text, tools && `[used: ${tools}]`].filter(Boolean);
+      return parts.length ? `${m.role}: ${parts.join(" ")}` : null;
+    })
+    .filter((line): line is string => !!line)
+    .join("\n\n")
+    .slice(-MAX_TRANSCRIPT_CHARS);
+  if (!transcript.trim()) return null;
+
+  const prompt =
+    "An AI coding agent just ended its turn. From the recent conversation, " +
+    "classify its state as exactly one of these labels:\n" +
+    "NEEDS_YOU — it asked the user a question, or needs a decision, approval, or " +
+    "input to continue.\n" +
+    "DONE — it finished the requested work and has nothing pending.\n" +
+    "IDLE — it stopped without clearly finishing or asking (e.g. mid-exchange).\n\n" +
+    "Reply with the label on the first line (exactly NEEDS_YOU, DONE, or IDLE), " +
+    "then a one-sentence reason.\n\n" +
+    transcript;
+
+  const result = await runHaiku(prompt);
+  return result ? parseTurnEnd(result) : null;
+}
+
+/**
+ * Parses the classifier's reply — a label line (NEEDS_YOU / DONE / IDLE) plus
+ * a reason — into a typed state. Unknown/garbled labels fall back to 'idle',
+ * the do-nothing state. Pure, so the branch logic is unit-testable without a
+ * model call.
+ */
+export function parseTurnEnd(raw: string): {
+  state: "needs_you" | "done" | "idle";
+  reason: string;
+} {
+  const lines = raw.split("\n");
+  const label = (lines[0] ?? "").trim().toUpperCase();
+  const rest = lines.slice(1).join(" ").trim();
+  const reason = (rest || lines[0] || "").trim();
+  const state = label.includes("NEEDS")
+    ? "needs_you"
+    : label.includes("DONE")
+      ? "done"
+      : "idle";
+  const capped =
+    reason.length > MAX_SUMMARY_CHARS ? `${reason.slice(0, MAX_SUMMARY_CHARS - 1)}…` : reason;
+  return { state, reason: capped };
+}
+
 export function cleanTitle(raw: string): string | null {
   const title = raw
     .replace(/^["'`]+|["'`]+$/g, "")

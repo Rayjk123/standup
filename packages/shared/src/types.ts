@@ -65,7 +65,7 @@ export interface ProjectConfig {
 // Sessions
 // ============================================================================
 
-export type SessionStatus = "running" | "idle" | "waiting" | "stalled";
+export type SessionStatus = "running" | "idle" | "waiting" | "stalled" | "done";
 
 export interface Session {
   id: string;

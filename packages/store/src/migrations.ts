@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 
-const MIGRATIONS = [
+export const MIGRATIONS = [
   // Migration 001: Initial schema
   `
   -- Projects from registry (cached for fast lookup)
@@ -279,6 +279,37 @@ const MIGRATIONS = [
   // all worktree launches (0), the safe default.
   `
   ALTER TABLE launches ADD COLUMN provisioned INTEGER NOT NULL DEFAULT 0;
+  `,
+
+  // Migration 013: sessions.status 'done'
+  //
+  // A turn-end classifier (auto-checkpoint-gated) marks a session 'done' when
+  // the agent finished with nothing pending — distinct from 'idle' (stopped
+  // mid-thought) and from a 'waiting' needs-you. SQLite can't ALTER a CHECK in
+  // place, so the table is recreated. Eight tables FK-reference sessions, so
+  // foreign keys are disabled for the swap (the SQLite-recommended procedure);
+  // the data is copied verbatim and keys re-enabled after.
+  `
+  PRAGMA foreign_keys=OFF;
+  CREATE TABLE sessions_new (
+    id TEXT PRIMARY KEY,
+    project_id TEXT REFERENCES projects(id),
+    title TEXT,
+    cwd TEXT NOT NULL,
+    parent_session_id TEXT REFERENCES sessions(id),
+    status TEXT NOT NULL DEFAULT 'running'
+      CHECK (status IN ('running', 'idle', 'waiting', 'stalled', 'done')),
+    started_at TEXT DEFAULT (datetime('now')),
+    ended_at TEXT
+  );
+  INSERT INTO sessions_new
+    SELECT id, project_id, title, cwd, parent_session_id, status, started_at, ended_at
+    FROM sessions;
+  DROP TABLE sessions;
+  ALTER TABLE sessions_new RENAME TO sessions;
+  CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
+  PRAGMA foreign_keys=ON;
   `,
 ];
 

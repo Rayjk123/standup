@@ -13,6 +13,7 @@ export const theme = {
   stalled: "#F0A93B",
   waiting: "#FF6B84",
   idle: "#48536A",
+  done: "#5FDCA4",
   expert: "#B08CF0",
   mono: "ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Code', Menlo, monospace",
   sans: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
@@ -37,4 +38,5 @@ export const statusColors = {
   idle: theme.idle,
   waiting: theme.waiting,
   stalled: theme.stalled,
+  done: theme.done,
 } as const;
