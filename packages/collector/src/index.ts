@@ -9,6 +9,7 @@ import { createWsServer } from "./ws.js";
 import { KnowledgeSync } from "./knowledge-sync.js";
 import { ProjectsRegistry, defaultProjectsPath } from "./projects-registry.js";
 import { reconcileBlockedSessions } from "./reconcile.js";
+import { reapDeadSessions } from "./reaper.js";
 
 const COLLECTOR_PORT = parseInt(process.env.COLLECTOR_PORT ?? String(DEFAULT_COLLECTOR_PORT));
 const WS_PORT = parseInt(process.env.WS_PORT ?? String(DEFAULT_WS_PORT));
@@ -74,6 +75,34 @@ if (reblocked.length > 0) {
   }
 }
 
+// Reap launched sessions whose tmux pane died out-of-band. SessionEnd only
+// fires on a clean Claude Code exit; a killed pane sends no hook, so without
+// this its row stays active and any pending ask lingers in "Needs you"
+// forever. Poll on an interval — there is no event to hang this off of.
+const REAPER_INTERVAL_MS = parseInt(
+  process.env.STANDUP_REAPER_INTERVAL_MS ?? "30000"
+);
+const reaperTimer = setInterval(() => {
+  const reaped = reapDeadSessions(store.db);
+  for (const { sessionId, cancelledAsks } of reaped) {
+    for (const ask of cancelledAsks) {
+      wsBroadcast({
+        type: "ask:resolved",
+        payload: { askId: ask.id, answer: "" },
+        timestamp: new Date().toISOString(),
+      });
+    }
+    wsBroadcast({
+      type: "session:end",
+      payload: { sessionId },
+      timestamp: new Date().toISOString(),
+    });
+  }
+  if (reaped.length > 0) {
+    console.log(`[reaper] Reaped ${reaped.length} dead launched session(s)`);
+  }
+}, REAPER_INTERVAL_MS);
+
 // Create HTTP server for Claude Code hooks
 const server = createServer(
   store,
@@ -95,6 +124,7 @@ console.log(`[collector] Ready to receive Claude Code hooks`);
 // Graceful shutdown
 process.on("SIGINT", () => {
   console.log("\n[collector] Shutting down...");
+  clearInterval(reaperTimer);
   knowledgeSync.stopWatching();
   store.close();
   process.exit(0);

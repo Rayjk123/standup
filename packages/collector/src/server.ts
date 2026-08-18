@@ -1861,6 +1861,18 @@ function handleHookEvent(
       clearTodoCheckpointState(session_id);
       clearNudgeState(session_id);
       clearAutoCheckpointState(session_id);
+
+      // The session is gone, so nothing will ever resolve a pending ask it
+      // raised — left pending it sits in "Needs you" forever pointing at a
+      // session that has ended. Mirrors the console stop endpoints.
+      for (const ask of cancelAllPendingAsks(store.db, session_id)) {
+        broadcast({
+          type: "ask:resolved",
+          payload: { askId: ask.id, answer: "" },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       broadcast({
         type: "session:end",
         payload: { sessionId: session_id },
