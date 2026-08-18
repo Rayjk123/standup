@@ -16,6 +16,20 @@ import { Composer } from "./Composer";
 import { LaunchControls } from "./LaunchControls";
 import { SessionScreen } from "./SessionScreen";
 
+/** Icon button in the hover action bar. `active` highlights a toggled state. */
+function actionBtn(active: boolean): React.CSSProperties {
+  return {
+    background: active ? theme.edge : "none",
+    border: "none",
+    cursor: "pointer",
+    fontSize: 13,
+    lineHeight: 1,
+    padding: "3px 5px",
+    borderRadius: 5,
+    color: theme.dim,
+  };
+}
+
 /**
  * Renders the agent's question and what retrieval returned, attributed to a
  * region. Shown in full rather than collapsed: the design's whole argument
@@ -211,8 +225,39 @@ export function FeedView({
   // asks disappear from `asks` once resolved server-side, so without this the
   // confirmation would vanish the instant it succeeded.
   const [replies, setReplies] = useState<Record<string, string>>({});
+  // Slack-style: the row does nothing on click. Hovering reveals an action
+  // bar; the reply box only opens when you pick "reply" from it.
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [replyingId, setReplyingId] = useState<string | null>(null);
 
   const navigate = useNavigate();
+
+  // Send a human response to a feed item — resolves an ask, steers a
+  // checkpoint's session. Optimistic (shows the reply instantly, reverts on
+  // failure). Shared by the reply box and the one-tap emoji reactions.
+  async function handleReply(
+    kind: "ask" | "checkpoint",
+    id: string,
+    sessionId: string,
+    body: string
+  ) {
+    setReplies((prev) => ({ ...prev, [id]: body }));
+    try {
+      if (kind === "ask") {
+        const result = await onResolveAsk(id, body);
+        if (result?.error) throw new Error(result.error);
+      } else {
+        await onSteer(sessionId, body);
+      }
+    } catch (err) {
+      setReplies((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      throw err;
+    }
+  }
 
   // "Blocked" is a filter on the feed, not a separate view — the alert strip
   // deep-links here with ?filter=blocked, and the toggle sets/clears it. When
@@ -403,17 +448,101 @@ export function FeedView({
           else if (isLaunch) navigate(`/projects/p/${(item.data as Launch).projectId}`);
         };
 
+        // Steerable = something the human can respond to: an ask (resolve) or
+        // a checkpoint (steer the session). Expert exchanges and launches are
+        // records, not prompts.
+        const steerable =
+          (isAsk || item.type === "checkpoint") && !!item.data.sessionId;
+        const canOpen = !!session || isLaunch;
+        const showActions =
+          hoveredId === item.data.id || replyingId === item.data.id;
+
         return (
           <div
             key={item.data.id}
-            onClick={openInProjects}
+            onMouseEnter={() => setHoveredId(item.data.id)}
+            onMouseLeave={() => setHoveredId(null)}
             style={{
+              position: "relative",
               display: "flex",
               gap: 12,
               padding: "9px 20px 5px",
-              cursor: "pointer",
+              background: showActions ? theme.surface : "transparent",
             }}
           >
+            {/* Hover action bar — Slack-style: the row itself does nothing,
+                these are the only ways to act on an item. */}
+            {showActions && (steerable || canOpen || isAsk) && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  right: 16,
+                  display: "flex",
+                  gap: 4,
+                  alignItems: "center",
+                  background: theme.raised,
+                  border: `1px solid ${theme.edge}`,
+                  borderRadius: 7,
+                  padding: "3px 4px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+                  zIndex: 2,
+                }}
+              >
+                {steerable &&
+                  ["👍", "✅", "👀"].map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() =>
+                        void handleReply(
+                          isAsk ? "ask" : "checkpoint",
+                          item.data.id,
+                          item.data.sessionId,
+                          emoji
+                        )
+                      }
+                      title={`React ${emoji} — sends it to the agent`}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: 15,
+                        lineHeight: 1,
+                        padding: "2px 3px",
+                        borderRadius: 5,
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                {steerable && (
+                  <button
+                    onClick={() =>
+                      setReplyingId((cur) => (cur === item.data.id ? null : item.data.id))
+                    }
+                    title="Reply / steer"
+                    style={actionBtn(replyingId === item.data.id)}
+                  >
+                    💬
+                  </button>
+                )}
+                {canOpen && (
+                  <button onClick={openInProjects} title="Open in Projects" style={actionBtn(false)}>
+                    ↗
+                  </button>
+                )}
+                {isAsk && (
+                  <button
+                    onClick={() => void onDismissAsk(item.data.id)}
+                    title="Dismiss without answering — the agent's wait ends as if it had timed out."
+                    style={actionBtn(false)}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Avatar */}
             <div
               style={{
@@ -472,30 +601,6 @@ export function FeedView({
                     minute: "2-digit",
                   })}
                 </span>
-                {isAsk && (
-                  <>
-                    <span style={{ flex: 1 }} />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void onDismissAsk(item.data.id);
-                      }}
-                      title="Dismiss without answering — the agent's wait ends as if it had timed out."
-                      style={{
-                        background: "none",
-                        border: `1px solid ${theme.edge}`,
-                        borderRadius: 4,
-                        padding: "0 6px",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        lineHeight: 1.6,
-                        color: theme.faint,
-                      }}
-                    >
-                      ×
-                    </button>
-                  </>
-                )}
               </div>
 
               {(isAsk || isExpert || isLaunch || isAutoCheckpoint) && (
@@ -552,64 +657,34 @@ export function FeedView({
               )}
 
               {/* A prompt-ask only knows the agent is waiting; the actual
-                  question is on its terminal, so show the pane. Plus a direct
-                  link into the full session (the row click does this too, but
-                  the reply/context areas stop propagation). */}
-              {isAsk && (
-                <div onClick={(e) => e.stopPropagation()}>
-                  {(item.data as Ask).kind === "permission_prompt" && (
-                    <SessionScreen sessionId={item.data.sessionId} />
-                  )}
-                  {session && (
-                    <button
-                      onClick={() => navigate(`/projects/s/${session.id}`)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        padding: 0,
-                        marginTop: 6,
-                        cursor: "pointer",
-                        fontFamily: theme.mono,
-                        fontSize: 11,
-                        color: theme.running,
-                      }}
-                    >
-                      Open session →
-                    </button>
-                  )}
+                  question is on its terminal, so show the pane inline. */}
+              {isAsk && (item.data as Ask).kind === "permission_prompt" && (
+                <SessionScreen sessionId={item.data.sessionId} />
+              )}
+
+              {/* Confirmation of a reply/reaction already sent, when the reply
+                  box isn't open (e.g. a one-tap emoji reaction). */}
+              {steerable && replies[item.data.id] && replyingId !== item.data.id && (
+                <div style={{ fontSize: 11.5, color: theme.checkpoint, marginTop: 5 }}>
+                  ✓ you: {replies[item.data.id]}
                 </div>
               )}
 
-              {/* Expert exchanges and launches are records, not prompts —
-                  neither has a counterpart action for the human, so no
-                  reply affordance. */}
-              {!isExpert && !isLaunch && (
-                <div onClick={(e) => e.stopPropagation()}>
+              {/* The reply box, revealed by the hover bar's 💬 action. */}
+              {steerable && replyingId === item.data.id && (
+                <div style={{ marginTop: 6 }}>
                   <Replier
                     target={isAsk ? "ask" : "checkpoint"}
                     options={isAsk ? (item.data as Ask).options : undefined}
                     reply={replies[item.data.id]}
-                    onReply={async (body) => {
-                      // Optimistic: show the reply the instant it's sent
-                      // rather than leaving the field disabled until the
-                      // round trip completes. Reverted if the send fails.
-                      setReplies((prev) => ({ ...prev, [item.data.id]: body }));
-                      try {
-                        if (isAsk) {
-                          const result = await onResolveAsk(item.data.id, body);
-                          if (result?.error) throw new Error(result.error);
-                        } else {
-                          await onSteer(item.data.sessionId, body);
-                        }
-                      } catch (err) {
-                        setReplies((prev) => {
-                          const next = { ...prev };
-                          delete next[item.data.id];
-                          return next;
-                        });
-                        throw err;
-                      }
-                    }}
+                    onReply={(body) =>
+                      handleReply(
+                        isAsk ? "ask" : "checkpoint",
+                        item.data.id,
+                        item.data.sessionId,
+                        body
+                      )
+                    }
                   />
                 </div>
               )}
