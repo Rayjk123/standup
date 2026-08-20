@@ -86,6 +86,7 @@ import {
   adoptSession,
   captureLaunchOutput,
   sendToLaunch,
+  tmuxSessionExists,
   WORKTREE_ROOT_SETTING,
 } from "./launcher.js";
 import { askExpert, loadRegions } from "./expert.js";
@@ -905,8 +906,17 @@ export function createServer(
     const session = getSession(store.db, sessionId);
     if (!session) return c.json({ error: "Not found" }, 404);
 
-    if (isLaunchedSession(store.db, sessionId)) {
-      return c.json({ error: "Standup already owns this session" }, 409);
+    // A session Standup previously launched can still be resumed once it has
+    // died — `claude --resume <id>` reattaches to the same conversation. Only
+    // refuse when it's still LIVE in an owned pane, since resuming that would
+    // put two processes on one transcript. (Previously any launched session
+    // was refused outright, which left a dead launched session unresumable.)
+    const existing = getLaunchBySession(store.db, sessionId);
+    if (existing?.tmuxSession && tmuxSessionExists(existing.tmuxSession)) {
+      return c.json(
+        { error: "This session is already running in a Standup-owned pane." },
+        409
+      );
     }
 
     try {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LuCheck, LuArrowLeftRight, LuSquare, LuTrash2 } from "react-icons/lu";
+import { LuCheck, LuArrowLeftRight, LuSquare, LuTrash2, LuCopy } from "react-icons/lu";
 import type { Session } from "@standup/shared";
 import { theme } from "./theme";
 
@@ -35,9 +35,20 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"stop" | "delete" | null>(null);
   const [freed, setFreed] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const ended = !!session.endedAt;
   const owned = !!session.owned;
+
+  function copyId() {
+    void navigator.clipboard?.writeText(session.id).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      () => {}
+    );
+  }
 
   async function adopt() {
     setBusy(true);
@@ -107,6 +118,43 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
 
   return (
     <div>
+      {/* The session id, always visible and copyable — it's what
+          `claude --resume <id>` needs to reattach to this conversation from a
+          terminal, and what the resume button below uses. */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          marginBottom: 11,
+          fontFamily: theme.mono,
+          fontSize: 11,
+          color: theme.faint,
+        }}
+      >
+        <span style={{ letterSpacing: "0.06em" }}>id</span>
+        <code
+          title={session.id}
+          style={{
+            color: theme.dim,
+            background: theme.ground,
+            border: `1px solid ${theme.edgeSoft}`,
+            borderRadius: 3,
+            padding: "1px 6px",
+            userSelect: "all",
+          }}
+        >
+          {session.id}
+        </code>
+        <button
+          onClick={copyId}
+          title={`Copy session id (resume with: claude --resume ${session.id})`}
+          style={{ ...linkButton, color: copied ? theme.checkpoint : theme.faint }}
+        >
+          {copied ? <><LuCheck /> copied</> : <><LuCopy /> copy</>}
+        </button>
+      </div>
+
       <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         {/* Which capabilities exist depends entirely on whether Standup owns
             this session's terminal, so say so rather than leaving the user to
@@ -131,11 +179,15 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
           {owned ? "owned" : "monitored"}
         </span>
 
-        {/* Adoption resumes an ended session under a tmux pane Standup owns,
-            converting monitored → owned. Only offered where it can work. */}
-        {!owned && ended && (
+        {/* Resume runs `claude --resume <id>` under a tmux pane Standup owns,
+            reattaching to the same conversation (history, checkpoints, and
+            events all stay). Offered for ANY ended session — whether it was
+            monitored or one Standup launched that has since died — since the
+            session id is all `--resume` needs. Not shown while it's live: two
+            processes on one transcript would collide. */}
+        {ended && (
           <button onClick={() => void adopt()} disabled={busy} style={linkButton}>
-            {busy ? "adopting…" : <><LuArrowLeftRight /> adopt</>}
+            {busy ? "resuming…" : <><LuArrowLeftRight /> resume</>}
           </button>
         )}
 
