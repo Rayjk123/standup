@@ -23,6 +23,7 @@ import {
   LuCheck,
 } from "react-icons/lu";
 import { theme, friendlyModel } from "./theme";
+import { Markdown } from "./Markdown";
 import { Replier } from "./Replier";
 import { Composer } from "./Composer";
 import { LaunchControls } from "./LaunchControls";
@@ -84,18 +85,8 @@ function ExpertBody({ exchange }: { exchange: ExpertExchange }) {
             </span>
           )}
         </div>
-        <div
-          style={{
-            fontFamily: theme.mono,
-            fontSize: 11.5,
-            lineHeight: 1.55,
-            color: theme.text,
-            whiteSpace: "pre-wrap",
-            maxHeight: 260,
-            overflowY: "auto",
-          }}
-        >
-          {exchange.answer}
+        <div style={{ maxHeight: 260, overflowY: "auto" }}>
+          <Markdown>{exchange.answer}</Markdown>
         </div>
       </div>
     </>
@@ -671,11 +662,11 @@ export function FeedView({
                   />
                 </div>
               ) : (
-                <div style={{ fontSize: 14, lineHeight: 1.55, color: theme.text }}>
+                <Markdown>
                   {item.type === "checkpoint"
                     ? (item.data as Checkpoint).summary
                     : (item.data as Ask).question}
-                </div>
+                </Markdown>
               )}
 
               {/* A prompt-ask only knows the agent is waiting; the actual
@@ -847,7 +838,7 @@ function BlockSummary({ askId }: { askId: string }) {
       >
         <LuBot /> why it's blocked
       </div>
-      <div style={{ fontSize: 12.5, lineHeight: 1.5, color: theme.text }}>{summary}</div>
+      <Markdown>{summary}</Markdown>
     </div>
   );
 }
