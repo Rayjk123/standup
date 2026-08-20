@@ -3,7 +3,15 @@ import { mkdtemp, mkdir, symlink, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { createStore } from "../store.js";
-import { upsertProject, createLaunch, findLaunchByCwd } from "../index.js";
+import {
+  upsertProject,
+  createLaunch,
+  findLaunchByCwd,
+  getLaunch,
+  setLaunchPhase,
+  appendLaunchLog,
+  updateLaunchStatus,
+} from "../index.js";
 
 /**
  * Launch attachment has to survive symlinked worktree roots the same way
@@ -74,5 +82,42 @@ describe("findLaunchByCwd across a symlinked worktree root", () => {
     createLaunch(store.db, launch("L1", canonicalWt));
 
     expect(findLaunchByCwd(store.db, sibling)).toBeNull();
+  });
+});
+
+describe("launch provisioning progress", () => {
+  function seed() {
+    const store = createStore(":memory:");
+    upsertProject(store.db, { id: "p", name: "p", branch: "main", repos: [] });
+    createLaunch(store.db, {
+      id: "L1",
+      projectId: "p",
+      task: "t",
+      worktreePath: "/tmp/L1",
+      branch: "main",
+      provisioned: true,
+    });
+    return store;
+  }
+
+  test("setLaunchPhase records the current phase", () => {
+    const store = seed();
+    setLaunchPhase(store.db, "L1", "building");
+    expect(getLaunch(store.db, "L1")?.phase).toBe("building");
+  });
+
+  test("appendLaunchLog accumulates streamed output", () => {
+    const store = seed();
+    appendLaunchLog(store.db, "L1", "line one\n");
+    appendLaunchLog(store.db, "L1", "line two\n");
+    expect(getLaunch(store.db, "L1")?.log).toBe("line one\nline two\n");
+  });
+
+  test("a terminal status clears the phase", () => {
+    const store = seed();
+    setLaunchPhase(store.db, "L1", "starting");
+    updateLaunchStatus(store.db, "L1", "running");
+    expect(getLaunch(store.db, "L1")?.phase).toBeUndefined();
+    expect(getLaunch(store.db, "L1")?.status).toBe("running");
   });
 });

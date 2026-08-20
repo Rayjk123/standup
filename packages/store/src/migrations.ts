@@ -311,6 +311,18 @@ export const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
   PRAGMA foreign_keys=ON;
   `,
+
+  // Migration 014: launch provisioning progress
+  //
+  // `phase` names which slow step a still-"starting" launch is in
+  // (provisioning / building / starting); `log` accumulates the streamed
+  // stdout+stderr of the provision and setup commands, so the console can show
+  // the otherwise-invisible workspace-create + build output live while a
+  // launch provisions.
+  `
+  ALTER TABLE launches ADD COLUMN phase TEXT;
+  ALTER TABLE launches ADD COLUMN log TEXT;
+  `,
 ];
 
 export function runMigrations(db: Database): void {

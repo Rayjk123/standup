@@ -1,6 +1,13 @@
 import type { Database } from "bun:sqlite";
-import type { Launch, LaunchStatus, LaunchKind } from "@standup/shared";
+import type { Launch, LaunchStatus, LaunchKind, LaunchPhase } from "@standup/shared";
 import { canonicalPath, isWithin } from "./projects.js";
+
+/**
+ * Tail cap for a launch's streamed provision/build log. Build output can run
+ * to megabytes; only the tail is useful for "what is it doing right now", and
+ * an unbounded column would bloat the row and every launch broadcast.
+ */
+const LAUNCH_LOG_CAP = 100_000;
 
 interface LaunchRow {
   id: string;
@@ -17,6 +24,8 @@ interface LaunchRow {
   model: string | null;
   effort: string | null;
   provisioned: number | null;
+  phase: string | null;
+  log: string | null;
   created_at: string;
 }
 
@@ -36,6 +45,8 @@ function toLaunch(row: LaunchRow): Launch {
     model: (row.model as Launch["model"]) ?? undefined,
     effort: (row.effort as Launch["effort"]) ?? undefined,
     provisioned: row.provisioned === 1,
+    phase: (row.phase as LaunchPhase | null) ?? undefined,
+    log: row.log ?? undefined,
     createdAt: new Date(row.created_at),
   };
 }
@@ -77,11 +88,39 @@ export function updateLaunchStatus(
   status: LaunchStatus,
   error?: string
 ): void {
-  db.run("UPDATE launches SET status = ?, error = ? WHERE id = ?", [
+  // Clear phase on any terminal transition — it only describes an in-flight
+  // "starting" launch, and a stale phase on a running row would mislabel it.
+  db.run("UPDATE launches SET status = ?, error = ?, phase = NULL WHERE id = ?", [
     status,
     error ?? null,
     launchId,
   ]);
+}
+
+/** Records which slow step a still-"starting" launch is currently in. */
+export function setLaunchPhase(
+  db: Database,
+  launchId: string,
+  phase: LaunchPhase
+): void {
+  db.run("UPDATE launches SET phase = ? WHERE id = ?", [phase, launchId]);
+}
+
+/**
+ * Appends streamed provision/build output to a launch's log, keeping only the
+ * last LAUNCH_LOG_CAP characters so a noisy build can't bloat the row.
+ */
+export function appendLaunchLog(
+  db: Database,
+  launchId: string,
+  chunk: string
+): void {
+  db.run(
+    `UPDATE launches
+       SET log = substr(COALESCE(log, '') || ?, -${LAUNCH_LOG_CAP})
+     WHERE id = ?`,
+    [chunk, launchId]
+  );
 }
 
 export function getLaunch(db: Database, launchId: string): Launch | null {

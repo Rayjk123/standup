@@ -108,6 +108,15 @@ export type LaunchStatus = "starting" | "running" | "failed" | "cleaned";
 
 export type LaunchKind = "worktree" | "adopted" | "bootstrap";
 
+/**
+ * Which slow step a still-`starting` launch is in, so the console can show
+ * real movement instead of a single "provisioning…" for the whole minutes-long
+ * wait. `provisioning` = making the working dir (provision command or
+ * `git worktree add`); `building` = the project `setup`/install command;
+ * `starting` = trusting the dir and spawning the agent's tmux session.
+ */
+export type LaunchPhase = "provisioning" | "building" | "starting";
+
 /** Aliases accepted by `claude --model`. */
 export type ClaudeModel = "opus" | "sonnet" | "haiku" | "fable";
 
@@ -143,6 +152,18 @@ export interface Launch {
    * worktree root, e.g. a whole Brazil workspace), never `git worktree remove`.
    */
   provisioned?: boolean;
+  /**
+   * The slow step currently running while `status` is still "starting".
+   * Undefined once the launch is running/failed/cleaned. Drives the sidebar's
+   * phase label ("provisioning workspace…" / "installing…" / "starting agent…").
+   */
+  phase?: LaunchPhase;
+  /**
+   * Accumulated stdout+stderr of the provision and setup/build commands,
+   * streamed to the console while provisioning so the otherwise-invisible
+   * workspace-create + build output is watchable. Capped to the tail.
+   */
+  log?: string;
   createdAt: Date;
 }
 

@@ -4,8 +4,21 @@ import { existsSync, readFileSync, writeFileSync, renameSync, realpathSync } fro
 import { mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
 import type { Database } from "bun:sqlite";
-import type { ClaudeEffort, ClaudeModel, Launch, LaunchKind, Project } from "@standup/shared";
-import { createLaunch, updateLaunchStatus, getSetting } from "@standup/store";
+import type {
+  ClaudeEffort,
+  ClaudeModel,
+  Launch,
+  LaunchKind,
+  LaunchPhase,
+  Project,
+} from "@standup/shared";
+import {
+  createLaunch,
+  updateLaunchStatus,
+  setLaunchPhase,
+  appendLaunchLog,
+  getSetting,
+} from "@standup/store";
 
 /** Built-in fallback when nothing else specifies where worktrees go. */
 const DEFAULT_WORKTREE_ROOT = join(
@@ -191,12 +204,43 @@ async function run(
   return { ok: proc.exitCode === 0, output };
 }
 
+/**
+ * Drains a spawned stream to a string, forwarding each decoded chunk to
+ * `onChunk` as it arrives. Reading incrementally (rather than buffering to
+ * completion with `new Response().text()`) is what lets a minutes-long build's
+ * output stream to the console live instead of appearing all at once at the
+ * end.
+ */
+async function pumpStream(
+  stream: ReadableStream<Uint8Array>,
+  onChunk?: (chunk: string) => void
+): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let acc = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const text = decoder.decode(value, { stream: true });
+    if (!text) continue;
+    acc += text;
+    onChunk?.(text);
+  }
+  const tail = decoder.decode();
+  if (tail) {
+    acc += tail;
+    onChunk?.(tail);
+  }
+  return acc;
+}
+
 async function runShell(
   script: string,
   cwd: string,
   log: string[],
   extraEnv?: Record<string, string>,
-  timeoutMs: number = STEP_TIMEOUT_MS
+  timeoutMs: number = STEP_TIMEOUT_MS,
+  onChunk?: (chunk: string) => void
 ): Promise<{ ok: boolean; output: string }> {
   // Setup and provision commands come from projects.toml and are shell strings
   // by design ("uv sync && docker compose up -d"), so they need a shell to
@@ -205,6 +249,7 @@ async function runShell(
   // execution, so it only ever runs on an explicit launch, never on collector
   // startup.
   log.push(`$ ${script}`);
+  onChunk?.(`$ ${script}\n`);
 
   const proc = Bun.spawn(["/bin/sh", "-c", script], {
     cwd,
@@ -215,8 +260,8 @@ async function runShell(
   const timer = setTimeout(() => proc.kill(), timeoutMs);
 
   const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
+    pumpStream(proc.stdout, onChunk),
+    pumpStream(proc.stderr, onChunk),
   ]);
   await proc.exited;
   clearTimeout(timer);
@@ -383,9 +428,25 @@ export async function launchSession(
   // (starting → running/failed) reach the UI through onUpdate, not the return.
   const done = (async () => {
     const log: string[] = [];
+
+    // Persist streamed output to the launch row as it arrives, so the
+    // workspace-create + build output — otherwise buried in a local array that
+    // used to be discarded — is watchable (the console polls the row) while
+    // provisioning, instead of appearing all at once when the work finishes.
+    const emitLog = (chunk: string) => {
+      appendLaunchLog(db, launch.id, chunk);
+    };
+    // Record which slow step we're in and broadcast it so the sidebar can show
+    // real movement instead of one static "provisioning…" for the whole wait.
+    const setPhase = (phase: LaunchPhase) => {
+      setLaunchPhase(db, launch.id, phase);
+      onUpdate?.({ ...launch, status: "starting", phase });
+    };
+
     try {
       await mkdir(join(worktreeRoot, project.id), { recursive: true });
 
+      setPhase("provisioning");
       if (usesProvision) {
         // Runs from the parent; must leave a ready directory at $STANDUP_WORKDIR
         // (for `brazil workspace create`, via --root "$STANDUP_WORKDIR").
@@ -400,7 +461,8 @@ export async function launchSession(
             STANDUP_BRANCH: branch,
             STANDUP_PROJECT: project.id,
           },
-          PROVISION_TIMEOUT_MS
+          PROVISION_TIMEOUT_MS,
+          emitLog
         );
         if (!provisioned.ok) {
           throw new Error(`provision command failed: ${provisioned.output.slice(0, 400)}`);
@@ -440,14 +502,24 @@ export async function launchSession(
       }
 
       if (project.setup) {
-        const setup = await runShell(project.setup, launchCwd, log);
+        setPhase("building");
+        const setup = await runShell(
+          project.setup,
+          launchCwd,
+          log,
+          undefined,
+          STEP_TIMEOUT_MS,
+          emitLog
+        );
         // Non-fatal: a failed `docker compose up` shouldn't discard a
         // correctly-created worktree. Surface it and let the agent start.
         if (!setup.ok) {
           log.push("[warn] setup command failed — starting the session anyway");
+          emitLog("[warn] setup command failed — starting the session anyway\n");
         }
       }
 
+      setPhase("starting");
       // A launched agent has nobody to click through Claude Code's
       // folder-trust dialog, and this cwd is a path it's never seen — so
       // pre-accept trust or it hangs on the dialog and never starts.
@@ -479,12 +551,13 @@ export async function launchSession(
       }
 
       updateLaunchStatus(db, launch.id, "running");
-      onUpdate?.({ ...launch, status: "running" });
+      onUpdate?.({ ...launch, status: "running", phase: undefined });
     } catch (err) {
       const message = (err as Error).message;
       updateLaunchStatus(db, launch.id, "failed", message);
       log.push(`[error] ${message}`);
-      onUpdate?.({ ...launch, status: "failed", error: message });
+      emitLog(`[error] ${message}\n`);
+      onUpdate?.({ ...launch, status: "failed", error: message, phase: undefined });
     }
   })();
 

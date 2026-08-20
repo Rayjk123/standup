@@ -1236,6 +1236,15 @@ export function createServer(
     }
   });
 
+  // The launch row incl. its accumulated provision/build `log` — lets a
+  // console that opens a provisioning launch show the output so far, then keep
+  // up via the streamed launch:log events.
+  app.get("/api/launches/:id", (c) => {
+    const launch = getLaunch(store.db, c.req.param("id"));
+    if (!launch) return c.json({ error: "Not found" }, 404);
+    return c.json(launch);
+  });
+
   app.post("/api/launches/:id/send", async (c) => {
     const launch = getLaunch(store.db, c.req.param("id"));
     if (!launch) return c.json({ error: "Not found" }, 404);

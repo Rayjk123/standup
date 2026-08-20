@@ -18,6 +18,7 @@ import { TranscriptView } from "./TranscriptView";
 import { WorkspaceRootSetting } from "./WorkspaceRootSetting";
 import { KnowledgePanel } from "./KnowledgePanel";
 import { Composer } from "./Composer";
+import { LaunchProgress, launchPhaseLabel } from "./LaunchProgress";
 
 interface ProjectsViewProps {
   projects: ProjectWithCounts[];
@@ -60,11 +61,20 @@ export function ProjectsView({
   const navigate = useNavigate();
 
   const selectedProjectId = kind === "p" ? selectedId : undefined;
+  // A sessionless launch (still provisioning, or failed before any session) —
+  // selectable into the detail pane so its provision/build progress is
+  // watchable while it runs.
+  const selectedLaunchId = kind === "l" ? selectedId : undefined;
   const selectedSession =
-    kind === "s" ? selectedId : selectedProjectId ? null : sessions[0]?.id ?? null;
+    kind === "s"
+      ? selectedId
+      : selectedProjectId || selectedLaunchId
+        ? null
+        : sessions[0]?.id ?? null;
 
   const setSelectedSession = (id: string) => navigate(`/projects/s/${id}`);
   const setSelectedProject = (id: string) => navigate(`/projects/p/${id}`);
+  const setSelectedLaunch = (id: string) => navigate(`/projects/l/${id}`);
 
   // null = not editing; "" = creating a new project; otherwise a project id.
   const [editing, setEditing] = useState<string | null>(null);
@@ -97,6 +107,9 @@ export function ProjectsView({
   // user in their own terminal, so there's no worktree/branch/tmux pane to
   // show beyond the working directory itself.
   const selectedLaunch = launches.find((l) => l.sessionId === selectedSession);
+  // The launch selected directly (before it has a session) — its progress
+  // view is shown in the detail pane.
+  const openLaunch = launches.find((l) => l.id === selectedLaunchId);
 
   // Clears a sessionless launch (failed provisioning, or an abandoned
   // "starting"). The launch:cleaned broadcast refreshes the list, so the row
@@ -331,10 +344,39 @@ export function ProjectsView({
                       )}
                     </>
                   ) : (
-                    <div style={{ fontSize: 12, color: theme.running }}>
-                      ⧗ {launch.provisioned ? "provisioning workspace…" : "starting…"}{" "}
-                      <span style={{ color: theme.faint }}>{launch.task}</span>
-                    </div>
+                    <button
+                      onClick={() => setSelectedLaunch(launch.id)}
+                      title="Watch this launch provision"
+                      style={{
+                        display: "flex",
+                        width: "100%",
+                        textAlign: "left",
+                        gap: 5,
+                        alignItems: "baseline",
+                        fontSize: 12,
+                        color: theme.running,
+                        background:
+                          selectedLaunchId === launch.id ? theme.raised : "none",
+                        border: "none",
+                        borderRadius: 4,
+                        padding: "1px 3px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span style={{ flexShrink: 0 }}>⧗ {launchPhaseLabel(launch)}</span>
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          color: theme.faint,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {launch.task}
+                      </span>
+                    </button>
                   )}
                 </div>
               ))}
@@ -879,6 +921,13 @@ export function ProjectsView({
               </div>
             )}
           </>
+        ) : openLaunch ? (
+          <LaunchProgress
+            key={openLaunch.id}
+            launchId={openLaunch.id}
+            initialLaunch={openLaunch}
+            onOpenSession={setSelectedSession}
+          />
         ) : (
           <div
             style={{
