@@ -672,7 +672,14 @@ export function FeedView({
               {/* A prompt-ask only knows the agent is waiting; the actual
                   question is on its terminal, so show the pane inline. */}
               {isAsk && (item.data as Ask).kind === "permission_prompt" && (
-                <SessionScreen sessionId={item.data.sessionId} />
+                <SessionScreen
+                  sessionId={item.data.sessionId}
+                  // Nudge an immediate re-fetch when the session's live state
+                  // changes — e.g. a resume flips it to owned, and the pane
+                  // should switch from "can't read its screen" to the live
+                  // view without waiting on the poll or a page reload.
+                  reloadKey={`${session?.owned}:${session?.status}:${session?.endedAt ?? ""}`}
+                />
               )}
 
               {/* Confirmation of a reply/reaction already sent, when the reply

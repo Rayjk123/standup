@@ -5,6 +5,14 @@ interface SessionScreenProps {
   sessionId: string;
   /** Lines to show. Blocking prompts sit at the bottom of the pane. */
   lines?: number;
+  /**
+   * A value that changes when the session's live state does (ownership,
+   * status, ended). This view reads ownership from its own `/output` poll, so
+   * without a nudge it would keep showing a stale "can't read its screen" for
+   * up to a full poll interval after a resume flips the session to owned.
+   * Changing this forces an immediate re-fetch.
+   */
+  reloadKey?: string;
 }
 
 interface ScreenState {
@@ -23,7 +31,7 @@ interface ScreenState {
  * Monitored sessions have no pane to read; that renders as a pointer back to
  * the human's own terminal rather than an error, because it isn't one.
  */
-export function SessionScreen({ sessionId, lines = 18 }: SessionScreenProps) {
+export function SessionScreen({ sessionId, lines = 18, reloadKey }: SessionScreenProps) {
   const [screen, setScreen] = useState<ScreenState | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -41,10 +49,13 @@ export function SessionScreen({ sessionId, lines = 18 }: SessionScreenProps) {
   useEffect(() => {
     void load();
     // Re-read periodically: the pane is the source of truth and the agent
-    // may move on without any hook firing to tell us.
+    // may move on without any hook firing to tell us. `reloadKey` in the deps
+    // makes a live session-state change (e.g. a resume flipping it to owned)
+    // re-fetch at once rather than after up to a full interval.
     const timer = setInterval(load, 5000);
     return () => clearInterval(timer);
-  }, [sessionId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, reloadKey]);
 
   if (loading) {
     return (
