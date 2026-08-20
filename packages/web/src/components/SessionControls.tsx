@@ -35,16 +35,18 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"stop" | "delete" | null>(null);
   const [freed, setFreed] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"id" | "cmd" | null>(null);
 
   const ended = !!session.endedAt;
   const owned = !!session.owned;
 
-  function copyId() {
-    void navigator.clipboard?.writeText(session.id).then(
+  const resumeCmd = `claude --resume ${session.id}`;
+
+  function copy(what: "id" | "cmd", text: string) {
+    void navigator.clipboard?.writeText(text).then(
       () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        setCopied(what);
+        setTimeout(() => setCopied(null), 1500);
       },
       () => {}
     );
@@ -147,11 +149,20 @@ export function SessionControls({ session, onChanged }: SessionControlsProps) {
           {session.id}
         </code>
         <button
-          onClick={copyId}
-          title={`Copy session id (resume with: claude --resume ${session.id})`}
-          style={{ ...linkButton, color: copied ? theme.checkpoint : theme.faint }}
+          onClick={() => copy("id", session.id)}
+          title="Copy session id"
+          style={{ ...linkButton, color: copied === "id" ? theme.checkpoint : theme.faint }}
         >
-          {copied ? <><LuCheck /> copied</> : <><LuCopy /> copy</>}
+          {copied === "id" ? <><LuCheck /> copied</> : <><LuCopy /> id</>}
+        </button>
+        {/* One-click the whole resume command, ready to paste into a terminal
+            to reattach to this conversation. */}
+        <button
+          onClick={() => copy("cmd", resumeCmd)}
+          title={`Copy: ${resumeCmd}`}
+          style={{ ...linkButton, color: copied === "cmd" ? theme.checkpoint : theme.running }}
+        >
+          {copied === "cmd" ? <><LuCheck /> copied</> : <><LuCopy /> claude --resume</>}
         </button>
       </div>
 
