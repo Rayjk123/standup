@@ -372,26 +372,41 @@ export async function launchSession(
   // worktree, so there's no branch and cleanup can't be a git op.
   const provisionCmd = project.provision?.trim();
   const usesProvision = !!provisionCmd;
-  const branch = usesProvision ? "(provisioned — no worktree)" : `standup/${slug}`;
+
+  const repo = project.repos[0];
+  // A scratch run: no repo to check out and no provision command, so there's
+  // no worktree at all — just a fresh empty directory to run `claude` in. Lets
+  // the console fire off an ad-hoc session without configuring a project.
+  //
+  // Only ordinary launches fall back to scratch. A bootstrap run must have a
+  // real repo (or provision) — its whole point is a stable git HEAD for the
+  // knowledge it stamps with generated_from_sha — so a repo-less bootstrap is
+  // still a misconfiguration, not a scratch session.
+  const isScratch = !usesProvision && !repo && kind !== "bootstrap";
+  const branch = usesProvision
+    ? "(provisioned — no worktree)"
+    : isScratch
+      ? "(scratch — no repo)"
+      : `standup/${slug}`;
 
   // Where the agent actually starts and setup runs. For a provisioned Brazil
   // workspace the package sits at src/<pkg>, so launchSubdir points there.
   const subdir = project.launchSubdir?.trim();
   const launchCwd = subdir ? join(worktreePath, subdir) : worktreePath;
 
-  const repo = project.repos[0];
-  if (!repo) {
+  const repoPath = repo ? repo.replace(/^~/, homedir()) : "";
+
+  // Cheap preconditions run synchronously and throw, so the caller can turn a
+  // misconfiguration into a 400 before any launch row exists. A worktree
+  // launch needs a repo; a bootstrap run does too (see isScratch above). A
+  // provision command or a scratch run makes its own working dir, so neither
+  // needs repos[0].
+  if (!usesProvision && !repo && !isScratch) {
     throw new Error(
       `Project "${project.id}" has no repos configured — nothing to check out. Add a repos entry in projects.toml.`
     );
   }
-  const repoPath = repo.replace(/^~/, homedir());
-
-  // Cheap preconditions run synchronously and throw, so the caller can turn a
-  // misconfiguration into a 400 before any launch row exists. A provision
-  // command materializes its own working dir, so repos[0] need not be a
-  // checkout on disk (it's only $STANDUP_REPO context); the worktree path does.
-  if (!usesProvision && !existsSync(repoPath)) {
+  if (!usesProvision && !isScratch && !existsSync(repoPath)) {
     throw new Error(`Repo path does not exist: ${repoPath}`);
   }
   if (!tmuxAvailable()) {
@@ -473,6 +488,10 @@ export async function launchSession(
               `It must produce that exact directory — pass --root "$STANDUP_WORKDIR" (or --name "$STANDUP_WORKDIR_NAME").`
           );
         }
+      } else if (isScratch) {
+        // No repo, no provision — just a fresh empty directory to run in.
+        // Nothing to check out; the agent starts on a clean slate.
+        await mkdir(worktreePath, { recursive: true });
       } else {
         const isRepo = await run(
           ["git", "rev-parse", "--is-inside-work-tree"],
@@ -827,10 +846,23 @@ export async function cleanupLaunch(
     if (!removed.ok) {
       log.push("[warn] worktree remove failed; it may already be gone");
     }
+    updateLaunchStatus(db, launch.id, "cleaned");
+    log.push(`Branch ${launch.branch} left in place — delete it manually if unwanted.`);
+    return { ok: true, log };
+  }
+
+  // A scratch run (no repo, no provision) is just a plain directory Standup
+  // made — not a git worktree, so remove the dir itself, path-guarded to this
+  // project's own worktree root exactly like the provisioned case.
+  const ownedPrefixRoot = join(resolveWorktreeRoot(db, project), project.id);
+  const target = launch.worktreePath;
+  if (target && (target === ownedPrefixRoot || target.startsWith(`${ownedPrefixRoot}/`))) {
+    const removed = await run(["rm", "-rf", target], "/", log);
+    if (!removed.ok) {
+      log.push("[warn] failed to remove scratch dir; remove it manually");
+    }
   }
 
   updateLaunchStatus(db, launch.id, "cleaned");
-  log.push(`Branch ${launch.branch} left in place — delete it manually if unwanted.`);
-
   return { ok: true, log };
 }

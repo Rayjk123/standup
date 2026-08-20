@@ -65,10 +65,14 @@ export function Composer({ projects, onLaunch, focusSignal }: ComposerProps) {
     if (focusSignal) taskInputRef.current?.focus();
   }, [focusSignal]);
 
-  // A project with no repos can't be checked out — surface that before the
-  // user types a task and hits a failure.
   const selected = projects.find((p) => p.id === target);
-  const launchable = !!selected && selected.repos.length > 0;
+  // No repo and no provision command → a scratch run: the agent starts in a
+  // fresh empty directory. Anything selectable is launchable now — a repo
+  // gets a worktree, a provision command builds a workspace, and everything
+  // else is a scratch session.
+  const isScratch =
+    !!selected && selected.repos.length === 0 && !selected.provision;
+  const launchable = !!selected;
 
   async function submit() {
     if (!task.trim() || busy || !launchable) return;
@@ -108,7 +112,9 @@ export function Composer({ projects, onLaunch, focusSignal }: ComposerProps) {
           marginBottom: 7,
         }}
       >
-        Start new work — launches an agent in its own worktree
+        {isScratch
+          ? "Fire off a scratch agent — a Claude session in a fresh directory"
+          : "Start new work — launches an agent in its own worktree"}
       </div>
       <div
         style={{
@@ -200,9 +206,9 @@ export function Composer({ projects, onLaunch, focusSignal }: ComposerProps) {
           onChange={(e) => setTask(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void submit()}
           placeholder={
-            launchable
-              ? "Describe a task to start a new agent on it…"
-              : `${selected?.name ?? "This project"} has no repos configured — add one in Projects`
+            isScratch
+              ? "Describe a task to fire off a scratch Claude session…"
+              : "Describe a task to start a new agent on it…"
           }
           style={{
             flex: 1,
@@ -236,7 +242,9 @@ export function Composer({ projects, onLaunch, focusSignal }: ComposerProps) {
 
       {busy && (
         <div style={{ fontFamily: theme.mono, fontSize: 10.5, color: theme.running, marginTop: 8 }}>
-          ⧗ creating worktree · running setup · starting agent
+          {isScratch
+            ? "⧗ starting agent"
+            : "⧗ creating worktree · running setup · starting agent"}
         </div>
       )}
 
