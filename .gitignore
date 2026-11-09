@@ -1,0 +1,56 @@
+# Build output in the repo root
+/build
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+dist-serve/
+*.tsbuildinfo
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Bun
+bun.lockb
+
+# Test coverage
+coverage/
+
+# Vite
+packages/web/.vite/
+
+# Knowledge eval snapshot tier (real, private data; never commit)
+packages/knowledge/eval/local/
+
+# Knowledge eval run outputs (milestone results are copied to packages/knowledge/eval/history/)
+packages/knowledge/eval/results/
+
+# Python bytecode
+__pycache__/

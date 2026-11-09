@@ -1,0 +1,27 @@
+{
+  "name": "@standup/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./write-token": "./src/write-token.ts",
+    "./owner-token": "./src/owner-token.ts",
+    "./constants": "./src/constants.ts",
+    "./console-url": "./src/console-url.ts",
+    "./topology": "./src/topology.ts",
+    "./persona": "./src/persona.ts",
+    "./share": "./src/share.ts",
+    "./process-identity": "./src/process-identity.ts",
+    "./steering": "./src/steering.ts",
+    "./scratch": "./src/scratch.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
