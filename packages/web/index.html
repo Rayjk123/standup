@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Standup</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        background: var(--su-page);
+        color: var(--su-page-text);
+        min-height: 100vh;
+      }
+      #root {
+        min-height: 100vh;
+      }
+      @keyframes standup-pulse {
+        0%, 100% { opacity: 0.55; }
+        50% { opacity: 1; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        @keyframes standup-pulse {
+          0%, 100% { opacity: 0.75; }
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Persona's first-paint reads (BOOT_READS in src/lib/persona.ts), started
+      // here so they overlap the bundle's download; the app takes each once.
+      window.__standupBoot = {};
+      ["/api/persona/state", "/api/persona/messages?limit=50", "/api/persona/approvals?status=pending"].forEach(function (url) {
+        var read = fetch(url, { credentials: "same-origin" });
+        read.catch(function () {});
+        window.__standupBoot[url] = read;
+      });
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

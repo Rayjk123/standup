@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      The page Mermaid draws diagrams in (see src/lib/mermaid.ts). Diagrams come
+      from docs that agents write, and Mermaid lays one out in a live page before
+      handing back its SVG; some diagram syntax names a URL it would load there.
+      This policy lets the page run only its own scripts and inline styles and
+      load nothing else, so whatever a diagram names, the browser fetches nothing.
+      Under `vite dev` it also refuses vite's reload socket and the React plugin's
+      inline preamble; the page has no React, so both only log.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <title>Diagram renderer</title>
+  </head>
+  <body>
+    <script type="module" src="/src/mermaidFrame.ts"></script>
+  </body>
+</html>
