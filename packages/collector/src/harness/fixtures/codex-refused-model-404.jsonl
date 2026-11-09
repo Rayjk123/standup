@@ -1,0 +1,9 @@
+{"type":"thread.started","thread_id":"00000000-0000-4000-8000-0000000404aa"}
+{"type":"turn.started"}
+{"type":"error","message":"Reconnecting... 1/5 (unexpected status 404 Not Found: The model 'provider.example-model-6.1' does not exist, url: https://inference.example.com/openai/v1/responses, request id: req_example1)"}
+{"type":"error","message":"Reconnecting... 2/5 (unexpected status 404 Not Found: The model 'provider.example-model-6.1' does not exist, url: https://inference.example.com/openai/v1/responses, request id: req_example2)"}
+{"type":"error","message":"Reconnecting... 3/5 (unexpected status 404 Not Found: The model 'provider.example-model-6.1' does not exist, url: https://inference.example.com/openai/v1/responses, request id: req_example3)"}
+{"type":"error","message":"Reconnecting... 4/5 (unexpected status 404 Not Found: The model 'provider.example-model-6.1' does not exist, url: https://inference.example.com/openai/v1/responses, request id: req_example4)"}
+{"type":"error","message":"Reconnecting... 5/5 (unexpected status 404 Not Found: The model 'provider.example-model-6.1' does not exist, url: https://inference.example.com/openai/v1/responses, request id: req_example5)"}
+{"type":"error","message":"unexpected status 404 Not Found: The model 'provider.example-model-6.1' does not exist, url: https://inference.example.com/openai/v1/responses, request id: req_example6"}
+{"type":"turn.failed","error":{"message":"unexpected status 404 Not Found: The model 'provider.example-model-6.1' does not exist, url: https://inference.example.com/openai/v1/responses, request id: req_example6"}}

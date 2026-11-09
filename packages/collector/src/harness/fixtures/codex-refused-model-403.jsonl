@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"00000000-0000-4000-8000-0000000403aa"}
+{"type":"turn.started"}
+{"type":"error","message":"Reconnecting... 1/5 (unexpected status 403 Forbidden: the caller is not allowed to use model 'provider.example-model-6': access denied by an organization policy, url: https://inference.example.com/openai/v1/responses, request id: req_example1)"}
+{"type":"error","message":"unexpected status 403 Forbidden: the caller is not allowed to use model 'provider.example-model-6': access denied by an organization policy, url: https://inference.example.com/openai/v1/responses, request id: req_example2"}
+{"type":"turn.failed","error":{"message":"unexpected status 403 Forbidden: the caller is not allowed to use model 'provider.example-model-6': access denied by an organization policy, url: https://inference.example.com/openai/v1/responses, request id: req_example2"}}
