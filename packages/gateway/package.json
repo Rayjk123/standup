@@ -1,0 +1,23 @@
+{
+  "name": "@standup/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/gateway.ts",
+  "types": "./src/gateway.ts",
+  "exports": {
+    ".": "./src/gateway.ts",
+    "./config": "./src/config.ts",
+    "./version": "./src/version.ts"
+  },
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@standup/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

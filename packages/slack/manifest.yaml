@@ -1,0 +1,87 @@
+# Slack app manifest for the Standup Slack adapter (dev / single workspace).
+#
+# Use it: https://api.slack.com/apps → Create New App → From an app manifest →
+#         pick your workspace → paste this file (or manifest.json) → Create.
+#
+# It scopes the app for the full bidirectional adapter, so you create the app once.
+# The adapter runs over Socket Mode (no public request URL): it mirrors each
+# Standup session into its own channel thread, streams turns live via the Slack
+# Assistant API (chat.*Stream) with a Block-Kit fallback, posts asks/plans with
+# interactive Approve/Reject buttons, and takes inbound commands by DM, @-mention,
+# and in-thread reply (launch / steer / answer an ask / channel-config toggles).
+#
+# Reinstall note: `users:read` + `users:read.email` were added so the adapter can
+# resolve a Slack answerer's email to their alias and merge the two actor
+# identities. The merge reads only an email at the identity email domain
+# (SLACK_IDENTITY_EMAIL_DOMAIN, else the org profile's identity.emailDomain) and
+# is off while neither names one. An app installed before these were granted keeps working, but logs a
+# one-time hint to reinstall; reimport this manifest, then OAuth & Permissions →
+# Reinstall to Workspace to pick them up.
+#
+# Persona note: `chat:write.customize` lets Persona's replies show as "Persona"
+# (without it they post under the app's name); `groups:history` + `message.groups`
+# let Persona follow threads in private channels; `channels:read` + `groups:read`
+# let it name a channel and recognize a Slack Connect channel (whose threads it
+# treats as external); `commands` backs the "Send to Persona" message shortcut.
+# Reinstall after importing so the new scopes apply.
+#
+# NOTE on assistant/AI mode: `features.assistant_view` turns the app into an
+# Agent/AI app, which opens DMs in Slack's ASSISTANT PANE (a separate thread
+# model) and hides the plain-DM ask/reply flow, so it is left OFF here. The
+# `assistant:write` scope is what unlocks the `chat.*Stream` streaming surface the
+# mirror uses, and it works without `assistant_view`.
+
+display_information:
+  name: Standup (dev)
+  description: Drive and monitor Claude Code sessions from Slack.
+  background_color: "#1f2937"
+
+features:
+  bot_user:
+    display_name: standup-dev
+    always_online: true
+  # Without this, DMing the app shows "Sending messages to this app has been turned off."
+  app_home:
+    home_tab_enabled: true
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false # false = users can send DMs to the app
+  # (assistant_view intentionally omitted — see header note.)
+  shortcuts:
+    - name: Send to Persona
+      type: message
+      callback_id: persona_send
+      description: Forward this message (and its thread) to Persona in your DM.
+
+oauth_config:
+  scopes:
+    bot:
+      - chat:write # post / stream / edit the feed, mirror threads, asks, and plan cards
+      - chat:write.customize # post Persona's replies under the name "Persona"
+      - assistant:write # unlocks chat.*Stream — the mirror streams turns live via the Assistant API
+      - app_mentions:read # receive @-mentions (launch / feed here / channel toggles) in channels
+      - im:history # read DMs sent to the app (ask replies, DM launch commands)
+      - im:write # open a DM to a person for an ask or plan card
+      - channels:history # read in-thread replies in the feed channel (answer asks / steer in-thread)
+      - groups:history # read Persona threads (and their context) in private channels
+      - channels:read # name public channels and spot Slack Connect ones (Persona treats those as external)
+      - groups:read # the same for private channels
+      - commands # the "Send to Persona" message shortcut
+      - files:write # upload the images Persona attaches to its replies into the same DM or thread
+      - files:read # download the images and videos a Persona user shares in their DM, to send them to Persona
+      - reactions:write # status reactions on the mirror thread root
+      - users:read # resolve a Slack user to reconcile their actor identity
+      - users:read.email # read the user's email — at the identity email domain its local-part is their alias
+
+settings:
+  event_subscriptions:
+    # No request_url — Socket Mode delivers these over the outbound websocket.
+    bot_events:
+      - app_mention # launch / feed here / channel toggles addressed to the bot
+      - message.im # a person's DM (ask reply or launch command)
+      - message.channels # in-thread replies in the feed channel (answer asks / steer in-thread)
+      - message.groups # follow-ups in Persona threads in private channels
+  interactivity:
+    is_enabled: true # Block Kit buttons (ask options, plan + Persona Approve/Deny, Persona quick replies) and shortcuts
+  socket_mode_enabled: true
+  org_deploy_enabled: false
+  token_rotation_enabled: false

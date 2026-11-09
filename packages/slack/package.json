@@ -1,0 +1,24 @@
+{
+  "name": "@standup/slack",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "probe": "bun run src/probe.ts",
+    "start": "bun run src/index.ts",
+    "dev": "bun run --watch src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@slack/bolt": "^4",
+    "@slack/socket-mode": "^2",
+    "@slack/types": "^3.0.0",
+    "@slack/web-api": "^7",
+    "@standup/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
