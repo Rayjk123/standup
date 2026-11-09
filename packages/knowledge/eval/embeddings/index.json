@@ -1,0 +1,11 @@
+{
+  "format": "kbeval-embedding-cache",
+  "version": 1,
+  "provider": "ollama",
+  "model": "nomic-embed-text",
+  "modelDigest": "0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f",
+  "dims": 768,
+  "count": 557,
+  "quantization": "int8-symmetric-per-vector",
+  "binSha256": "ab9cc7b6da5eda0ffe1a50ccf868acefdb47104ef2616da6ed09d25134df3547"
+}

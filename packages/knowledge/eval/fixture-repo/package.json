@@ -1,0 +1,11 @@
+{
+  "name": "fixture-standup",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Synthetic source tree used as the code-truth repo for the knowledge eval. Not built or run.",
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "sqlite-vec": "^0.1.9"
+  }
+}

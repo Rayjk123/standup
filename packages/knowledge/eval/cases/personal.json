@@ -1,0 +1,179 @@
+[
+  {
+    "id": "personal-commit-subject-length",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "how long can a commit subject be when you commit for me",
+    "relevant": [
+      { "doc": "global/native-mem-home-rule-house-style", "grade": 2 },
+      { "doc": "global/commit-message-conventions", "grade": 1 }
+    ],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "the owner's rule (under 60 characters) is stricter than the team convention (72); the personal rule answers for the owner's commits"
+  },
+  {
+    "id": "personal-summary-table",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "should my end-of-task summary be a bullet list or a table",
+    "relevant": [
+      { "doc": "global/native-mem-home-rule-house-style", "grade": 2 },
+      { "doc": "global/persona-feedback-lead-with-changed-number", "grade": 1 }
+    ],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "personal-emoji-in-replies",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "is it fine to add a celebration emoji when a deploy succeeds",
+    "relevant": [{ "doc": "global/native-mem-home-rule-house-style", "grade": 2 }],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "personal-changelog-section",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "where in CHANGELOG.md does a new entry go",
+    "relevant": [
+      { "doc": "global/owner-changelog-practice", "grade": 2 },
+      { "doc": "global/native-mem-home-rule-house-style", "grade": 1 }
+    ],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "personal-late-result-message",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "a benchmark finishes at 23:30 Lagos time; should I message Rae the result right away",
+    "relevant": [{ "doc": "global/native-mem-home-rule-hours-and-tools", "grade": 2 }],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "personal-quiet-hours-from-tidepool",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "tidepool", "user": "owner" },
+    "query": "what are my quiet hours and time zone",
+    "relevant": [{ "doc": "global/native-mem-home-rule-hours-and-tools", "grade": 2 }],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "asked from another project: the personal layer reaches its owner whatever project the session runs in"
+  },
+  {
+    "id": "personal-fish-env-var",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "how do I write an environment variable in a command Rae will paste into her terminal",
+    "relevant": [
+      { "doc": "global/native-mem-home-rule-hours-and-tools", "grade": 2 },
+      { "doc": "standup/native-mem-memory-fish-shell-commands", "grade": 1 }
+    ],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "personal-editor-open-file",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "which editor command should a how-to step use to open a file at a line",
+    "relevant": [{ "doc": "global/native-mem-home-rule-hours-and-tools", "grade": 2 }],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "personal-dependency-bump-in-fix",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "can I bump a library version while fixing an unrelated bug mid-month",
+    "relevant": [
+      { "doc": "global/native-mem-home-rule-hours-and-tools", "grade": 2 },
+      { "doc": "global/dependency-upgrade-cadence", "grade": 1 }
+    ],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "personal-summary-first-line",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "what should the first line of my report say after a latency fix",
+    "relevant": [{ "doc": "global/persona-feedback-lead-with-changed-number", "grade": 2 }],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "personal-rename-exported-function",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "the exported parseStation function has a bad name; can I just rename it",
+    "relevant": [{ "doc": "global/persona-feedback-ask-before-public-api-rename", "grade": 2 }],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "personal-screenshot-theme",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "which theme should the screenshots for a UI change be taken in",
+    "relevant": [{ "doc": "global/persona-feedback-screenshot-theme-2026-07-24", "grade": 2 }],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "staleOver": [["global/persona-feedback-screenshot-theme-2026-07-24", "global/persona-feedback-screenshot-theme-2026-07-03"]],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "the 2026-07-24 note replaces the 2026-07-03 one on the same topic (dark theme, not light)"
+  },
+  {
+    "id": "personal-screenshot-light-mode",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "global", "user": "owner" },
+    "query": "do you still want light mode screenshots",
+    "relevant": [{ "doc": "global/persona-feedback-screenshot-theme-2026-07-24", "grade": 2 }],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "staleOver": [["global/persona-feedback-screenshot-theme-2026-07-24", "global/persona-feedback-screenshot-theme-2026-07-03"]],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "personal-export-failed-from-standup",
+    "category": "personal",
+    "surface": ["persona"],
+    "audience": { "projectId": "standup", "user": "owner" },
+    "query": "the export command from the setup steps failed in my terminal",
+    "relevant": [
+      { "doc": "standup/native-mem-memory-fish-shell-commands", "grade": 2 },
+      { "doc": "global/native-mem-home-rule-hours-and-tools", "grade": 1 }
+    ],
+    "forbidden": ["global/alice-*", "standup/alice-*"],
+    "expectEmpty": false,
+    "source": "authored"
+  }
+]

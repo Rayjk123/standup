@@ -1,0 +1,360 @@
+[
+  {
+    "id": "off-sourdough-rye",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "How do I bake sourdough bread with a rye starter?",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "review:C-P8"
+  },
+  {
+    "id": "off-sourdough-deploy",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "how do I deploy my sourdough starter to the fridge without killing it",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored",
+    "note": "shares 'deploy' with runbooks"
+  },
+  {
+    "id": "off-tax-extension",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what's the deadline for filing my 2026 tax return extension",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "off-football-score",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "who won the football match last night and what was the score",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored",
+    "note": "shares 'score' with retrieval docs"
+  },
+  {
+    "id": "off-knitting-scarf",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "how many stitches should I cast on for a knitted scarf",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "off-sourdough-retry",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "should I retry a failed sourdough rise with more yeast or more time",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored",
+    "note": "shares 'retry' with the Slack mirror runbook"
+  },
+  {
+    "id": "off-caffeine-half-life",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what is the half-life of caffeine in the body",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored",
+    "note": "shares 'half-life' with confidence decay"
+  },
+  {
+    "id": "off-chunky-yarn",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "recommend a chunky knitting yarn for blankets",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored",
+    "note": "shares 'chunk'"
+  },
+  {
+    "id": "off-tomato-pruning",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "how do I prune tomato plants for a bigger harvest",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "off-oven-conversion",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "convert 350 degrees fahrenheit to celsius for baking",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "off-hiking-trip",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "plan a weekend hiking trip with campsite reservations",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "off-road-trip-playlist",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what's a good playlist for a long road trip",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "off-insurance-claim",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "how do I file an insurance claim for a cracked phone screen",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored",
+    "note": "shares 'claim'"
+  },
+  {
+    "id": "off-pizza-hydration",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "what's the best pizza dough hydration percentage",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "off-half-marathon",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "frost-watch",
+      "user": "owner"
+    },
+    "query": "how do I train for a half marathon in 12 weeks",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "off-capital-australia",
+    "category": "offtopic",
+    "surface": [
+      "search",
+      "inject"
+    ],
+    "audience": {
+      "projectId": "quillstack",
+      "user": "owner"
+    },
+    "query": "what's the capital of Australia",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  }
+]

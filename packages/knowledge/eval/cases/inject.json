@@ -1,0 +1,554 @@
+[
+  {
+    "id": "inject-sidebar-css",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Fix the CSS of the session sidebar so long titles truncate cleanly",
+    "relevant": [
+      {
+        "doc": "standup/session-sidebar-ui-spec",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:H7"
+  },
+  {
+    "id": "inject-slack-backoff",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Add exponential backoff with jitter to the Slack mirror's post calls",
+    "relevant": [
+      {
+        "doc": "standup/slack-mirror-retry-policy",
+        "grade": 2
+      },
+      {
+        "doc": "standup/slack-reliability-review",
+        "grade": 1
+      },
+      {
+        "doc": "standup/slack-native-streaming",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "inject-expert-empty-sources",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Make ask_expert return no Sources when it declines to answer",
+    "relevant": [
+      {
+        "doc": "standup/ask-expert-pipeline",
+        "grade": 2
+      },
+      {
+        "doc": "standup/knowledge-layer-open-gaps",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:H8"
+  },
+  {
+    "id": "inject-bedrock-403",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Fix the 403 when the expert synthesizer spawns claude -p",
+    "relevant": [
+      {
+        "doc": "standup/headless-claude-p-bedrock-auth",
+        "grade": 2
+      },
+      {
+        "doc": "standup/headless-claude-p-bedrock-auth-default-profile",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "inject-webhook-timeout",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Add a timeout to outbound webhook fetches so they stop hanging",
+    "relevant": [
+      {
+        "doc": "standup/bun-fetch-default-360s-timeout",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "inject-knowledge-tab-column",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Rename the Knowledge tab's Usage column to Retrievals",
+    "relevant": [
+      {
+        "doc": "standup/knowledge-tab-ui-spec",
+        "grade": 2
+      },
+      {
+        "doc": "standup/knowledge-retrieval-telemetry",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "inject-persona-forget",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Add a forget tool to Persona's memory",
+    "relevant": [
+      {
+        "doc": "standup/persona-implementation-spec",
+        "grade": 2
+      },
+      {
+        "doc": "standup/persona-architecture",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:H2"
+  },
+  {
+    "id": "inject-ts-upgrade",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Upgrade the TypeScript compiler to 5.9 across the monorepo",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "inject-sidebar-dark-mode",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Add a dark mode toggle to the session sidebar",
+    "relevant": [
+      {
+        "doc": "standup/session-sidebar-ui-spec",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "inject-tide-refit-window",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "Shorten the refit window for a station whose gauge was moved in March",
+    "relevant": [
+      {
+        "doc": "tidepool/harmonic-refit-job",
+        "grade": 2
+      },
+      {
+        "doc": "tidepool/station-metadata-schema",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "two earlier versions are replayed; only the final one names refit.window_days in the station metadata (v1 had a fixed --window flag, v2 stations/overrides.yaml)"
+  },
+  {
+    "id": "inject-tide-extremes-endpoint",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "Add a daily highs and lows endpoint to the API, paged the same way as predictions",
+    "relevant": [
+      {
+        "doc": "tidepool/predictions-api-paging",
+        "grade": 2
+      },
+      {
+        "doc": "tidepool/timezone-flaky-tests",
+        "grade": 1
+      },
+      {
+        "doc": "tidepool/datum-conversions",
+        "grade": 1
+      },
+      {
+        "doc": "tidepool/tidepool-at-a-glance",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "inject-tide-dst-tests",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "Write tests for the daily extremes grouping on the days the clocks change",
+    "relevant": [
+      {
+        "doc": "tidepool/timezone-flaky-tests",
+        "grade": 2
+      },
+      {
+        "doc": "tidepool/station-metadata-schema",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "inject-tide-haiku",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "Write a haiku about autumn leaves for the team channel",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "inject-frost-night-roster",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "frost-watch",
+      "user": "owner"
+    },
+    "query": "Let each grower pick who is woken first and second for their block",
+    "relevant": [
+      {
+        "doc": "frost-watch/night-roster-product-intent",
+        "grade": 2
+      },
+      {
+        "doc": "frost-watch/alert-escalation",
+        "grade": 1
+      },
+      {
+        "doc": "frost-watch/block-settings-fields",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:H7",
+    "note": "a real product-intent task: same-project product/spec docs are the right injection"
+  },
+  {
+    "id": "inject-frost-offline-buffer",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "frost-watch",
+      "user": "owner"
+    },
+    "query": "Buffer readings on the block controller while its cellular link is down, so the start rules keep working",
+    "relevant": [
+      {
+        "doc": "frost-watch/controller-offline-buffer",
+        "grade": 2
+      },
+      {
+        "doc": "frost-watch/controller-crates",
+        "grade": 1
+      },
+      {
+        "doc": "frost-watch/wind-machine-start-rules",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "inject-quill-billing-invoice-pdf",
+    "category": "inject",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "quillstack",
+      "user": "owner"
+    },
+    "query": "Add a PDF export to the organisation billing invoices page",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  }
+]

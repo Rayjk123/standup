@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "files": {
+    "code.json": "52fc4ef8014516880546677bef5ae24300047d01f7c5bd3eac1e404a7a15f981",
+    "docs.json": "bc78b48414661f1d52d9f2757b961cf8b8e69ebb09ec5ec83304a62b5624efc2",
+    "inject.json": "066bf73615a1d3bfef4f6e68fd57bb0e855436d7a1dbc4155450951ab8beb51b",
+    "leakage.json": "9743b00335c784466985be3a61b2680ec53a817564ad34ef78ae0aaf203abd44",
+    "offtopic.json": "13076266347a9190be715c470f4298b6304a0924781ae8eb7ef583181d12fa38",
+    "personal.json": "11a30ea57a1adf642051a8e23f5ceb6b9781f624f65eeccc544f6f71e11eadb7",
+    "staleness.json": "12b9f0b7908015a0bf7a35997669d42eba7a513aef47b4102593c56d90cb06b8"
+  }
+}

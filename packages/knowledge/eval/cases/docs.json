@@ -1,0 +1,1265 @@
+[
+  {
+    "id": "docs-rrf-why",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "why did we switch score blending to RRF instead of weighted sum",
+    "relevant": [
+      {
+        "doc": "standup/knowledge-retrieval-quality",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "graph rerank promotes the product-gap-analysis hub over the focused decision doc"
+  },
+  {
+    "id": "docs-rrf-why-paraphrase",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what made us drop the weighted-sum scoring of search hits",
+    "relevant": [
+      {
+        "doc": "standup/knowledge-retrieval-quality",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "paraphrase of docs-rrf-why"
+  },
+  {
+    "id": "docs-persona-design",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "persona always-on orchestrator design decision",
+    "relevant": [
+      {
+        "doc": "standup/persona-architecture",
+        "grade": 2
+      },
+      {
+        "doc": "standup/always-on-orchestrator",
+        "grade": 1
+      },
+      {
+        "doc": "standup/persona-implementation-spec",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/persona-architecture",
+        "standup/always-on-orchestrator"
+      ]
+    ],
+    "source": "authored",
+    "note": "both sides of the pair are verdict=contradicted; a correct system still surfaces the correct side"
+  },
+  {
+    "id": "docs-trust-model",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "tunnel authenticated identity trust model for multiplayer",
+    "relevant": [
+      {
+        "doc": "standup/tunnel-identity-trust-model",
+        "grade": 2
+      },
+      {
+        "doc": "standup/personalization-multiplayer",
+        "grade": 1
+      },
+      {
+        "doc": "standup/scope-audience-gate",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-open-gaps",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what are the known open gaps in the knowledge layer",
+    "relevant": [
+      {
+        "doc": "standup/knowledge-layer-open-gaps",
+        "grade": 2
+      },
+      {
+        "doc": "standup/gaps",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/knowledge-layer-open-gaps",
+        "standup/gaps"
+      ]
+    ],
+    "source": "authored"
+  },
+  {
+    "id": "docs-embedding-provider",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "which embedding model and provider does knowledge search use",
+    "relevant": [
+      {
+        "doc": "standup/embedding-provider-choice",
+        "grade": 2
+      },
+      {
+        "code": "src/knowledge/embeddings.ts:EMBEDDING_MODEL",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-bun-timeout-cross-project",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "Bun fetch 360s timeout",
+    "relevant": [
+      {
+        "doc": "standup/bun-fetch-default-360s-timeout",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "standup doc is scope=global; the x0.75 cross-project factor lets low-relevance tidepool docs that mention feed timeouts outrank it"
+  },
+  {
+    "id": "docs-bun-timeout-symptom",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "outbound webhook calls hang for six minutes before failing",
+    "relevant": [
+      {
+        "doc": "standup/bun-fetch-default-360s-timeout",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-bedrock-403",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "headless claude -p gets a 403 from Bedrock",
+    "relevant": [
+      {
+        "doc": "standup/headless-claude-p-bedrock-auth",
+        "grade": 2
+      },
+      {
+        "doc": "standup/headless-claude-p-bedrock-auth-default-profile",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "paraphrased duplicates with different fixes; both are legitimate answers"
+  },
+  {
+    "id": "docs-bedrock-403-paraphrase",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "permission denied from the model runtime when the synthesizer spawns claude in print mode",
+    "relevant": [
+      {
+        "doc": "standup/headless-claude-p-bedrock-auth",
+        "grade": 2
+      },
+      {
+        "doc": "standup/headless-claude-p-bedrock-auth-default-profile",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-slack-retry-jitter",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "slack mirror retry with jitter",
+    "relevant": [
+      {
+        "doc": "standup/slack-mirror-retry-policy",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "'jitter' exists only in the final version; v1 said three attempts"
+  },
+  {
+    "id": "docs-slack-retry-attempts",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "how many attempts does the Slack mirror make before giving up on a post",
+    "relevant": [
+      {
+        "doc": "standup/slack-mirror-retry-policy",
+        "grade": 2
+      },
+      {
+        "code": "src/slack/mirror.ts:MAX_ATTEMPTS",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "staleOver": [
+      [
+        "standup/slack-mirror-retry-policy",
+        "standup/status"
+      ]
+    ]
+  },
+  {
+    "id": "docs-fts-returning-id",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "fix orphan FTS rows by resolving the stored id with RETURNING id",
+    "relevant": [
+      {
+        "doc": "standup/fts-orphan-rows",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "new terms added by the final edit"
+  },
+  {
+    "id": "docs-fts-invariant",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "count(fts) equals count(knowledge) health invariant",
+    "relevant": [
+      {
+        "doc": "standup/fts-orphan-rows",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-embedding-canary",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "boot canary that re-embeds chunks when the model digest changes",
+    "relevant": [
+      {
+        "doc": "standup/embedding-fingerprint-drift",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "'digest'/'canary' only in final version"
+  },
+  {
+    "id": "docs-db-migrate-separate",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "should db:migrate run separately from the collector deploy",
+    "relevant": [
+      {
+        "doc": "standup/collector-deploy-runbook",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "shrinking edit; the removed one-shot deploy command must not linger in stale tail chunks"
+  },
+  {
+    "id": "docs-session-watchdog",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "session watchdog marks a session stalled",
+    "relevant": [
+      {
+        "doc": "standup/stuck-session-diagnosis",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "'watchdog' only in the final of three versions"
+  },
+  {
+    "id": "docs-stuck-session",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "stuck session detection how to diagnose a stuck or stalled session",
+    "relevant": [
+      {
+        "doc": "standup/stuck-session-diagnosis",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "logged:stuck-session"
+  },
+  {
+    "id": "docs-slug-slack-reliability",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "slack-reliability-review",
+    "relevant": [
+      {
+        "doc": "standup/slack-reliability-review",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "exact-slug query"
+  },
+  {
+    "id": "docs-slug-bun-fetch",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "bun-fetch-default-360s-timeout",
+    "relevant": [
+      {
+        "doc": "standup/bun-fetch-default-360s-timeout",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "exact-slug query"
+  },
+  {
+    "id": "docs-slug-scope-gate",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "scope-audience-gate",
+    "relevant": [
+      {
+        "doc": "standup/scope-audience-gate",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "exact-slug query"
+  },
+  {
+    "id": "docs-plural-prs-mrs",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "which review artifacts do we support, PRs or MRs",
+    "relevant": [
+      {
+        "doc": "standup/review-artifact-provider",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "plural forms; no stemming"
+  },
+  {
+    "id": "docs-plural-deploys",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "collector deploys and migrations",
+    "relevant": [
+      {
+        "doc": "standup/collector-deploy-runbook",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "plural forms; no stemming"
+  },
+  {
+    "id": "docs-slack-streaming",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Slack native streaming chat.startStream appendStream task cards",
+    "relevant": [
+      {
+        "doc": "standup/slack-native-streaming",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "logged:slack-native-streaming"
+  },
+  {
+    "id": "docs-reply-idempotency",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "reply idempotency optimistic pending transcript event reconcile",
+    "relevant": [
+      {
+        "doc": "standup/reply-idempotency",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "logged:reply-idempotency"
+  },
+  {
+    "id": "docs-lost-run",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "lost run reconciliation sweep broadcast task:updated session:updated",
+    "relevant": [
+      {
+        "doc": "standup/lost-run-reconciliation",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "logged:lost-run"
+  },
+  {
+    "id": "docs-scheduler",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "scheduler recurring routines cron jobs background agent passes daily gate",
+    "relevant": [
+      {
+        "doc": "standup/scheduler-routines",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "logged:scheduler"
+  },
+  {
+    "id": "docs-sessionstart-hook",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "SessionStart hook additionalContext injection mailbox UserPromptSubmit",
+    "relevant": [
+      {
+        "doc": "standup/sessionstart-hook-injection",
+        "grade": 2
+      },
+      {
+        "doc": "standup/high-level-design",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "logged:sessionstart-hook"
+  },
+  {
+    "id": "docs-empty-string-cross-project",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "sqlite binds an empty string instead of NULL",
+    "relevant": [
+      {
+        "doc": "standup/empty-string-not-null-gotcha",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "scope=global gotcha reachable from another project"
+  },
+  {
+    "id": "docs-ripgrep-missing",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "ripgrep tool returns 500 executable not found in PATH",
+    "relevant": [
+      {
+        "doc": "standup/ripgrep-missing-on-host",
+        "grade": 2
+      },
+      {
+        "doc": "standup/knowledge-layer-open-gaps",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-dedup-threshold",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "why didn't dedup catch the paraphrased duplicate docs",
+    "relevant": [
+      {
+        "doc": "standup/dedup-threshold",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-contradiction-judge",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "contradiction judge treats a Bedrock 403 as no contradiction",
+    "relevant": [
+      {
+        "doc": "standup/contradiction-judge-403",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-tide-long-range-paging",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "how do I fetch three months of predictions when one response stops early",
+    "relevant": [
+      {
+        "doc": "tidepool/predictions-api-paging",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-tide-default-datum",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "which datum are heights relative to when the request does not name one",
+    "relevant": [
+      {
+        "doc": "tidepool/datum-conversions",
+        "grade": 2
+      },
+      {
+        "doc": "tidepool/station-metadata-schema",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-frost-alert-escalation",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "frost-watch",
+      "user": "owner"
+    },
+    "query": "alert escalation text then voice call second person night lead acknowledge NO_START",
+    "relevant": [
+      {
+        "doc": "frost-watch/alert-escalation",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-frost-start-rules",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "frost-watch",
+      "user": "owner"
+    },
+    "query": "who decides when a wind machine starts: wet-bulb start point, three consecutive readings, minimum run",
+    "relevant": [
+      {
+        "doc": "frost-watch/wind-machine-start-rules",
+        "grade": 2
+      },
+      {
+        "doc": "frost-watch/frost-watch-overview",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "staleOver": [
+      [
+        "frost-watch/wind-machine-start-rules",
+        "scratch/frost-watch-night-desk-responsibilities"
+      ]
+    ]
+  },
+  {
+    "id": "docs-quill-plugin-hook-timeout",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "quillstack",
+      "user": "owner"
+    },
+    "query": "what happens when a plugin hook runs longer than 30 seconds or the plugin process exits mid-build",
+    "relevant": [
+      {
+        "doc": "quillstack/plugin-lifecycle",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "docs-quill-links-ignore",
+    "category": "docs",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "quillstack",
+      "user": "owner"
+    },
+    "query": "the link checker fails CI on a vendor site that blocks datacenter IPs, how do I ignore that URL",
+    "relevant": [
+      {
+        "doc": "quillstack/link-checker-false-positives",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "the doc has an edit history; its first version answered with a --skip flag that no longer exists"
+  }
+]

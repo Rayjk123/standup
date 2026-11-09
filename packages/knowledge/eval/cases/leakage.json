@@ -1,0 +1,670 @@
+[
+  {
+    "id": "leak-changelog-unreleased-from-tidepool",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "move the Unreleased changelog section under the new version heading at release",
+    "relevant": [
+      {
+        "doc": "tidepool/release-checklist",
+        "grade": 2
+      },
+      {
+        "doc": "global/owner-changelog-practice",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "the project's release checklist answers; the owner's own user-scoped changelog note is in their window, the home rule mirror that also mentions Unreleased is not"
+  },
+  {
+    "id": "leak-shell-editor-from-quillstack",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "quillstack",
+      "user": "owner"
+    },
+    "query": "fish shell set -x instead of export, open files with hx helix",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored",
+    "note": "no quillstack doc covers shells or editors, so a correct system returns nothing; the owner's home rule must not surface instead"
+  },
+  {
+    "id": "leak-alice-review-queue-order",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "alice"
+    },
+    "query": "my worker sent a second review packet for the same launch: where does the older card go and does it stay under Pending",
+    "relevant": [
+      {
+        "doc": "standup/review-queue-order",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/persona-feedback-*",
+      "global/owner-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "the project's shared Reviews tab spec answers for a non-owner reader; the owner's user-scoped notes and other projects' docs stay out"
+  },
+  {
+    "id": "leak-alice-golden-approval-tidepool",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "alice"
+    },
+    "query": "pending review count, superseded revision, who has to approve a pull request that changes tests/golden before it merges",
+    "relevant": [
+      {
+        "doc": "tidepool/contributing",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/persona-feedback-*",
+      "global/owner-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "standup/alice-*",
+      "standup/review-queue-order"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "the review-queue words match the standup Reviews tab spec, but a tidepool reader gets only tidepool's own contributing page (the CODEOWNERS approval for golden files); alice's standup notes and the owner's user-scoped notes stay out"
+  },
+  {
+    "id": "leak-alice-owner-quiet-hours",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "alice"
+    },
+    "query": "what time zone is the owner in and when are their quiet hours",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/persona-feedback-*",
+      "global/owner-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "leak-quill-review-approvals",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "quillstack",
+      "user": "alice"
+    },
+    "query": "how many maintainer approvals does my pull request need before it can merge",
+    "relevant": [
+      {
+        "doc": "quillstack/contributor-onboarding",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/persona-feedback-*",
+      "global/owner-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:P7",
+    "note": "the project's own convention is the answer, not the owner's personal notes"
+  },
+  {
+    "id": "leak-inject-frost-start-rules-into-standup",
+    "category": "leakage",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Implement the three-reading wet-bulb start rule for wind machines",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": true,
+    "source": "review:H7"
+  },
+  {
+    "id": "leak-inject-frost-roster-into-standup",
+    "category": "leakage",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Let growers swap a roster night with someone else",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": true,
+    "source": "review:H7"
+  },
+  {
+    "id": "leak-owner-api-rename-from-tidepool",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "how does the owner want renames of public functions and CLI flags handled",
+    "relevant": [
+      {
+        "doc": "global/persona-feedback-ask-before-public-api-rename",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "standup/review-queue-order"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "the owner's user-scoped feedback note is in their own window; the home rule mirrors are not"
+  },
+  {
+    "id": "leak-alice-asks-owner-api-rename",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "alice"
+    },
+    "query": "how does the owner want renames of public functions and CLI flags handled",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/persona-feedback-*",
+      "global/owner-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "leak-alice-dev-setup",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "alice local dev setup second collector port",
+    "relevant": [
+      {
+        "doc": "standup/runbook",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "leak-persona-alice-prefs",
+    "category": "leakage",
+    "surface": [
+      "persona"
+    ],
+    "audience": {
+      "projectId": "global",
+      "user": "owner"
+    },
+    "query": "what does alice prefer for review comments",
+    "relevant": [],
+    "forbidden": [
+      "global/alice-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "leak-inject-tidepool-deploy-staging",
+    "category": "leakage",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "Deploy the API to staging and verify the release",
+    "relevant": [
+      {
+        "doc": "tidepool/release-checklist",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*",
+      "standup/collector-deploy-runbook",
+      "standup/runbook"
+    ],
+    "expectEmpty": false,
+    "source": "review:H1",
+    "note": "the owner's home rules must not be injected as code knowledge"
+  },
+  {
+    "id": "leak-tide-hypertable-from-standup",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "TimescaleDB hypertable chunked by 30 days, compressed after 90 days, pgBackRest WAL archive restore rehearsal",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored",
+    "note": "the query is lifted from tidepool/observation-store-postgres, a project-scoped decision; a Standup session has no storage doc of that shape and must get nothing"
+  },
+  {
+    "id": "leak-alice-dependency-bumps-tidepool",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "alice"
+    },
+    "query": "when are routine dependency upgrades allowed, and what about security fixes",
+    "relevant": [
+      {
+        "doc": "global/dependency-upgrade-cadence",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/persona-feedback-*",
+      "global/owner-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "the team-wide global cadence answers; the owner's home rule that also batches upgrades monthly is personal"
+  },
+  {
+    "id": "leak-alice-emoji-in-summaries",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "alice"
+    },
+    "query": "are emoji allowed in end-of-task summaries and commit messages",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/persona-feedback-*",
+      "global/owner-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": true,
+    "source": "authored"
+  },
+  {
+    "id": "leak-alice-frost-bench-rig",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "frost-watch",
+      "user": "alice"
+    },
+    "query": "owner bench rig controller board and dev night desk names",
+    "relevant": [
+      {
+        "doc": "frost-watch/bench-rig-current",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/persona-feedback-*",
+      "global/owner-*",
+      "tidepool/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "frost-watch/bench-rig-current",
+        "frost-watch/bench-rig-decided"
+      ],
+      [
+        "frost-watch/bench-rig-current",
+        "scratch/frost-watch-bench-rigs"
+      ]
+    ],
+    "source": "review:WP-6",
+    "note": "project docs about the owner's bench rig are team-visible; the owner's private notes are not"
+  },
+  {
+    "id": "leak-frost-parts-from-standup",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Frost Watch night desk vs canopy probe responsibilities",
+    "relevant": [
+      {
+        "doc": "scratch/frost-watch-night-desk-responsibilities",
+        "grade": 2
+      },
+      {
+        "doc": "scratch/frost-watch-canopy-probe-responsibilities",
+        "grade": 2
+      },
+      {
+        "doc": "scratch/frost-watch-overview",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:X2",
+    "note": "scope=global scratch copies are visible on expert and answer this; the project-scoped frost-watch/* docs must not leak into a standup audience"
+  },
+  {
+    "id": "leak-inject-quill-theme-partial-rename",
+    "category": "leakage",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "quillstack",
+      "user": "owner"
+    },
+    "query": "Rename the sidebar partial in the default theme and publish the theme release",
+    "relevant": [
+      {
+        "doc": "quillstack/theme-versioning",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "leak-owner-shell-editor-standup-search",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "owner shell and editor setup fish helix",
+    "relevant": [
+      {
+        "doc": "standup/native-mem-memory-fish-shell-commands",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "note": "shared surfaces must not return the home rule mirror or its legacy copy in the standup corpus; Persona is the channel for this. The owner's own auto-memory feedback note is in their window"
+  },
+  {
+    "id": "leak-alice-owner-shell-editor",
+    "category": "leakage",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "alice"
+    },
+    "query": "owner shell and editor setup fish helix",
+    "relevant": [],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/persona-feedback-*",
+      "global/owner-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "leak-inject-quill-plugin-cache",
+    "category": "leakage",
+    "surface": [
+      "inject"
+    ],
+    "audience": {
+      "projectId": "quillstack",
+      "user": "alice"
+    },
+    "query": "Make the glossary plugin's transform output refresh when its external term list changes",
+    "relevant": [
+      {
+        "doc": "quillstack/plugin-lifecycle",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/persona-feedback-*",
+      "global/owner-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "standup-self/*",
+      "scratch/cdk-template-*",
+      "scratch/frost-watch-*",
+      "standup/alice-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:H1"
+  }
+]

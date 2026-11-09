@@ -1,0 +1,753 @@
+[
+  {
+    "id": "stale-sqlite-vec",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "is sqlite-vec KNN implemented or is search still a linear JS cosine scan",
+    "relevant": [
+      {
+        "doc": "standup/sqlite-vec-knn-shipped",
+        "grade": 2
+      },
+      {
+        "doc": "standup/knowledge-layer-open-gaps",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/sqlite-vec-knn-shipped",
+        "standup/status"
+      ],
+      [
+        "standup/sqlite-vec-knn-shipped",
+        "standup/gaps"
+      ]
+    ],
+    "source": "review:S-P4"
+  },
+  {
+    "id": "stale-expert-graph-traversal",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what does ask_expert do — graph traversal over code structure?",
+    "relevant": [
+      {
+        "doc": "standup/ask-expert-pipeline",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/ask-expert-pipeline",
+        "standup/high-level-design"
+      ]
+    ],
+    "source": "review:S-P6"
+  },
+  {
+    "id": "stale-projects-toml",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "is projects.toml watched, and is it the source of truth for projects",
+    "relevant": [
+      {
+        "doc": "standup/projects-registry-source-of-truth",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/projects-registry-source-of-truth",
+        "standup/high-level-design"
+      ],
+      [
+        "standup/projects-registry-source-of-truth",
+        "standup/runbook"
+      ]
+    ],
+    "source": "review:Dup-10"
+  },
+  {
+    "id": "stale-graph-rerank",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "graph rerank experiment results recall MRR, and is it enabled",
+    "relevant": [
+      {
+        "doc": "standup/graph-rerank-default-on",
+        "grade": 2
+      },
+      {
+        "doc": "standup/retrieval-graph-rerank-experiment",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/graph-rerank-default-on",
+        "standup/retrieval-graph-rerank-experiment"
+      ],
+      [
+        "standup/graph-rerank-default-on",
+        "standup/status"
+      ],
+      [
+        "standup/graph-rerank-default-on",
+        "standup/gaps"
+      ]
+    ],
+    "source": "review:D3"
+  },
+  {
+    "id": "stale-wikilinks",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "graph edges wikilink body traversal parseWikilinks",
+    "relevant": [
+      {
+        "doc": "standup/knowledge-graph-edges",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/knowledge-graph-edges",
+        "standup/wikilink-graph-edges"
+      ]
+    ],
+    "source": "review:K7"
+  },
+  {
+    "id": "stale-product-split",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "is splitting launch knowledge into a code block and a product/spec block implemented or still planned",
+    "relevant": [
+      {
+        "doc": "standup/launch-knowledge-injection",
+        "grade": 2
+      },
+      {
+        "doc": "standup/phase-7-completion",
+        "grade": 1
+      },
+      {
+        "doc": "standup/knowledge-layer-open-gaps",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/launch-knowledge-injection",
+        "standup/competitive-analysis"
+      ],
+      [
+        "standup/launch-knowledge-injection",
+        "standup/gaps"
+      ],
+      [
+        "standup/launch-knowledge-injection",
+        "standup/implementation"
+      ]
+    ],
+    "source": "review:U-P4"
+  },
+  {
+    "id": "stale-persona-merged",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "has the Persona orchestrator work been merged or is it still uncommitted",
+    "relevant": [
+      {
+        "doc": "standup/persona-architecture",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/persona-architecture",
+        "standup/always-on-orchestrator"
+      ]
+    ],
+    "source": "review:H6"
+  },
+  {
+    "id": "stale-frost-bench-rig",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "frost-watch",
+      "user": "owner"
+    },
+    "query": "which bench rig board and dev night desk do I test Frost Watch controller changes on",
+    "relevant": [
+      {
+        "doc": "frost-watch/bench-rig-current",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "frost-watch/bench-rig-current",
+        "frost-watch/bench-rig-decided"
+      ],
+      [
+        "frost-watch/bench-rig-current",
+        "scratch/frost-watch-bench-rigs"
+      ]
+    ],
+    "source": "review:WP-6"
+  },
+  {
+    "id": "stale-rrf-wired",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "is RRF wired into production search or is blending still the weighted sum",
+    "relevant": [
+      {
+        "doc": "standup/knowledge-retrieval-quality",
+        "grade": 2
+      },
+      {
+        "doc": "standup/knowledge-layer-open-gaps",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/knowledge-retrieval-quality",
+        "standup/status"
+      ]
+    ],
+    "source": "review:C-P5"
+  },
+  {
+    "id": "stale-phase-7",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what's the status of Phase 7 steps 4 through 7",
+    "relevant": [
+      {
+        "doc": "standup/phase-7-completion",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/phase-7-completion",
+        "standup/implementation"
+      ]
+    ],
+    "source": "review:H5"
+  },
+  {
+    "id": "stale-expert-score",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "how did ask_expert score on the 15-question fixture set",
+    "relevant": [
+      {
+        "doc": "standup/expert-eval-results",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/expert-eval-results",
+        "standup/status"
+      ]
+    ],
+    "source": "review:M10"
+  },
+  {
+    "id": "stale-reverify",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "does the re-verification cron run today",
+    "relevant": [
+      {
+        "doc": "standup/truth-maintenance-status",
+        "grade": 2
+      },
+      {
+        "doc": "standup/knowledge-layer-open-gaps",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/truth-maintenance-status",
+        "standup/reverify-cron-shipped"
+      ],
+      [
+        "standup/truth-maintenance-status",
+        "standup/status"
+      ]
+    ],
+    "source": "review:H5"
+  },
+  {
+    "id": "stale-tide-observation-store",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "are gauge observations kept in a SQLite file per station or in a database server",
+    "relevant": [
+      {
+        "doc": "tidepool/observation-store-postgres",
+        "grade": 2
+      },
+      {
+        "doc": "tidepool/tidepool-at-a-glance",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "tidepool/observation-store-postgres",
+        "tidepool/storage-sqlite-per-station"
+      ]
+    ],
+    "staleDocs": [
+      "tidepool/storage-sqlite-per-station"
+    ],
+    "source": "authored",
+    "note": "the SQLite decision carries verdict=superseded; the query's wording matches it more closely than the Postgres decision"
+  },
+  {
+    "id": "stale-tide-leap-second-import",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "tidepool",
+      "user": "owner"
+    },
+    "query": "what does tp-import do with a 23:59:60 leap second timestamp in a gauge CSV",
+    "relevant": [
+      {
+        "doc": "tidepool/leap-second-import-incident",
+        "grade": 2
+      },
+      {
+        "doc": "tidepool/csv-import-tool",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "tidepool/leap-second-import-incident",
+        "tidepool/csv-import-tool"
+      ]
+    ],
+    "source": "authored",
+    "note": "both sides are verdict=contradicted; the incident review (newer) says rows at second 60 are rejected, the tool doc still says they are folded into the next day"
+  },
+  {
+    "id": "stale-launch-product-docs",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "does launch injection retrieve specific product docs or just a static preamble",
+    "relevant": [
+      {
+        "doc": "standup/launch-knowledge-injection",
+        "grade": 2
+      },
+      {
+        "doc": "standup/phase-7-completion",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/launch-knowledge-injection",
+        "standup/high-level-design"
+      ],
+      [
+        "standup/launch-knowledge-injection",
+        "standup/gaps"
+      ],
+      [
+        "standup/launch-knowledge-injection",
+        "standup/implementation"
+      ]
+    ],
+    "source": "review:H4"
+  },
+  {
+    "id": "stale-frost-parts",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "frost-watch",
+      "user": "owner"
+    },
+    "query": "how many parts does frost watch have",
+    "relevant": [
+      {
+        "doc": "frost-watch/frost-watch-overview",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "frost-watch/frost-watch-overview",
+        "scratch/frost-watch-overview"
+      ]
+    ],
+    "source": "review:H11",
+    "note": "forked slug: the scratch draft has two parts with the server starting machines, the current overview three with the controllers deciding"
+  },
+  {
+    "id": "stale-quill-preview-retention",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "quillstack",
+      "user": "owner"
+    },
+    "query": "are pull request previews deleted 7 days after the last push",
+    "relevant": [
+      {
+        "doc": "quillstack/preview-retention",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "quillstack/preview-retention",
+        "quillstack/preview-service-launch-notes"
+      ]
+    ],
+    "staleDocs": [
+      "quillstack/preview-service-launch-notes"
+    ],
+    "source": "authored",
+    "note": "the agent-written launch notes carry verdict=superseded and use the query's own wording; the retention decision keeps open previews and hibernates idle ones"
+  },
+  {
+    "id": "stale-quill-regional-locale-fallback",
+    "category": "staleness",
+    "surface": [
+      "search"
+    ],
+    "audience": {
+      "projectId": "quillstack",
+      "user": "owner"
+    },
+    "query": "does a pt-BR page fall back to the pt translation before the default locale",
+    "relevant": [
+      {
+        "doc": "quillstack/migrating-to-1-0",
+        "grade": 2
+      },
+      {
+        "doc": "quillstack/i18n-fallback",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "quillstack/migrating-to-1-0",
+        "quillstack/i18n-fallback"
+      ]
+    ],
+    "source": "authored",
+    "note": "both sides are verdict=contradicted; the 1.0 migration note (newer) drops the base-language step, the fallback spec still lists it"
+  }
+]

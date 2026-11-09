@@ -1,0 +1,1031 @@
+[
+  {
+    "id": "code-mcp-tools",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "What MCP tools does the MCP server register?",
+    "relevant": [
+      {
+        "code": "src/mcp/tools.ts:TOOL_DEFINITIONS",
+        "grade": 2
+      },
+      {
+        "code": "src/mcp/tools.ts:registerTools",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:K2",
+    "note": "standup/mcp-tools-overview is a stale 7-tool list; the code registers 11",
+    "staleDocs": [
+      "standup/mcp-tools-overview",
+      "standup/status"
+    ]
+  },
+  {
+    "id": "code-search-callers",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "where are the call sites of searchKnowledge",
+    "relevant": [
+      {
+        "code": "src/expert/expert.ts:askExpert",
+        "grade": 2
+      },
+      {
+        "code": "src/launcher/inject.ts:retrieveKnowledgeOfKinds",
+        "grade": 2
+      },
+      {
+        "code": "src/collector/server.ts:startCollector",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:K3"
+  },
+  {
+    "id": "code-inject-where",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "where is knowledge auto-injected into launches, and which kinds go in the code block?",
+    "relevant": [
+      {
+        "code": "src/launcher/inject.ts:CODE_KNOWLEDGE_KINDS",
+        "grade": 2
+      },
+      {
+        "code": "src/launcher/inject.ts:retrieveKnowledgeOfKinds",
+        "grade": 2
+      },
+      {
+        "code": "src/launcher/launcher.ts:launchSession",
+        "grade": 1
+      },
+      {
+        "doc": "standup/launch-knowledge-injection",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:K4"
+  },
+  {
+    "id": "code-inject-kinds-split",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "Which source_kind values does the launcher put in the code block vs the product/spec block?",
+    "relevant": [
+      {
+        "code": "src/launcher/inject.ts:CODE_KNOWLEDGE_KINDS",
+        "grade": 2
+      },
+      {
+        "code": "src/launcher/inject.ts:PRODUCT_KNOWLEDGE_KINDS",
+        "grade": 2
+      },
+      {
+        "doc": "standup/launch-knowledge-injection",
+        "grade": 1
+      },
+      {
+        "doc": "standup/phase-7-completion",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/launch-knowledge-injection",
+        "standup/competitive-analysis"
+      ],
+      [
+        "standup/launch-knowledge-injection",
+        "standup/gaps"
+      ]
+    ],
+    "source": "review:U-P4"
+  },
+  {
+    "id": "code-confidence-decay",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "which function computes confidence decay and what is the half-life",
+    "relevant": [
+      {
+        "code": "src/knowledge/confidence.ts:deriveConfidence",
+        "grade": 2
+      },
+      {
+        "code": "src/knowledge/confidence.ts:DEFAULT_HALF_LIFE_DAYS",
+        "grade": 2
+      },
+      {
+        "doc": "standup/confidence-decay",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:K5"
+  },
+  {
+    "id": "code-expert-constants",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what are ask_expert's relevance floor, number of sources, and synthesis model",
+    "relevant": [
+      {
+        "code": "src/expert/expert.ts:RELEVANCE_FLOOR",
+        "grade": 2
+      },
+      {
+        "code": "src/expert/expert.ts:MAX_SOURCES",
+        "grade": 2
+      },
+      {
+        "code": "src/expert/expert.ts:SYNTH_MODEL",
+        "grade": 2
+      },
+      {
+        "doc": "standup/ask-expert-pipeline",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:C-P1"
+  },
+  {
+    "id": "code-rrf-constants",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what value is RRF_K and what are the text and embedding weights",
+    "relevant": [
+      {
+        "code": "src/knowledge/search.ts:RRF_K",
+        "grade": 2
+      },
+      {
+        "code": "src/knowledge/search.ts:TEXT_WEIGHT",
+        "grade": 2
+      },
+      {
+        "code": "src/knowledge/search.ts:EMBEDDING_WEIGHT",
+        "grade": 2
+      },
+      {
+        "doc": "standup/knowledge-retrieval-quality",
+        "grade": 1
+      },
+      {
+        "doc": "standup/rrf-k-env-override",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/knowledge-retrieval-quality",
+        "standup/status"
+      ]
+    ],
+    "source": "review:C-P5"
+  },
+  {
+    "id": "code-fuse-rrf-def",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "where is fuseRrf defined",
+    "relevant": [
+      {
+        "code": "src/knowledge/search.ts:fuseRrf",
+        "grade": 2
+      },
+      {
+        "doc": "standup/knowledge-retrieval-quality",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "code-graph-default",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "is graph rerank on by default in the code",
+    "relevant": [
+      {
+        "code": "src/knowledge/search.ts:GRAPH_RERANK_DEFAULT",
+        "grade": 2
+      },
+      {
+        "doc": "standup/graph-rerank-default-on",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/graph-rerank-default-on",
+        "standup/retrieval-graph-rerank-experiment"
+      ]
+    ],
+    "source": "review:D3"
+  },
+  {
+    "id": "code-parse-wikilinks",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "where is parseWikilinks defined",
+    "relevant": [
+      {
+        "doc": "standup/knowledge-graph-edges",
+        "grade": 2
+      },
+      {
+        "code": "src/knowledge/graph.ts:buildEdges",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/knowledge-graph-edges",
+        "standup/wikilink-graph-edges"
+      ]
+    ],
+    "source": "review:K7",
+    "note": "no such function exists; the correct answer says so and points at buildEdges"
+  },
+  {
+    "id": "code-chunk-tables",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what table stores knowledge chunks and their embeddings",
+    "relevant": [
+      {
+        "code": "src/store/schema.ts:knowledge_chunks",
+        "grade": 2
+      },
+      {
+        "code": "src/store/schema.ts:knowledge_vec",
+        "grade": 2
+      },
+      {
+        "doc": "standup/chunking-strategy",
+        "grade": 1
+      },
+      {
+        "doc": "standup/sqlite-vec-knn-shipped",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:C2",
+    "staleOver": [
+      [
+        "standup/chunking-strategy",
+        "standup/high-level-design"
+      ]
+    ]
+  },
+  {
+    "id": "code-collector-port",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what port does the collector listen on",
+    "relevant": [
+      {
+        "code": "src/collector/server.ts:COLLECTOR_PORT",
+        "grade": 2
+      },
+      {
+        "doc": "standup/runbook",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/runbook",
+        "standup/high-level-design"
+      ]
+    ],
+    "source": "review:C3",
+    "note": "high-level-design says 7780; code and runbook say 7781"
+  },
+  {
+    "id": "code-rrf-env",
+    "category": "code",
+    "surface": [
+      "code",
+      "search"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "how is the RRF k constant configured KNOWLEDGE_RRF_K",
+    "relevant": [
+      {
+        "code": "src/knowledge/search.ts:RRF_K",
+        "grade": 2
+      },
+      {
+        "doc": "standup/rrf-k-env-override",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:C5"
+  },
+  {
+    "id": "code-knn-where",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "where does the vec0 KNN query live",
+    "relevant": [
+      {
+        "code": "src/store/vec.ts:knnSearch",
+        "grade": 2
+      },
+      {
+        "doc": "standup/sqlite-vec-knn-shipped",
+        "grade": 1
+      },
+      {
+        "doc": "standup/knowledge-layer-open-gaps",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "code-knn-callers",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what calls knnSearch",
+    "relevant": [
+      {
+        "code": "src/knowledge/search.ts:searchKnowledge",
+        "grade": 2
+      },
+      {
+        "doc": "standup/sqlite-vec-knn-shipped",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "code-fts-write",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "where is the FTS row written for an upserted doc, and why does it leave orphan rows",
+    "relevant": [
+      {
+        "code": "src/store/store.ts:upsertDoc",
+        "grade": 2
+      },
+      {
+        "doc": "standup/fts-orphan-rows",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:H9"
+  },
+  {
+    "id": "code-slack-attempts",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what is the Slack mirror's max retry attempts constant",
+    "relevant": [
+      {
+        "code": "src/slack/mirror.ts:MAX_ATTEMPTS",
+        "grade": 2
+      },
+      {
+        "code": "src/slack/mirror.ts:postWithRetry",
+        "grade": 1
+      },
+      {
+        "doc": "standup/slack-mirror-retry-policy",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored",
+    "staleOver": [
+      [
+        "standup/slack-mirror-retry-policy",
+        "standup/status"
+      ]
+    ]
+  },
+  {
+    "id": "code-fetch-timeout",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "where does the collector set a timeout on outbound fetch",
+    "relevant": [
+      {
+        "code": "src/net/fetch.ts:fetchWithTimeout",
+        "grade": 2
+      },
+      {
+        "code": "src/net/fetch.ts:FETCH_TIMEOUT_MS",
+        "grade": 2
+      },
+      {
+        "doc": "standup/bun-fetch-default-360s-timeout",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "code-projects-registry",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "is projects.toml watched for changes or is SQLite the source of truth for projects",
+    "relevant": [
+      {
+        "code": "src/collector/projects-registry.ts:loadProjects",
+        "grade": 2
+      },
+      {
+        "code": "src/collector/projects-registry.ts:importProjectsToml",
+        "grade": 1
+      },
+      {
+        "doc": "standup/projects-registry-source-of-truth",
+        "grade": 2
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/projects-registry-source-of-truth",
+        "standup/high-level-design"
+      ],
+      [
+        "standup/projects-registry-source-of-truth",
+        "standup/runbook"
+      ]
+    ],
+    "source": "review:Dup-10"
+  },
+  {
+    "id": "code-persona-prompt",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "does Persona's system prompt include saved memories",
+    "relevant": [
+      {
+        "code": "src/persona/prompt.ts:buildSystemPrompt",
+        "grade": 2
+      },
+      {
+        "doc": "standup/persona-architecture",
+        "grade": 1
+      },
+      {
+        "doc": "standup/knowledge-layer-open-gaps",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:H2"
+  },
+  {
+    "id": "code-dedup-threshold",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what is the duplicate threshold for proposed docs and which docs are compared",
+    "relevant": [
+      {
+        "code": "src/knowledge/coherence.ts:DEDUP_THRESHOLD",
+        "grade": 2
+      },
+      {
+        "code": "src/knowledge/coherence.ts:findDuplicates",
+        "grade": 1
+      },
+      {
+        "doc": "standup/dedup-threshold",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:H11"
+  },
+  {
+    "id": "code-chunk-size",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what chunk size and overlap does the chunker use",
+    "relevant": [
+      {
+        "code": "src/knowledge/chunker.ts:CHUNK_TARGET_CHARS",
+        "grade": 2
+      },
+      {
+        "code": "src/knowledge/chunker.ts:CHUNK_OVERLAP_WORDS",
+        "grade": 2
+      },
+      {
+        "doc": "standup/chunking-strategy",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:M3"
+  },
+  {
+    "id": "code-embedding-fingerprint",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "does the embedding fingerprint include the model digest",
+    "relevant": [
+      {
+        "code": "src/knowledge/embeddings.ts:embeddingFingerprint",
+        "grade": 2
+      },
+      {
+        "doc": "standup/embedding-fingerprint-drift",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "review:H10"
+  },
+  {
+    "id": "code-headless-env",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "what environment does runClaudeHeadless pass to claude -p",
+    "relevant": [
+      {
+        "code": "src/synth/claude-headless.ts:runClaudeHeadless",
+        "grade": 2
+      },
+      {
+        "doc": "standup/headless-claude-p-bedrock-auth",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "source": "authored"
+  },
+  {
+    "id": "code-reverify-gate",
+    "category": "code",
+    "surface": [
+      "code"
+    ],
+    "audience": {
+      "projectId": "standup",
+      "user": "owner"
+    },
+    "query": "when does the reverify cron actually run",
+    "relevant": [
+      {
+        "code": "src/reverify/reverify-cron.ts:runReverifyCron",
+        "grade": 2
+      },
+      {
+        "doc": "standup/truth-maintenance-status",
+        "grade": 1
+      },
+      {
+        "doc": "standup/knowledge-layer-open-gaps",
+        "grade": 1
+      }
+    ],
+    "forbidden": [
+      "global/native-mem-*",
+      "standup/native-mem-home-*",
+      "global/alice-*",
+      "standup/alice-*",
+      "tidepool/*",
+      "frost-watch/*",
+      "quillstack/*",
+      "standup-self/*",
+      "scratch/cdk-template-*"
+    ],
+    "expectEmpty": false,
+    "staleOver": [
+      [
+        "standup/truth-maintenance-status",
+        "standup/reverify-cron-shipped"
+      ]
+    ],
+    "source": "review:H5"
+  }
+]

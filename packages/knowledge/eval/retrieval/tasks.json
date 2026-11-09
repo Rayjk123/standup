@@ -1,0 +1,97 @@
+[
+  {
+    "id": "frost-blocks-live-night-map",
+    "project": "frost-watch",
+    "brief": "Turn the Frost Watch night map prototype's Blocks view (#/blocks) into the live night map: block tiles shaded by their margin above the critical temperature, a 12-hour uPlot chart per block fed by fetchReadings at 5-minute steps with the wind machine's state drawn as bands behind the probe lines, and an Acknowledge button on each open alert. Remove the separate Alerts view. Front-end only; acknowledging for another grower is offered only to the night lead, and in replay mode no acknowledgement leaves the replay server.",
+    "queries": [
+      { "id": "keyword-dump", "query": "Frost Watch night map prototype Blocks view alerts route existing conventions testing uPlot readings chart routes", "helpful": ["frost-watch/night-desk-readings-api", "scratch/frost-watch-night-map-prototype", "global/frost-watch-night-map-brief", "global/frost-watch-controller-messages"] },
+      { "id": "downsampling", "query": "what does the readings API return for each 5-minute step, the average or the minimum", "helpful": ["frost-watch/night-desk-readings-api"] },
+      { "id": "machine-states", "query": "which wind machine states can a block report and what does an override state mean", "helpful": ["global/frost-watch-controller-messages", "frost-watch/wind-machine-start-rules"] },
+      { "id": "ack-replay", "query": "who may acknowledge an alert for another grower, and where does an acknowledgement go in replay mode", "helpful": ["scratch/frost-watch-night-map-prototype", "frost-watch/night-desk-readings-api", "frost-watch/alert-escalation"] },
+      { "id": "from-scratch", "project": "scratch", "query": "Frost Watch live night map design", "helpful": ["global/frost-watch-night-map-brief", "scratch/frost-watch-night-map-prototype", "frost-watch/night-desk-readings-api"] }
+    ]
+  },
+  {
+    "id": "standup-floor-rule",
+    "project": "standup",
+    "brief": "The safety floor holds `bun run eval:kb` for the owner because the script's import graph reaches modules that spawn claude with bypassPermissions. Fix the floor's classification so a command whose code only imports such a module, without calling it, is not held, and add a test table covering the held and allowed shapes.",
+    "queries": [
+      { "id": "floor-rule", "query": "safety floor rule that holds a command for the owner", "helpful": [] },
+      { "id": "floor-keywords", "query": "floor classify bypassPermissions spawn claude import graph held", "helpful": [] },
+      { "id": "floor-why", "query": "why does the floor hold a bun script that only imports server.ts", "helpful": [] },
+      { "id": "floor-approve", "query": "how does the owner approve a held command", "helpful": [] }
+    ]
+  },
+  {
+    "id": "standup-ranking-change",
+    "project": "standup",
+    "paths": ["src/knowledge/search.ts", "src/knowledge/fts.ts"],
+    "brief": "Rebalance knowledge search ranking so the title and relevance boosts are additive instead of multiplicative, then confirm on the knowledge eval that MRR and recall@5 do not regress. Keep the scope gate and the confidence floor behaviour unchanged.",
+    "queries": [
+      { "id": "blending", "query": "how does knowledge search fuse the text and vector arms", "helpful": ["standup/knowledge-retrieval-quality"] },
+      { "id": "rrf-k", "query": "RRF k constant override", "helpful": ["standup/rrf-k-env-override", "standup/knowledge-retrieval-quality"] },
+      { "id": "boost-keywords", "query": "knowledge search ranking multipliers title boost relevance score", "helpful": ["standup/knowledge-retrieval-quality", "standup/rrf-k-env-override", "standup/retrieval-graph-rerank-experiment"] },
+      { "id": "rerank-worth", "query": "was the graph rerank worth turning on", "helpful": ["standup/retrieval-graph-rerank-experiment", "standup/knowledge-layer-open-gaps"] },
+      { "id": "regression-check", "query": "how do I tell whether a ranking change made retrieval worse", "helpful": ["standup/retrieval-graph-rerank-experiment", "standup/knowledge-retrieval-quality"] }
+    ]
+  },
+  {
+    "id": "standup-review-queue-order",
+    "project": "standup",
+    "brief": "Show the Reviews tab's Pending filter oldest first, so the packet that has waited longest is on top, while All stays newest first. Keep superseded packets out of Pending, and add store tests for the order when a launch submits a second revision.",
+    "queries": [
+      { "id": "current-order", "query": "what order does the console list review packets in", "helpful": ["standup/review-queue-order"] },
+      { "id": "keywords", "query": "listReviewPackets created_at rowid sort limit drafts", "helpful": ["standup/review-queue-order"] },
+      { "id": "second-round", "query": "where does a packet land in the list after the worker submits a second round for the same launch", "helpful": ["standup/review-queue-order"] },
+      { "id": "superseded", "query": "why did the older packet disappear from Pending when a new one was submitted", "helpful": ["standup/review-queue-order"] }
+    ]
+  },
+  {
+    "id": "standup-slack-retry-bug",
+    "project": "standup",
+    "paths": ["src/slack/mirror.ts"],
+    "brief": "Slack mirror posts are dropped during bursts of 429 responses when several sessions finish turns at once. Fix postWithRetry so rate-limited attempts honour Retry-After and are spread out, and add tests for the retry schedule.",
+    "queries": [
+      { "id": "policy", "query": "slack mirror retry policy", "helpful": ["standup/slack-mirror-retry-policy", "standup/slack-reliability-review"] },
+      { "id": "keywords", "query": "postWithRetry backoff jitter max attempts", "helpful": ["standup/slack-mirror-retry-policy"] },
+      { "id": "why-dropped", "query": "why do slack posts get dropped when several sessions finish at once", "helpful": ["standup/slack-reliability-review", "standup/slack-mirror-retry-policy"] },
+      { "id": "retry-after", "query": "does the mirror honor Retry-After from Slack 429 responses", "helpful": ["standup/slack-mirror-retry-policy"] }
+    ]
+  },
+  {
+    "id": "standup-worktree-launch-bug",
+    "project": "standup",
+    "paths": ["src/launcher/launcher.ts"],
+    "brief": "Launching a worker into a project whose worktree root is a symlink starts the session in the main checkout instead of the new worktree. Fix worktree creation and the launch cwd, and add a launcher test with a symlinked worktree root.",
+    "queries": [
+      { "id": "keywords", "query": "worktree root symlink launch cwd", "helpful": [] },
+      { "id": "where-created", "query": "where does the launcher create the git worktree for a new session", "helpful": [] },
+      { "id": "wrong-checkout", "query": "launched worker starts in the wrong checkout", "helpful": [] },
+      { "id": "provision", "query": "worktree provision setup command before the session starts", "helpful": [] }
+    ]
+  },
+  {
+    "id": "tidepool-daily-extremes",
+    "project": "tidepool",
+    "brief": "Add GET /v1/stations/{id}/extremes to the Tidepool API: the daily highs and lows grouped by the station's local day, heights in the requested datum and unit, paged by time window like predictions. Cover the days the clocks change in the tests.",
+    "queries": [
+      { "id": "paging", "query": "how does a new time-series endpoint get its page window and next link", "helpful": ["tidepool/predictions-api-paging"] },
+      { "id": "datum", "query": "how are predicted heights shifted to chart datum or MLLW and converted to feet", "helpful": ["tidepool/datum-conversions"] },
+      { "id": "local-day", "query": "a day with 25 hours can have three high tides, how should tests handle that", "helpful": ["tidepool/timezone-flaky-tests"] },
+      { "id": "station-zone", "query": "where does a station's time zone come from and what is it used for", "helpful": ["tidepool/station-metadata-schema", "tidepool/timezone-flaky-tests"] },
+      { "id": "keyword-dump", "query": "tidepool extremes endpoint highs lows local day datum units paging Link header DST tests", "helpful": ["tidepool/predictions-api-paging", "tidepool/datum-conversions", "tidepool/timezone-flaky-tests", "tidepool/station-metadata-schema", "tidepool/tidepool-at-a-glance"] }
+    ]
+  },
+  {
+    "id": "quillstack-redirects-plugin",
+    "project": "quillstack",
+    "brief": "Write a Quillstack plugin that reads a redirects table from quill.toml, adds a stub page for every old path during discovery, and writes a _redirects file for the static host after the build. Make sure the link checker accepts links to the old paths, and that translated sites get a stub per locale.",
+    "queries": [
+      { "id": "hooks", "query": "which plugin hooks can add virtual pages and write files to the output directory", "helpful": ["quillstack/plugin-lifecycle"] },
+      { "id": "manifest", "query": "quill-plugin.toml manifest fields and how a site pins a plugin version", "helpful": ["quillstack/plugin-lifecycle", "quillstack/migrating-to-1-0"] },
+      { "id": "links", "query": "will quill check links report a link to a page that only exists as a redirect stub", "helpful": ["quillstack/link-checker-false-positives"] },
+      { "id": "locales", "query": "how are pages laid out per locale and what does a translated site serve for an untranslated page", "helpful": ["quillstack/i18n-fallback", "quillstack/migrating-to-1-0"] },
+      { "id": "tests", "query": "how do I test a change that alters the built HTML output", "helpful": ["quillstack/contributor-onboarding"] }
+    ]
+  }
+]

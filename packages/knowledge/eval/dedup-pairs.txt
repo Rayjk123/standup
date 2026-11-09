@@ -1,0 +1,11 @@
+# Known duplicates in the fixture corpus, read by `scripts/kb-dedup-calibrate.ts --fixture`.
+# Format (scripts/kb-dedup-pairs.ts): one label per line; `a/* b/*` labels every same-slug pair across two projects.
+
+# standup-self is a frozen copy of standup.
+standup-self/* standup/*
+
+# scratch holds the agent-written early drafts of the Frost Watch docs.
+scratch/* frost-watch/*
+
+# The same Bedrock auth gotcha, written twice.
+standup/headless-claude-p-bedrock-auth standup/headless-claude-p-bedrock-auth-default-profile

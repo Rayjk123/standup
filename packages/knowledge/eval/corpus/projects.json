@@ -1,0 +1,9 @@
+[
+  { "id": "standup", "name": "Standup", "repo": "fixture-repo" },
+  { "id": "standup-self", "name": "Standup (frozen self copy)", "repo": null, "reserved": true, "mirrorOf": "standup" },
+  { "id": "tidepool", "name": "Tidepool", "repo": null },
+  { "id": "frost-watch", "name": "Frost Watch", "repo": null },
+  { "id": "quillstack", "name": "Quillstack", "repo": null },
+  { "id": "scratch", "name": "Scratch", "repo": null },
+  { "id": "global", "name": "Global", "repo": null }
+]
