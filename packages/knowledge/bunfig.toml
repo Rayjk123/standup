@@ -1,0 +1,4 @@
+[test]
+# Keeps every test away from the real service manager and the live DB (see test-guard.ts).
+preload = ["../../test-guard.ts"]
+pathIgnorePatterns = ["eval/local/**", "eval/fixture-repo/**"]
