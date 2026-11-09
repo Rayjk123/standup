@@ -1,0 +1,659 @@
+import type { Database } from "bun:sqlite";
+import type {
+  HarnessId,
+  Launch,
+  LaunchCheckoutSnapshot,
+  LaunchStatus,
+  LaunchKind,
+  LaunchPhase,
+} from "@standup/shared";
+import { canonicalPath, isWithin } from "./projects.js";
+
+/**
+ * Tail cap for a launch's streamed provision/build log. Build output can run
+ * to megabytes; only the tail is useful for "what is it doing right now", and
+ * an unbounded column would bloat the row and every launch broadcast.
+ */
+const LAUNCH_LOG_CAP = 100_000;
+
+interface LaunchRow {
+  id: string;
+  kind: "worktree" | "adopted" | "bootstrap";
+  project_id: string;
+  task: string;
+  worktree_path: string;
+  branch: string;
+  base_branch: string | null;
+  tmux_session: string | null;
+  session_id: string | null;
+  status: LaunchStatus;
+  error: string | null;
+  model: string | null;
+  effort: string | null;
+  provisioned: number | null;
+  provision_snapshot?: string | null;
+  in_place: number | null;
+  phase: string | null;
+  log: string | null;
+  requester: string | null;
+  launched_by?: string | null;
+  idempotency_key: string | null;
+  harness: string | null;
+  codex_event_log: string | null;
+  codex_model: string | null;
+  codex_effort: string | null;
+  reaped_at?: string | null;
+  reap_reason?: string | null;
+  keep_alive?: number | null;
+  bypass_permissions?: number | null;
+  created_at: string;
+}
+
+function toLaunch(row: LaunchRow): Launch {
+  return {
+    id: row.id,
+    kind: row.kind ?? "worktree",
+    projectId: row.project_id,
+    task: row.task,
+    worktreePath: row.worktree_path,
+    branch: row.branch,
+    baseBranch: row.base_branch ?? undefined,
+    tmuxSession: row.tmux_session ?? undefined,
+    sessionId: row.session_id ?? undefined,
+    status: row.status,
+    error: row.error ?? undefined,
+    model: (row.model as Launch["model"]) ?? undefined,
+    effort: (row.effort as Launch["effort"]) ?? undefined,
+    provisioned: row.provisioned === 1,
+    provisionSnapshot: parseCheckoutSnapshot(row.provision_snapshot),
+    inPlace: row.in_place === 1,
+    phase: (row.phase as LaunchPhase | null) ?? undefined,
+    log: row.log ?? undefined,
+    requester: row.requester ?? undefined,
+    launchedBy: row.launched_by ?? undefined,
+    harness: (row.harness as HarnessId | null) ?? undefined,
+    codexEventLog: row.codex_event_log ?? undefined,
+    codexModel: (row.codex_model as Launch["codexModel"]) ?? undefined,
+    codexEffort: (row.codex_effort as Launch["codexEffort"]) ?? undefined,
+    reapedAt: row.reaped_at ? new Date(row.reaped_at) : undefined,
+    reapReason: row.reap_reason ?? undefined,
+    keepAlive: row.keep_alive === 1,
+    bypassPermissions:
+      row.bypass_permissions === null || row.bypass_permissions === undefined ? undefined : row.bypass_permissions === 1,
+    createdAt: new Date(row.created_at),
+  };
+}
+
+export function createLaunch(
+  db: Database,
+  launch: Omit<Launch, "createdAt" | "status" | "kind" | "keepAlive" | "reapedAt" | "reapReason"> & {
+    status?: LaunchStatus;
+    kind?: LaunchKind;
+    /**
+     * Optional caller-supplied dedup key. When present, a UNIQUE index makes a
+     * second launch with the same key a constraint violation — the collector's
+     * launch endpoint checks getLaunchByIdempotencyKey first and returns the
+     * existing row, so a redelivered launch command can't double-spawn. Omitted
+     * for internal/automatic launches, which carry no key.
+     */
+    idempotencyKey?: string;
+  }
+): Launch {
+  db.run(
+    `INSERT INTO launches
+       (id, kind, project_id, task, worktree_path, branch, base_branch, tmux_session, session_id, status, model, effort, provisioned, in_place, requester, launched_by, idempotency_key, harness, codex_event_log, codex_model, codex_effort, bypass_permissions)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      launch.id,
+      launch.kind ?? "worktree",
+      launch.projectId,
+      launch.task,
+      launch.worktreePath,
+      launch.branch,
+      launch.baseBranch ?? null,
+      launch.tmuxSession ?? null,
+      launch.sessionId ?? null,
+      launch.status ?? "starting",
+      launch.model ?? null,
+      launch.effort ?? null,
+      launch.provisioned ? 1 : 0,
+      launch.inPlace ? 1 : 0,
+      launch.requester ?? null,
+      launch.launchedBy?.trim() || null,
+      launch.idempotencyKey ?? null,
+      launch.harness ?? null,
+      launch.codexEventLog ?? null,
+      launch.codexModel ?? null,
+      launch.codexEffort ?? null,
+      launch.bypassPermissions === undefined ? null : launch.bypassPermissions ? 1 : 0,
+    ]
+  );
+
+  return getLaunch(db, launch.id)!;
+}
+
+/**
+ * The launch previously created for `key`, or null when none exists. Backs the
+ * launch endpoint's idempotency: a redelivered launch command resolves to the
+ * SAME launch (and its session/worktree) instead of spawning a duplicate.
+ */
+export function getLaunchByIdempotencyKey(db: Database, key: string): Launch | null {
+  const row = db
+    .query("SELECT * FROM launches WHERE idempotency_key = ? LIMIT 1")
+    .get(key) as LaunchRow | null;
+  return row ? toLaunch(row) : null;
+}
+
+export function updateLaunchStatus(
+  db: Database,
+  launchId: string,
+  status: LaunchStatus,
+  error?: string
+): void {
+  // Clear phase on any terminal transition — it only describes an in-flight
+  // "starting" launch, and a stale phase on a running row would mislabel it.
+  db.run("UPDATE launches SET status = ?, error = ?, phase = NULL WHERE id = ?", [
+    status,
+    error ?? null,
+    launchId,
+  ]);
+  // A failed or cleaned launch has no worker left to resume, so it no longer
+  // reads as paused.
+  if (status === "failed" || status === "cleaned") clearLaunchReaped(db, launchId);
+}
+
+/**
+ * Records that the launch's idle worker was stopped, and why. Leaves `status`
+ * as it is, so the launch still reads as the job's and can be resumed.
+ */
+export function markLaunchReaped(db: Database, launchId: string, reason: string): void {
+  db.run("UPDATE launches SET reaped_at = datetime('now'), reap_reason = ? WHERE id = ?", [reason, launchId]);
+}
+
+/** Clears a launch's reaped mark, once its worker runs again. */
+export function clearLaunchReaped(db: Database, launchId: string): void {
+  db.run("UPDATE launches SET reaped_at = NULL, reap_reason = NULL WHERE id = ?", [launchId]);
+}
+
+/** Sets whether the launch is exempt from idle reaping. */
+export function setLaunchKeepAlive(db: Database, launchId: string, keepAlive: boolean): void {
+  db.run("UPDATE launches SET keep_alive = ? WHERE id = ?", [keepAlive ? 1 : 0, launchId]);
+}
+
+/** Whether the launch belongs to a Persona job that is still open (active or waiting on the owner). */
+export function launchHasOpenPersonaJob(db: Database, launchId: string): boolean {
+  const row = db
+    .query(
+      `SELECT 1 FROM persona_job_launches jl JOIN persona_jobs j ON j.id = jl.job_id
+       WHERE jl.launch_id = ? AND j.status IN ('active', 'waiting_user') LIMIT 1`
+    )
+    .get(launchId);
+  return row !== null;
+}
+
+/**
+ * Whether a pending Persona approval card acts on this launch's worker: one
+ * naming its session or launch, answering one of its session's asks (a
+ * safety-floor hold's allow card), or deciding one of its plans.
+ */
+export function launchHasPendingApproval(db: Database, launchId: string, sessionId: string): boolean {
+  const row = db
+    .query(
+      `SELECT 1 FROM persona_approvals
+        WHERE status = 'pending'
+          AND (json_extract(args_json, '$.sessionId') = ?
+            OR json_extract(args_json, '$.launchId') = ?
+            OR json_extract(args_json, '$.askId') IN (SELECT id FROM asks WHERE session_id = ?)
+            OR json_extract(args_json, '$.planId') IN (SELECT id FROM plan_approvals WHERE launch_id = ?))
+        LIMIT 1`
+    )
+    .get(sessionId, launchId, sessionId, launchId);
+  return row !== null;
+}
+
+/**
+ * Re-attributes a launch to a different project. Used when a project-less
+ * launch (started against `scratch`) is later matched to a real project, so
+ * the launch row stays consistent with the session it spawned rather than
+ * lingering as scratch.
+ */
+export function updateLaunchProject(
+  db: Database,
+  launchId: string,
+  projectId: string
+): void {
+  db.run("UPDATE launches SET project_id = ? WHERE id = ?", [projectId, launchId]);
+}
+
+/**
+ * Records a launch's Claude model and/or effort after a mid-session switch, so
+ * the persisted value tracks what the session is actually running. Each field
+ * is optional: an omitted one keeps its stored value rather than being
+ * cleared.
+ */
+export function updateLaunchModelEffort(
+  db: Database,
+  launchId: string,
+  settings: { model?: Launch["model"]; effort?: Launch["effort"] }
+): void {
+  if (settings.model !== undefined) {
+    db.run("UPDATE launches SET model = ? WHERE id = ?", [settings.model, launchId]);
+  }
+  if (settings.effort !== undefined) {
+    db.run("UPDATE launches SET effort = ? WHERE id = ?", [settings.effort, launchId]);
+  }
+}
+
+/** A stored LaunchCheckoutSnapshot, or undefined when there is none or any part of it doesn't parse as one. */
+function parseCheckoutSnapshot(raw: string | null | undefined): LaunchCheckoutSnapshot | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as Partial<LaunchCheckoutSnapshot> | null;
+    if (!parsed || !parsed.checkouts || typeof parsed.checkouts !== "object") return undefined;
+    const checkouts = Object.values(parsed.checkouts) as Array<Partial<LaunchCheckoutSnapshot["checkouts"][string]> | null>;
+    const valid = checkouts.every(
+      (c) => !!c && typeof c.head === "string" && typeof c.log === "string" && typeof c.reflog === "number" && Number.isInteger(c.reflog) && c.reflog >= 0
+    );
+    if (!valid) return undefined;
+    const dirty = parsed.dirty && typeof parsed.dirty === "object" ? parsed.dirty : {};
+    if (!Object.values(dirty).every((d) => typeof d === "string")) return undefined;
+    return { checkouts: parsed.checkouts, dirty };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Records a provisioned launch's checkouts as provisioning and setup left them. */
+export function setLaunchProvisionSnapshot(db: Database, launchId: string, snapshot: LaunchCheckoutSnapshot): void {
+  db.run("UPDATE launches SET provision_snapshot = ? WHERE id = ?", [JSON.stringify(snapshot), launchId]);
+}
+
+/** Records which slow step a still-"starting" launch is currently in. */
+export function setLaunchPhase(
+  db: Database,
+  launchId: string,
+  phase: LaunchPhase
+): void {
+  db.run("UPDATE launches SET phase = ? WHERE id = ?", [phase, launchId]);
+}
+
+/**
+ * Appends streamed provision/build output to a launch's log, keeping only the
+ * last LAUNCH_LOG_CAP characters so a noisy build can't bloat the row.
+ */
+export function appendLaunchLog(
+  db: Database,
+  launchId: string,
+  chunk: string
+): void {
+  db.run(
+    `UPDATE launches
+       SET log = substr(COALESCE(log, '') || ?, -${LAUNCH_LOG_CAP})
+     WHERE id = ?`,
+    [chunk, launchId]
+  );
+}
+
+export function getLaunch(db: Database, launchId: string): Launch | null {
+  const row = db
+    .query("SELECT * FROM launches WHERE id = ?")
+    .get(launchId) as LaunchRow | null;
+  return row ? toLaunch(row) : null;
+}
+
+export function getLaunches(db: Database): Launch[] {
+  const rows = db
+    .query("SELECT * FROM launches ORDER BY created_at DESC")
+    .all() as LaunchRow[];
+  return rows.map(toLaunch);
+}
+
+/**
+ * Every launch column toLaunch reads except `log`. The log holds up to
+ * LAUNCH_LOG_CAP characters of build output per launch, so across a few hundred
+ * launches it is most of the list's bytes; the list is sent on every hello-ok
+ * and GET /api/launches, and the log is read per launch (getLaunch) by the one
+ * view that shows it.
+ */
+const LAUNCH_LIST_COLUMNS = [
+  "id", "kind", "project_id", "task", "worktree_path", "branch", "base_branch", "tmux_session",
+  "session_id", "status", "error", "model", "effort", "provisioned", "in_place", "phase",
+  "requester", "launched_by", "idempotency_key", "harness", "codex_event_log", "codex_model",
+  "codex_effort", "reaped_at", "reap_reason", "keep_alive", "bypass_permissions", "created_at",
+].join(", ");
+
+/** Every launch, most recent first, without its log (see LAUNCH_LIST_COLUMNS). */
+export function getLaunchList(db: Database): Launch[] {
+  const rows = db
+    .query(`SELECT ${LAUNCH_LIST_COLUMNS} FROM launches ORDER BY created_at DESC`)
+    .all() as LaunchRow[];
+  return rows.map(toLaunch);
+}
+
+/**
+ * Launches CREATED at/after `sinceIso` — a bare UTC sqlite datetime
+ * (`YYYY-MM-DD HH:MM:SS`, e.g. from a 24h digest window). The window is applied
+ * in SQL against the stored UTC `created_at`, so the boundary is computed in
+ * true UTC rather than against toLaunch's `createdAt` Date — a bare stamp parsed
+ * as LOCAL time, which skews a `getTime()` comparison by the UTC offset. Most
+ * recent first.
+ */
+export function getLaunchesSince(db: Database, sinceIso: string): Launch[] {
+  const rows = db
+    .query("SELECT * FROM launches WHERE created_at >= ? ORDER BY created_at DESC")
+    .all(sinceIso) as LaunchRow[];
+  return rows.map(toLaunch);
+}
+
+/**
+ * Codex launches that recorded a JSONL event-log sidecar — the rows fleet
+ * telemetry reads to reconcile a Codex run's per-turn token usage (Claude
+ * launches have no sidecar; their usage comes from the transcript). `activeOnly`
+ * mirrors the fleet endpoint's default view: only starting/running launches,
+ * matching the active-session default (the `?all=1` view passes false to include
+ * finished runs). A launch whose observed session has already ended is no longer
+ * active even while its row still reads `running` — the run is done, and its
+ * session's `ended_at` is what records that (the same signal an active Claude
+ * session drops out on) — so the active view excludes it, keeping a finished
+ * Codex run out of the live fleet. Ordered most recent first; the caller sorts by
+ * tokens.
+ */
+export function getCodexLaunches(
+  db: Database,
+  { activeOnly }: { activeOnly: boolean }
+): Launch[] {
+  const sql = activeOnly
+    ? `SELECT l.* FROM launches l
+        LEFT JOIN sessions s ON s.id = l.session_id
+        WHERE l.harness = 'codex' AND l.codex_event_log IS NOT NULL
+          AND l.status IN ('starting', 'running')
+          AND (l.session_id IS NULL OR s.ended_at IS NULL)
+        ORDER BY l.created_at DESC`
+    : `SELECT * FROM launches
+        WHERE harness = 'codex' AND codex_event_log IS NOT NULL
+        ORDER BY created_at DESC`;
+  return (db.query(sql).all() as LaunchRow[]).map(toLaunch);
+}
+
+/**
+ * Maps a launched session's cwd back to the project that launched it.
+ *
+ * A worktree lives outside the project's configured `repos`, so the normal
+ * findProjectByCwd path can't match it and the session would land in
+ * `scratch` despite being deliberately started for a project.
+ *
+ * Only matches a launch that's still unclaimed (never attached to a session)
+ * or whose attached session is still live. Once that session has ended, the
+ * launch is spent — its task/project already flowed into that session's row,
+ * and matching it again would silently hand a brand-new, unrelated session
+ * the old one's title and steal the launch out from under it via
+ * attachSessionToLaunch. This matters most for an *adopted* launch, whose
+ * `worktree_path` is the session's original cwd rather than a fresh, unique
+ * worktree (see launcher.ts's adopt path) — for a bare repo directory that
+ * path is shared by every plain session anyone starts there afterward.
+ * `status != 'cleaned'` additionally excludes a launch whose worktree has
+ * since been removed.
+ *
+ * Paths are canonicalized (realpath, `~` expanded) on both sides before
+ * comparing — exactly as findProjectByCwd does. A launch's worktree_path is
+ * stored from the configured worktree root (e.g. `~/code/...`) while a
+ * session's cwd is reported by the OS as the resolved realpath (e.g.
+ * `/Volumes/code/...` when that root is a symlinked mount). A literal
+ * string compare treats those as different trees, so the SessionStart hook
+ * never attaches and the launch is stranded sessionless, rendering forever as
+ * "provisioning workspace…". Canonicalizing is what makes the match reflect
+ * the real filesystem. The match runs in JS because each row's stored path
+ * must be resolved individually.
+ */
+export function findLaunchByCwd(db: Database, cwd: string): Launch | null {
+  const rows = db
+    .query(
+      `SELECT l.* FROM launches l
+       LEFT JOIN sessions s ON s.id = l.session_id
+       WHERE l.status != 'cleaned'
+         AND (l.session_id IS NULL OR s.ended_at IS NULL)`
+    )
+    .all() as LaunchRow[];
+
+  const target = canonicalPath(cwd);
+  const match = rows
+    .filter((row) => isWithin(canonicalPath(row.worktree_path), target))
+    // Deepest worktree_path wins (a nested launch beats an ancestor), then
+    // most recent — mirrors the old SQL ORDER BY.
+    .sort((a, b) => {
+      const byDepth = b.worktree_path.length - a.worktree_path.length;
+      if (byDepth !== 0) return byDepth;
+      return b.created_at.localeCompare(a.created_at);
+    })[0];
+
+  return match ? toLaunch(match) : null;
+}
+
+/**
+ * The most recent still-active (starting/running) launch occupying a worktree.
+ * Used by the task-run reconciliation sweep to find the tmux pane hosting a run
+ * whose session hasn't linked yet — the run and its launch share worktree_path.
+ */
+export function getActiveLaunchByWorktree(
+  db: Database,
+  worktreePath: string
+): Launch | null {
+  const row = db
+    .query(
+      `SELECT * FROM launches
+        WHERE worktree_path = ? AND status IN ('starting', 'running')
+        ORDER BY created_at DESC LIMIT 1`
+    )
+    .get(worktreePath) as LaunchRow | null;
+  return row ? toLaunch(row) : null;
+}
+
+/** The worktree paths of `projectId`'s most recent launches (at most `limit`), newest first. */
+export function recentLaunchWorktrees(db: Database, projectId: string, limit = 5): string[] {
+  const rows = db
+    .query(
+      "SELECT worktree_path AS path FROM launches WHERE project_id = ? AND worktree_path IS NOT NULL AND worktree_path != '' GROUP BY worktree_path ORDER BY MAX(created_at) DESC LIMIT ?"
+    )
+    .all(projectId, limit) as Array<{ path: string }>;
+  return rows.map((r) => r.path);
+}
+
+/** The working dirs of the most recent provisioned launches across every project (at most `limit`), newest first. */
+export function recentProvisionedWorkingDirs(db: Database, limit = 50): string[] {
+  const rows = db
+    .query(
+      "SELECT worktree_path AS path FROM launches WHERE provisioned = 1 AND worktree_path IS NOT NULL AND worktree_path != '' GROUP BY worktree_path ORDER BY MAX(created_at) DESC LIMIT ?"
+    )
+    .all(limit) as Array<{ path: string }>;
+  return rows.map((r) => r.path);
+}
+
+/**
+ * The most recent launch occupying a worktree, in ANY status — unlike
+ * getActiveLaunchByWorktree, which is limited to starting/running. A best-of-N
+ * attempt worktree is unique to one launch, so this resolves an attempt's launch
+ * (for its branch/base and to repoint a ticket at the picked winner) even after
+ * the run has reached a terminal state.
+ */
+export function getLaunchByWorktree(db: Database, worktreePath: string): Launch | null {
+  const row = db
+    .query(
+      "SELECT * FROM launches WHERE worktree_path = ? ORDER BY created_at DESC LIMIT 1"
+    )
+    .get(worktreePath) as LaunchRow | null;
+  return row ? toLaunch(row) : null;
+}
+
+/**
+ * Whether this session was started by the console rather than by a human in
+ * their own terminal. The distinction changes how signals are read: an
+ * "agent is waiting for input" notification is routine for a monitored
+ * session (you are sitting at that terminal) and means nobody is coming for
+ * a launched one.
+ */
+export function getLaunchBySession(
+  db: Database,
+  sessionId: string
+): Launch | null {
+  // A session id can map to more than one launch row — adopting an ended
+  // session reuses the original session id, so the dead worktree launch and
+  // the live adopted launch share it. Prefer the row that can actually be
+  // driven: live statuses first, then the newest, so callers resolve to the
+  // running pane rather than a stale one whose tmux session is long gone.
+  const row = db
+    .query(
+      `SELECT * FROM launches
+       WHERE session_id = ?
+       ORDER BY (status IN ('running', 'starting')) DESC, created_at DESC
+       LIMIT 1`
+    )
+    .get(sessionId) as LaunchRow | null;
+  return row ? toLaunch(row) : null;
+}
+
+/**
+ * getLaunchBySession for many sessions in one query, keyed by session id, with
+ * the same preference when a session id maps to more than one launch (live
+ * statuses first, then the newest). A session with no launch has no entry, so
+ * `has(id)` answers isLaunchedSession. It decorates every session of the
+ * hello-ok snapshot and the session lists, so like getLaunchList it leaves
+ * each launch's log out.
+ */
+export function getLaunchesBySession(
+  db: Database,
+  sessionIds: readonly string[]
+): Map<string, Launch> {
+  const rows = db
+    .query(
+      `SELECT ${LAUNCH_LIST_COLUMNS} FROM launches
+       WHERE session_id IN (SELECT value FROM json_each(?))
+       ORDER BY session_id, (status IN ('running', 'starting')) DESC, created_at DESC`
+    )
+    .all(JSON.stringify(sessionIds)) as LaunchRow[];
+  const bySession = new Map<string, Launch>();
+  for (const row of rows) {
+    if (!bySession.has(row.session_id!)) bySession.set(row.session_id!, toLaunch(row));
+  }
+  return bySession;
+}
+
+/**
+ * The first launch that carried `sessionId` (the one that started it, before
+ * any adoption reused the id), or null when no launch did.
+ */
+export function getOriginalLaunchBySession(db: Database, sessionId: string): Launch | null {
+  const row = db
+    .query("SELECT * FROM launches WHERE session_id = ? ORDER BY created_at ASC, rowid ASC LIMIT 1")
+    .get(sessionId) as LaunchRow | null;
+  return row ? toLaunch(row) : null;
+}
+
+export function isLaunchedSession(db: Database, sessionId: string): boolean {
+  const row = db
+    .query("SELECT 1 AS found FROM launches WHERE session_id = ? LIMIT 1")
+    .get(sessionId) as { found: number } | null;
+  return row !== null;
+}
+
+/** Links a launch to the Claude Code session that reported in from it. */
+export function attachSessionToLaunch(
+  db: Database,
+  launchId: string,
+  sessionId: string
+): void {
+  db.run(
+    "UPDATE launches SET session_id = ?, status = 'running' WHERE id = ?",
+    [sessionId, launchId]
+  );
+}
+
+/**
+ * Records the sha256 (hex) of a launch's scoped worker credential
+ * (FloorConfig.workerToken). The token itself is never stored.
+ */
+export function setLaunchWorkerTokenHash(db: Database, launchId: string, hash: string): void {
+  db.run("UPDATE launches SET worker_token_hash = ? WHERE id = ?", [hash, launchId]);
+}
+
+/** Records the sha256 (hex) of a launch's review token (the launcher keeps the token itself in an owner-only file). */
+export function setLaunchReviewTokenHash(db: Database, launchId: string, hash: string): void {
+  db.run("UPDATE launches SET review_token_hash = ? WHERE id = ?", [hash, launchId]);
+}
+
+/** Forgets a launch's review token hash, so no token authenticates as it any more. */
+export function clearLaunchReviewTokenHash(db: Database, launchId: string): void {
+  db.run("UPDATE launches SET review_token_hash = NULL WHERE id = ?", [launchId]);
+}
+
+/** The launch whose review token hashes to `hash`, or null. */
+export function getLaunchByReviewTokenHash(db: Database, hash: string): Launch | null {
+  if (!hash) return null;
+  const row = db.query("SELECT * FROM launches WHERE review_token_hash = ? LIMIT 1").get(hash) as LaunchRow | null;
+  return row ? toLaunch(row) : null;
+}
+
+/** The sha256 (hex) of a launch's review token, or null when it has none. */
+export function getLaunchReviewTokenHash(db: Database, launchId: string): string | null {
+  const row = db
+    .query("SELECT review_token_hash FROM launches WHERE id = ?")
+    .get(launchId) as { review_token_hash: string | null } | null;
+  return row?.review_token_hash ?? null;
+}
+
+/** The sha256 (hex) of a launch's worker credential, or null when it has none. */
+export function getLaunchWorkerTokenHash(db: Database, launchId: string): string | null {
+  const row = db
+    .query("SELECT worker_token_hash FROM launches WHERE id = ?")
+    .get(launchId) as { worker_token_hash: string | null } | null;
+  return row?.worker_token_hash ?? null;
+}
+
+/**
+ * Records the sha256 (hex) of a launch's hook token: the credential its
+ * Claude session's own hooks present on the collector's `/hook` route. The
+ * token itself is never stored.
+ */
+export function setLaunchHookTokenHash(db: Database, launchId: string, hash: string): void {
+  db.run("UPDATE launches SET hook_token_hash = ? WHERE id = ?", [hash, launchId]);
+}
+
+/**
+ * Marks a launch's hook token as proven: an event carrying it has reached
+ * `/hook`, so from now on the route takes the launch's session's events only
+ * with it (hook-auth.ts).
+ */
+export function setLaunchHookAuth(db: Database, launchId: string): void {
+  db.run("UPDATE launches SET hook_auth = 1 WHERE id = ? AND hook_auth IS NOT 1", [launchId]);
+}
+
+/**
+ * Retires a launch's hook-token proof: its session ended and reports again
+ * without the token, so the route stops enforcing it until a token event
+ * proves it again.
+ */
+export function retireLaunchHookAuth(db: Database, launchId: string): void {
+  db.run("UPDATE launches SET hook_auth = 0 WHERE id = ? AND hook_auth = 1", [launchId]);
+}
+
+/**
+ * Whether a launch's hook-token proof was retired (retireLaunchHookAuth): its
+ * session's latest events came without the token, so whatever reports for it
+ * now is not the launch's worker — the session was resumed by hand elsewhere.
+ */
+export function launchHookAuthRetired(db: Database, launchId: string): boolean {
+  const row = db.query("SELECT hook_auth FROM launches WHERE id = ?").get(launchId) as { hook_auth: number | null } | null;
+  return row?.hook_auth === 0;
+}
+
+/** Whether a launch's hook token has been proven (setLaunchHookAuth). */
+export function getLaunchHookAuth(db: Database, launchId: string): boolean {
+  const row = db.query("SELECT hook_auth FROM launches WHERE id = ?").get(launchId) as { hook_auth: number | null } | null;
+  return row?.hook_auth === 1;
+}
+
+/** The launch whose hook token hashes to `hash`, or null. */
+export function getLaunchByHookTokenHash(db: Database, hash: string): Launch | null {
+  if (!hash) return null;
+  const row = db.query("SELECT * FROM launches WHERE hook_token_hash = ? LIMIT 1").get(hash) as LaunchRow | null;
+  return row ? toLaunch(row) : null;
+}
