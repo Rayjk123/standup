@@ -1,0 +1,3 @@
+# The Bun config the safety-floor hook runs under (floorHookCommand passes
+# --config=<this file>), in place of any bunfig.toml in the worker's cwd, so
+# nothing a worker writes can preload code into the hook. Keep it empty.
