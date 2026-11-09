@@ -1,0 +1,88 @@
+import type { ReviewMediaInfo, ReviewPacketDetail, ReviewPacketSummary } from "@standup/shared";
+
+/** The instant fixture ages are measured from. */
+export const FIXTURE_NOW = new Date("2026-10-08T12:00:00.000Z");
+
+export const DETAIL_ID = "rp-7f3a2c";
+
+function mediaUrl(packetId: string, mediaId: string): string {
+  return `/api/reviews/${packetId}/media/${mediaId}`;
+}
+
+export const STAGE_LABELS = {
+  validation: "Validation",
+  deploy: "Deploy",
+  screenshot: "Screenshot",
+  "corp-review": "corp-review",
+};
+
+export const fixtureMedia: ReviewMediaInfo[] = [
+  {
+    id: "m-list",
+    kind: "image",
+    mime: "image/png",
+    bytes: 182_344,
+    caption: "Review list on desktop: pending packets first, with media counts",
+    position: 0,
+    url: mediaUrl(DETAIL_ID, "m-list"),
+  },
+  {
+    id: "m-walkthrough",
+    kind: "video",
+    mime: "video/webm",
+    bytes: 1_482_006,
+    caption: "Walkthrough: approving a packet moves the pipeline to complete",
+    position: 3,
+    url: mediaUrl(DETAIL_ID, "m-walkthrough"),
+  },
+];
+
+export const fixtureDetail: ReviewPacketDetail = {
+  id: DETAIL_ID,
+  owner: "alice",
+  projectId: "standup",
+  launchId: "launch-91be",
+  jobId: "job-review-tab",
+  sessionId: "sess-4c1d9e20",
+  pipelineRunId: "run-55a1",
+  branch: "standup/review-tab",
+  commitSha: "9c41f2e7b8a03d5561e2f0c4a7d9b3e1f6a2c804",
+  status: "pending",
+  title: "Add the Review tab for human sign-off on delivery pipelines",
+  intent:
+    "Gives the human_review pipeline stage a place to be decided: a Review tab that lists packets awaiting sign-off and shows each one's intent, diff, validation and media. Approving or requesting changes resumes the waiting pipeline run.",
+  changes: [
+    {
+      area: "Review tab UI",
+      files: ["packages/web/src/components/review/ReviewView.tsx", "packages/web/src/components/review/ReviewDetail.tsx"],
+      hunks: [
+        {
+          file: "packages/web/src/useWebSocket.ts",
+          lines: ["+        publishReviewUpdate(message.payload as ReviewUpdatedPayload);", "+        refreshReviewsPending();"],
+        },
+      ],
+      why: "A small pub/sub fans review:updated out to the mounted Review tab so the list and detail refetch",
+    },
+  ],
+  validation: {
+    tests: { summary: "bun test packages/web — review list, detail, decision bar and view", passed: 412, failed: 0 },
+    typecheck: "clean",
+  },
+  questions: ["Should approving also post the comment to the linked corp-review review?"],
+  links: [
+    { kind: "corp-review", label: "R-241 — Review tab", url: "https://code.example.corp/reviews/R-241" },
+    { kind: "deploy", label: "Personal stack deploy", url: "https://ci.example.com/pipelines/standup-dev" },
+  ],
+  media: fixtureMedia,
+  comments: [],
+  createdAt: "2026-10-08T10:12:00.000Z",
+  decidedAt: null,
+  decidedBy: null,
+};
+
+export const fixtureSummaries: ReviewPacketSummary[] = [
+  { id: DETAIL_ID, title: fixtureDetail.title, status: "pending", branch: fixtureDetail.branch, mediaCount: 2, createdAt: fixtureDetail.createdAt },
+  { id: "rp-2b81d0", title: "Ship the cost panel under the You tab", status: "approved", branch: "standup/cost-you", mediaCount: 1, createdAt: "2026-10-07T18:40:00.000Z" },
+];
+
+export const pendingSummaries: ReviewPacketSummary[] = fixtureSummaries.filter((s) => s.status === "pending");

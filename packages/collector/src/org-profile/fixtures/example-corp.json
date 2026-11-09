@@ -1,0 +1,103 @@
+{
+  "name": "example.corp",
+  "internalHostSuffixes": ["example.corp", "corp-dev.example", "apps.example.net"],
+  "ownerHostPatterns": ["devbox-{owner}-*"],
+  "sso": {
+    "dirs": [".corp-sso"],
+    "cookieFiles": [".corp-sso/cookie"],
+    "loginClis": ["corp-sso-login"]
+  },
+  "credentialClis": [
+    {
+      "program": "corp-creds",
+      "subcommand": ["cred(?:entials)?", "refresh"],
+      "accountOption": "--account",
+      "accountAliases": ["-a"],
+      "roleOption": "--role",
+      "roleAliases": ["-r"],
+      "profileOption": "--profile",
+      "printSubcommands": ["show", "get", "export"]
+    },
+    {
+      "program": "corp-assume",
+      "subcommand": ["run|exec|assume|credentials|creds|session"],
+      "accountOption": "--account",
+      "accountAliases": ["-a"],
+      "roleOption": "--role",
+      "roleAliases": ["-r"],
+      "positionalAccount": true,
+      "execSubcommands": ["run", "exec"]
+    }
+  ],
+  "reviewClis": ["corp-review"],
+  "outwardRules": [
+    {
+      "program": "corp-deploy",
+      "subcommand": ["promote|release|start"],
+      "anywhere": true,
+      "category": "outward",
+      "reason": "deploys through the org's release tool"
+    },
+    {
+      "program": "corp-tickets",
+      "valueOptions": ["--queue", "-q"],
+      "subcommand": ["create|update|comment"],
+      "category": "outward",
+      "reason": "writes to the org's issue tracker"
+    }
+  ],
+  "wrapperClis": [
+    { "program": "corp-env" },
+    { "program": "corp-each", "valueOptions": ["-p", "--package", "-j", "--jobs"] }
+  ],
+  "httpClients": [
+    { "program": "corp-curl", "kind": "curl-wrapper" },
+    { "program": "ticket-curl", "kind": "curl-like" }
+  ],
+  "mcp": {
+    "readOnlyTools": {
+      "corp-mcp": ["SearchCode", "ReadWiki", "GetTicket", "ListTickets", "SearchDocs", "ReadPage", "ReviewRead", "BuildStatus"],
+      "corp-docs-mcp": ["*"],
+      "corp-cloud-mcp": ["docs__read_page", "docs__search", "models__lint"],
+      "corp-wiki-mcp": ["WikiRead"],
+      "corp-metrics-mcp": ["ListMetrics", "GetMetric"]
+    },
+    "reviewWriteTools": [{ "server": "corp-mcp", "tool": "ReviewWrite", "action": "update-description", "fileField": "description" }],
+    "checkoutTools": [
+      {
+        "server": "corp-mcp",
+        "tool": "CheckoutReview",
+        "idField": "reviewId",
+        "idPattern": "(?:R-)?(\\d{1,9})(?::\\d+)?",
+        "dirField": "workingDirectory",
+        "nameField": "name",
+        "defaultName": "R-{id}"
+      }
+    ],
+    "selfFiledTools": [
+      {
+        "server": "corp-mcp",
+        "tool": "CreateTicket",
+        "selfFields": { "assignee": ["currentUser"] },
+        "unsetFields": ["delegate", "watchers"]
+      }
+    ],
+    "pluginPrefixes": ["plugin_corp-agents_"]
+  },
+  "webFetchDomains": ["docs.example.corp"],
+  "webFetchPages": [{ "host": "www.example.corp", "paths": ["blogs", "(?!pricing/)[a-z0-9][a-z0-9-]*/pricing"] }],
+  "identity": { "emailDomain": "example.corp" },
+  "codeReview": {
+    "noun": "code review",
+    "remotePatterns": ["(?:^|[@/.])code\\.example\\.corp\\b"],
+    "provisionPatterns": ["\\bcorp-provision\\b"],
+    "launchSubdirPatterns": ["^pkgs/"],
+    "linkFormat": {
+      "urlPattern": "^https://code\\.example\\.corp/reviews/(R-\\d+)(?:[/?#]|$)",
+      "idPattern": "\\bR-\\d+\\b",
+      "urlTemplate": "https://code.example.corp/reviews/{id}"
+    },
+    "cutCommand": "corp-review --issue {issueId} --description {descriptionFile}",
+    "reviseCommand": "corp-review --revise {reviewId} --description {descriptionFile}"
+  }
+}

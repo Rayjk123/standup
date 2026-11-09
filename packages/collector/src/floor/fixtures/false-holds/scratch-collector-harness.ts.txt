@@ -1,0 +1,35 @@
+/**
+ * Live-updates check against a scratch collector: its own data dir under
+ * /tmp/clu-806212 and ports 5311 (API), 5312 (ws) and 5313 (web). The live
+ * Standup install is never touched.
+ */
+import { spawn } from "child_process";
+import { readOwnerToken } from "@standup/shared/owner-token";
+
+const SCRATCH = "/tmp/clu-806212";
+if (SCRATCH.includes("/.local/share/standup")) throw new Error("refusing to run against the live data dir");
+
+const API = "http://127.0.0.1:5311";
+const WS = "ws://127.0.0.1:5312/ws";
+
+const collector = spawn("bun", ["run", "src/index.ts", "--scratch", SCRATCH], {
+  cwd: "packages/collector",
+  env: { ...process.env, DB_PATH: `${SCRATCH}/data/standup.db`, COLLECTOR_PORT: "5311", WS_PORT: "5312", STANDUP_WEB_URL: "http://localhost:5313/" },
+  stdio: "inherit",
+});
+
+const token = readOwnerToken("/tmp/clu-806212/data/secrets/owner.token");
+
+const socket = new WebSocket(WS);
+socket.onmessage = (event) => console.log("ws", String(event.data).slice(0, 120));
+
+await Bun.sleep(3000);
+const sent = await fetch(`${API}/api/persona/messages`, {
+  method: "POST",
+  headers: { "content-type": "application/json", "x-standup-owner-token": token ?? "" },
+  body: JSON.stringify({ text: "live update probe" }),
+});
+console.log(await sent.json());
+console.log(await fetch(`${API}/api/persona/state`).then((r) => r.json()));
+socket.close();
+collector.kill();

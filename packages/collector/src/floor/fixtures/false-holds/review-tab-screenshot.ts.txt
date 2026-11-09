@@ -1,0 +1,196 @@
+#!/usr/bin/env bun
+/**
+ * Screenshots the web console's Review tab against fixture data.
+ *
+ *   bun scripts/review-tab-screenshot.ts [--out-dir /tmp/review-tab-shots]
+ *
+ * Starts the packages/web Vite dev server with vite.screenshot.config.ts (no
+ * /api or /ws proxy) on a free port picked from 5300–5399, and drives headless
+ * Chromium against it with every /api request answered from
+ * review-fixtures.ts and the /ws socket closed unanswered. Any request that
+ * leaves the Vite origin is aborted and fails the run, so no collector is
+ * contacted.
+ */
+
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "fs";
+import { createRequire } from "module";
+import { tmpdir } from "os";
+import { join, resolve } from "path";
+import type { Subprocess } from "bun";
+import type { ReviewPacketDetail } from "@standup/shared";
+import {
+  DETAIL_ID,
+  fixtureDetail,
+  fixtureSummaries,
+  pendingSummaries,
+} from "../packages/web/src/components/review/review-fixtures";
+
+const DEFAULT_PLAYWRIGHT_DIR = "/tmp/standup-pw";
+const INSTALL_HINT =
+  "mkdir -p /tmp/standup-pw && cd /tmp/standup-pw && bun init -y && bun add playwright && bunx playwright install chromium";
+const DEFAULT_OUT_DIR = "/tmp/review-tab-shots";
+/** Ports the script may bind; ports outside this range belong to live services. */
+const PORT_RANGE = { min: 5300, max: 5399 } as const;
+
+const ROOT = resolve(import.meta.dir, "..");
+const WEB_DIR = join(ROOT, "packages", "web");
+
+type Any = any;
+
+function resolvePlaywright(dir: string): string | null {
+  if (!existsSync(join(dir, "package.json"))) return null;
+  try {
+    return createRequire(join(dir, "package.json")).resolve("playwright");
+  } catch {
+    return null;
+  }
+}
+
+async function startVite(port: number): Promise<{ proc: Subprocess; url: string; stderr: () => string }> {
+  if (port < PORT_RANGE.min || port > PORT_RANGE.max) throw new Error(`refusing port ${port} outside ${PORT_RANGE.min}–${PORT_RANGE.max}`);
+  const vite = join(WEB_DIR, "node_modules", ".bin", "vite");
+  const config = join(WEB_DIR, "vite.screenshot.config.ts");
+  const proc = Bun.spawn([vite, "--config", config, "--port", String(port), "--strictPort", "--host", "127.0.0.1"], {
+    cwd: WEB_DIR,
+    stdout: "ignore",
+    stderr: "pipe",
+  });
+  let errText = "";
+  void (async () => {
+    const reader = (proc.stderr as ReadableStream<Uint8Array>).getReader();
+    const decoder = new TextDecoder();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      errText += decoder.decode(value);
+    }
+  })();
+  const url = `http://127.0.0.1:${port}`;
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    if (proc.exitCode !== null) throw new Error(`vite exited (${proc.exitCode}): ${errText.slice(-2000)}`);
+    try {
+      const res = await fetch(`${url}/`);
+      if (res.ok) return { proc, url, stderr: () => errText };
+    } catch {
+      // Not listening yet.
+    }
+    await Bun.sleep(250);
+  }
+  throw new Error(`vite did not start on ${url}: ${errText.slice(-2000)}`);
+}
+
+const DECISION_MOCKUP = `
+<div class="row">
+  <pre class="card" style="margin:0;flex:1">POST /api/reviews/rp-7f3a2c/approve</pre><span style="color:#f59e32;font-size:20px">→</span>
+  <pre class="card" style="margin:0;flex:1">pipeline run-55a1 resumes: human_review → complete</pre>
+</div>`;
+
+function detailFor(id: string): ReviewPacketDetail | null {
+  if (id === DETAIL_ID) return fixtureDetail;
+  const summary = fixtureSummaries.find((s) => s.id === id);
+  if (!summary) return null;
+  return { ...fixtureDetail, ...summary, media: [], comments: [] };
+}
+
+/** Requests the browser tried to send off the Vite origin; each was aborted. */
+const offOrigin: string[] = [];
+
+async function confineToOrigin(context: Any, origin: string): Promise<void> {
+  await context.route(
+    (url: URL) => url.origin !== origin,
+    (route: Any) => {
+      offOrigin.push(route.request().url());
+      return route.abort("blockedbyclient");
+    }
+  );
+  await context.routeWebSocket(
+    (url: URL) => new URL(url.href.replace(/^ws/, "http")).origin !== origin,
+    (ws: Any) => {
+      offOrigin.push(ws.url());
+      ws.close();
+    }
+  );
+}
+
+/** Answers every same-origin /api request from fixtures; nothing reaches a collector. */
+async function mockApi(context: Any, assets: Any, base: string): Promise<void> {
+  const origin = new URL(base);
+  const emptyLists = new Set([
+    "/api/projects",
+    "/api/sessions",
+    "/api/checkpoints",
+    "/api/asks/pending",
+    "/api/expert/exchanges",
+    "/api/knowledge-changes",
+    "/api/digests",
+    "/api/launches",
+    "/api/tickets",
+    "/api/task-runs",
+    "/api/review-findings",
+  ]);
+  await context.routeWebSocket((url: URL) => url.pathname === "/ws" && url.port === origin.port, (ws: Any) => ws.close());
+  await context.route(
+    (url: URL) => url.origin === origin.origin && url.pathname.startsWith("/api/"),
+    async (route: Any) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const path = url.pathname;
+      const json = (body: unknown, status = 200) =>
+        route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+
+      const media = path.match(/^\/api\/reviews\/([^/]+)\/media\/([^/]+)$/);
+      if (media) {
+        const mediaId = decodeURIComponent(media[2]);
+        if (mediaId === "m-walkthrough") return route.fulfill({ status: 200, contentType: "video/webm", body: assets.video });
+        const png = assets.images[mediaId];
+        return png ? route.fulfill({ status: 200, contentType: "image/png", body: png }) : json({ error: "no media" }, 404);
+      }
+      if (path === "/api/reviews") {
+        return json({ reviews: url.searchParams.get("status") === "all" ? fixtureSummaries : pendingSummaries });
+      }
+      if (path === "/api/reviews/pending-count") return json({ count: pendingSummaries.length });
+      const decide = path.match(/^\/api\/reviews\/([^/]+)\/(approve|request-changes)$/);
+      if (decide && request.method() === "POST") {
+        const review = detailFor(decodeURIComponent(decide[1]));
+        if (!review) return json({ error: "review not found" }, 404);
+        const status = decide[2] === "approve" ? "approved" : "changes_requested";
+        return json({ review: { ...review, status, decidedBy: "alice", decidedAt: new Date().toISOString() } });
+      }
+      if (emptyLists.has(path)) return json([]);
+      return json({ error: "not mocked" }, 404);
+    }
+  );
+}
+
+async function main(): Promise<void> {
+  const entry = resolvePlaywright(process.env.STANDUP_PLAYWRIGHT_DIR ?? DEFAULT_PLAYWRIGHT_DIR);
+  if (!entry) {
+    console.error(INSTALL_HINT);
+    process.exit(2);
+  }
+  const outDir = DEFAULT_OUT_DIR;
+  mkdirSync(outDir, { recursive: true });
+  const scratch = mkdtempSync(join(tmpdir(), "review-tab-"));
+  const vite = await startVite(5300 + Math.floor(Math.random() * 100));
+  try {
+    const { chromium } = await import(entry);
+    const browser = await chromium.launch();
+    const context = await browser.newContext();
+    await confineToOrigin(context, vite.url);
+    await mockApi(context, { images: {}, video: readFileSync(join(scratch, "x.webm")) }, vite.url);
+    const page = await context.newPage();
+    await page.setContent(DECISION_MOCKUP);
+    await page.goto(`${vite.url}/review`);
+    await page.screenshot({ path: join(outDir, "review-list-desktop.png") });
+    await browser.close();
+    if (offOrigin.length) throw new Error(`requests left the Vite origin: ${offOrigin.join(", ")}`);
+  } finally {
+    vite.proc.kill();
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+if (import.meta.main) {
+  await main();
+}

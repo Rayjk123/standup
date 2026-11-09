@@ -1,0 +1,40 @@
+import type { Database } from "bun:sqlite";
+
+/*
+ * Schema migrations, applied in order. `merged_into` reconciles one human's
+ * two actor rows into one; the launcher MERGES the two at launch time.
+ */
+const MIGRATIONS: Array<{ id: number; sql: string }> = [
+  {
+    id: 1,
+    sql: `
+      CREATE TABLE actors (
+        id TEXT PRIMARY KEY,
+        alias TEXT NOT NULL,
+        merged_into TEXT REFERENCES actors(id)
+      );`,
+  },
+  {
+    id: 2,
+    // `merge` (combine into one doc and tombstone the other), or `supersede`.
+    sql: `
+      CREATE TABLE knowledge_proposals (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL CHECK (type IN ('rescope', 'merge', 'supersede', 'delete')),
+        note TEXT
+      );`,
+  },
+];
+
+export function runMigrations(db: Database): void {
+  db.exec("CREATE TABLE IF NOT EXISTS schema_migrations (id INTEGER PRIMARY KEY)");
+  for (const m of MIGRATIONS) {
+    if (db.query("SELECT 1 FROM schema_migrations WHERE id = ?").get(m.id)) continue;
+    db.exec(m.sql);
+    db.query("INSERT INTO schema_migrations (id) VALUES (?)").run(m.id);
+  }
+}
+
+export function mergeActors(db: Database, from: string, into: string): void {
+  db.query("UPDATE actors SET merged_into = ? WHERE id = ?").run(into, from);
+}

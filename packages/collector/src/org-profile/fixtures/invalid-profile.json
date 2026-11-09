@@ -1,0 +1,5 @@
+{
+  "name": "invalid",
+  "reviewClis": ["corp-review"],
+  "outwardRules": [{ "program": "corp-deploy", "subcommand": ["("], "category": "outward", "reason": "a pattern that doesn't compile" }]
+}

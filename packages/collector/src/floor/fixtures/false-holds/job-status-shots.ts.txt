@@ -1,0 +1,87 @@
+/**
+ * Screenshots the job-status view against the built console
+ * (packages/web/dist), served by a throwaway static server on a random port.
+ * Every /api/* request is answered from fixtures below and the /ws socket is
+ * closed, so no collector is contacted.
+ */
+import { chromium, type Route } from "playwright-core";
+import { existsSync, mkdirSync } from "node:fs";
+import { join, resolve } from "node:path";
+
+const DIST = resolve(import.meta.dir, "../../packages/web/dist");
+const OUT = "/tmp/job-status-shots";
+/** Ports that belong to live services; the static server refuses them. */
+const FORBIDDEN_PORTS = new Set([5173, 5199, 7777, 7778]);
+
+const jobs = [
+  {
+    id: "job-1",
+    title: "Ship the per-user Persona migration",
+    goal: "Land the per-user Persona schema change and cut the review with corp-review.",
+    status: "developing",
+    updates: [{ at: "2026-10-08T09:00:00Z", summary: "deriveJobState + tests done; wiring the view into GET /api/persona/jobs next." }],
+  },
+  {
+    id: "job-2",
+    title: "Review tab",
+    goal: "Deploy to the personal stack and take screenshots.",
+    status: "validating",
+    updates: [],
+  },
+];
+
+function fixtureFor(path: string): unknown {
+  switch (path) {
+    case "/api/persona/state":
+      return { runState: "running" };
+    case "/api/persona/messages":
+      return [];
+    case "/api/persona/jobs":
+      return jobs;
+    case "/api/persona/approvals":
+      return [];
+    case "/api/whoami":
+      return { alias: "alice" };
+    case "/api/plans/pending":
+      return [];
+    case "/api/sessions":
+    case "/api/launches":
+    case "/api/asks/pending":
+      return [];
+    default:
+      return null;
+  }
+}
+
+const server = Bun.serve({
+  port: 0,
+  async fetch(req) {
+    const url = new URL(req.url);
+    // The page's /api and /ws traffic is intercepted in the browser; anything
+    // that reaches this server off the static files is a bug in the harness.
+    if (url.pathname.startsWith("/api/") || url.pathname === "/ws") {
+      return new Response("not served", { status: 502 });
+    }
+    const file = join(DIST, url.pathname === "/" ? "index.html" : url.pathname);
+    return existsSync(file) ? new Response(Bun.file(file)) : new Response(Bun.file(join(DIST, "index.html")));
+  },
+});
+
+if (FORBIDDEN_PORTS.has(server.port)) throw new Error(`refusing port ${server.port}`);
+const base = `http://127.0.0.1:${server.port}`;
+
+mkdirSync(OUT, { recursive: true });
+const browser = await chromium.launch();
+const page = await browser.newPage();
+await page.route(
+  (url) => url.origin !== base,
+  (route: Route) => route.abort("blockedbyclient")
+);
+await page.route(`${base}/api/**`, (route: Route) => {
+  const body = fixtureFor(new URL(route.request().url()).pathname);
+  return body === null ? route.fulfill({ status: 404, body: "{}" }) : route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+});
+await page.goto(`${base}/persona`);
+await page.screenshot({ path: join(OUT, "job-status.png"), fullPage: true });
+await browser.close();
+server.stop(true);

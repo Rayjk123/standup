@@ -1,0 +1,34 @@
+{
+  "name": "standup",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run scripts/dev.ts",
+    "setup": "bun run scripts/setup-hooks.ts",
+    "setup:steering": "bun run scripts/setup-hooks.ts --steering-only",
+    "setup:remove-steering": "bun run scripts/setup-hooks.ts --remove-steering",
+    "setup:codex": "bun run scripts/setup-hooks.ts --codex",
+    "setup:codex-only": "bun run scripts/setup-hooks.ts --codex-only",
+    "setup:remove-codex": "bun run scripts/setup-hooks.ts --remove-codex",
+    "eval:kb": "bun run scripts/eval-kb.ts",
+    "eval:retrieval": "bun run scripts/kb-retrieval-eval.ts",
+    "nudge:report": "bun run scripts/nudge-report.ts",
+    "kb:export": "bun run scripts/kb-export.ts",
+    "kb:import": "bun run scripts/kb-import.ts",
+    "slack:probe": "bun --env-file=packages/slack/.env packages/slack/src/probe.ts",
+    "slack:start": "bun --env-file=packages/slack/.env packages/slack/src/index.ts",
+    "test": "bun test",
+    "test:live": "bun packages/web/e2e/live-updates.e2e.ts",
+    "build": "bun run --filter '*' build",
+    "typecheck": "bun run --filter '*' typecheck",
+    "lint": "bun run --filter '*' lint"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "typescript": "^5.7.2"
+  }
+}
