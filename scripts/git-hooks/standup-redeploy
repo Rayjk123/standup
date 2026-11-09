@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# standup-redeploy git hook (installed by `bun run scripts/setup-hooks.ts --git-hooks`)
+#
+# Redeploys Standup after a merge in its primary checkout. Installed as the
+# repository's post-merge hook it runs as `post-merge`; run by hand (or from
+# another hook) as `standup-redeploy <hook-name>`.
+#
+# It acts only in the primary checkout (the one whose .git is the common git
+# dir, never a worktree) while that checkout is on the redeploy branch
+# (STANDUP_REDEPLOY_BRANCH, default main), and returns at once: the redeploy
+# runs detached, logging to /tmp/standup-redeploy.log (and, through
+# scripts/standup-redeploy.ts, to <dataDir>/restart/redeploy.log).
+#
+# When scripts/standup-redeploy.ts is missing (a checkout that predates it, or
+# a revert), it falls back to `bun install --frozen-lockfile` and a full
+# restart of the standup.service user unit.
+
+hook_name="$(basename "$0")"
+if [ "$hook_name" = "standup-redeploy" ]; then
+  hook_name="${1:-manual}"
+fi
+
+# Relative to the current directory when git prints it relative.
+common_dir="$(git rev-parse --git-common-dir 2>/dev/null)" || exit 0
+top="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+PRIMARY="$(cd "$common_dir/.." 2>/dev/null && pwd -P)" || exit 0
+top="$(cd "$top" 2>/dev/null && pwd -P)" || exit 0
+[ "$top" = "$PRIMARY" ] || exit 0
+
+branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" || exit 0
+[ "$branch" = "${STANDUP_REDEPLOY_BRANCH:-main}" ] || exit 0
+
+# The git variables a hook runs with would point the redeploy's own git
+# commands at this hook's invocation rather than the install.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR
+
+BUN="$HOME/.bun/bin/bun"
+LOG=/tmp/standup-redeploy.log
+
+# Runs "$@" in the background, immune to hangups and, where setsid exists, in
+# a session of its own, so a caller that kills its process tree or group (an
+# agent's shell, a CI step) doesn't take the redeploy down with it.
+detach() {
+  if command -v setsid >/dev/null 2>&1; then
+    nohup setsid "$@" >> "$LOG" 2>&1 < /dev/null &
+  else
+    nohup "$@" >> "$LOG" 2>&1 < /dev/null &
+  fi
+}
+
+cd "$PRIMARY" || exit 0
+if [ -f scripts/standup-redeploy.ts ]; then
+  detach "$BUN" scripts/standup-redeploy.ts "$hook_name"
+else
+  detach bash -c '"$1" install --frozen-lockfile; systemctl --user restart --no-block standup.service' \
+    standup-redeploy-fallback "$BUN"
+fi
+exit 0

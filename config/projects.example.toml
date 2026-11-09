@@ -1,0 +1,69 @@
+# Standup Project Registry
+#
+# This file defines your projects for the session manager.
+# Copy to ~/.config/standup/projects.toml or set STANDUP_PROJECTS_PATH.
+#
+# Each project groups multiple repos under one name and defines setup commands.
+
+[[project]]
+id      = "catalog-api"
+name    = "catalog-api"
+emoji   = "🛰️"
+repos   = ["~/src/catalog-api", "~/src/catalog-graph"]
+setup   = "bun install && docker compose up -d"
+branch  = "main"
+# Extra flags passed to `claude` on every console-launched session for this
+# project. Omit if none. (Model/effort are chosen per-launch, not here.)
+# A pinned --permission-mode replaces the default bypassed posture below.
+launchArgs = "--permission-mode acceptEdits"
+# Launches run `--permission-mode bypassPermissions` behind Standup's safety-floor
+# hook, which routes outward-facing and destructive steps (push, pull request, deploy,
+# mutating AWS outside STANDUP_PERSONAL_AWS_ACCOUNTS, deletes outside the
+# worktree) to Persona or the owner. Set false for `--permission-mode auto` with
+# normal prompting and no floor. Omit for the default (true).
+# bypassPermissions = false
+# Where this project's launched worktrees are created. Omit to use the global
+# default (settable in the UI / STANDUP_WORKTREE_ROOT). ~ is expanded. Point it
+# at a case-sensitive volume if your builds need one.
+worktreeRoot = "~/src/standup-worktrees"
+# provision: a command that builds a launch's working dir, REPLACING the default
+# `git worktree add`. Use it when a plain worktree isn't buildable — e.g. a
+# service that only builds with its sibling repos checked out beside it. It
+# must create exactly $STANDUP_WORKDIR; it also gets $STANDUP_WORKDIR_NAME (the
+# dir's last path segment), $STANDUP_REPO, $STANDUP_BRANCH, $STANDUP_PROJECT.
+# It runs in the project's dir under the worktree root, so name the script by
+# an absolute or ~ path. Omit for a normal git worktree. A working dir of
+# several checkouts also needs STANDUP_PROJECT_LAYOUT=workspace on the collector.
+# provision = '~/src/catalog-api/scripts/new-workdir.sh "$STANDUP_WORKDIR" "$STANDUP_BRANCH" catalog-api catalog-graph'
+# launchSubdir: where inside the working dir the agent starts (and setup runs).
+# For a working dir of several checkouts, the one the work is in.
+# launchSubdir = "catalog-api"
+# codeReviewAdapter: how this project's changes are reviewed — "github-pr"
+# (draft pull requests through `gh`) or "generic" (any review URL, cut with the
+# org profile's codeReview commands). Omit to let Standup detect it.
+# codeReviewAdapter = "github-pr"
+
+[[project]]
+id      = "content-tools"
+name    = "content-tools"
+emoji   = "📚"
+repos   = ["~/src/content-tools"]
+setup   = "pnpm install"
+branch  = "main"
+
+[[project]]
+id      = "milestone-tracker"
+name    = "milestone-tracker"
+emoji   = "🪴"
+repos   = ["~/src/milestone-tracker"]
+setup   = "swift build"
+branch  = "main"
+
+# Catch-all project for sessions that don't match any repo
+# This is created automatically if not defined, but you can customize it
+[[project]]
+id      = "scratch"
+name    = "scratch"
+emoji   = "🦑"
+repos   = []
+branch  = "main"

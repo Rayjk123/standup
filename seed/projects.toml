@@ -1,0 +1,26 @@
+# Sample project registry — the project ids the sample knowledge in seed/knowledge/
+# is filed under. Standup only indexes knowledge for registered projects, so copy
+# this to ~/.config/standup/projects.toml on a fresh install (before the first
+# `bun run dev`), then point each project's `repos` at your own checkouts.
+# See config/projects.example.toml for every supported field.
+
+[[project]]
+id     = "standup"
+name   = "Standup"
+emoji  = "🌅"
+branch = "main"
+repos  = ["~/src/standup"]
+
+[[project]]
+id     = "global"
+name   = "Global — best practices"
+emoji  = "🌐"
+branch = "main"
+repos  = []
+
+[[project]]
+id     = "scratch"
+name   = "scratch"
+emoji  = "🦑"
+branch = "main"
+repos  = []

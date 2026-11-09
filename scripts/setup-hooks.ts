@@ -1,0 +1,979 @@
+#!/usr/bin/env bun
+/**
+ * Setup script for Standup: wires up every half of the read/write/steer split.
+ *
+ *   - Read path:   HTTP hooks in ~/.claude/settings.json, so every session
+ *                  reports lifecycle events to the collector.
+ *   - Write path:  the standup MCP server in ~/.claude.json, so every session
+ *                  gets the checkpoint / ask_human / search_knowledge /
+ *                  get_knowledge_doc / propose_knowledge / ripgrep /
+ *                  propose_standup_improvement tools.
+ *   - Steer path:  the standup steering — a Claude Code skill under
+ *                  ~/.claude/skills/standup and a managed block in the global
+ *                  ~/.claude/CLAUDE.md — so EVERY session (launched or
+ *                  hand-started) automatically consults the shared knowledge
+ *                  base, contributes back, and can fire a self-fix against
+ *                  Standup. Without this the app is inert: an agent with the
+ *                  tools available but no standing instruction never reaches
+ *                  for them. Any other skill listed in BUNDLED_SKILLS is
+ *                  installed alongside it with the same ownership guard.
+ *
+ * All three are global — every Claude Code session on this machine gets wired
+ * up, not just sessions started in this repo. Safe to re-run: idempotent, and
+ * repairs shapes this script may have previously written incorrectly. The
+ * managed CLAUDE.md block is add / update / remove, always kept as the first
+ * thing in the file (a block found lower down is moved up) — it never
+ * duplicates and never clobbers content outside its delimiters.
+ *
+ * Codex support is ADDITIVE and opt-in — Claude Code stays the default harness,
+ * wired exactly as above. When Codex is selected the same write / steer split is
+ * mirrored under ~/.codex: the standup MCP server as an [mcp_servers.standup]
+ * table in ~/.codex/config.toml, a managed steering block in ~/.codex/AGENTS.md,
+ * and the standup skill installed under ~/.codex/skills/standup — Codex
+ * discovers SKILL.md files there (alongside its built-in ~/.codex/skills/.system
+ * set) and auto-loads the standup skill by name exactly as Claude does, so the
+ * AGENTS.md block references it by name. The AGENTS.md block and the skill reuse
+ * the SAME marker / ownership machinery as their Claude counterparts; the
+ * MCP table is upserted by its [mcp_servers.standup] key STRUCTURALLY — like the
+ * Claude .claude.json server, reclaiming any nested [mcp_servers.standup.env]
+ * subtable with it — so a re-run, or a run over a hand-added `codex mcp add`
+ * table, replaces it in place instead of appending a duplicate table (or a
+ * duplicate env key) that would make the whole config.toml unparseable. (Codex
+ * reports session activity through its event log, which the collector observes
+ * directly, so it needs no settings.json hooks.)
+ *
+ * Usage:
+ *   bun run scripts/setup-hooks.ts                 # hooks + MCP + steering (Claude)
+ *   bun run scripts/setup-hooks.ts --steering-only # just the Claude steering
+ *   bun run scripts/setup-hooks.ts --no-steering   # Claude hooks + MCP only
+ *   bun run scripts/setup-hooks.ts --remove-steering  # uninstall the Claude steering
+ *   bun run scripts/setup-hooks.ts --codex         # also wire Codex (MCP + steering)
+ *   bun run scripts/setup-hooks.ts --codex-only    # wire Codex only, leave Claude alone
+ *   bun run scripts/setup-hooks.ts --remove-codex  # uninstall the Codex wiring
+ *   bun run scripts/setup-hooks.ts --git-hooks     # ONLY install the redeploy git hook (opt-in; see installGitHooks)
+ */
+
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  cpSync,
+  realpathSync,
+  rmSync,
+} from "fs";
+import { homedir } from "os";
+import { join, resolve } from "path";
+import {
+  HOOK_CLIENT_TIMEOUT_SECONDS,
+  STANDUP_HOOK_EVENTS,
+  upsertManagedBlock as spliceManagedBlock,
+  stripManagedBlock as removeManagedBlock,
+} from "@standup/shared";
+import {
+  SKILL_REFERENCE,
+  STEERING_BEGIN,
+  STEERING_BODY,
+  STEERING_END,
+  STEERING_SKILL_NAME,
+  steeringBlock,
+  steeringInstallPaths,
+} from "@standup/shared/steering";
+
+// Single source of truth for where the collector lives — the hook URL and
+// the MCP server's COLLECTOR_URL env var are both derived from this, so
+// overriding COLLECTOR_URL once keeps every half consistent.
+const COLLECTOR_BASE_URL = process.env.COLLECTOR_URL ?? "http://localhost:7777";
+const HOOK_URL = `${COLLECTOR_BASE_URL}/hook`;
+
+// Absolute path to the MCP server entry point, resolved from this script's
+// own location so it works regardless of the caller's cwd.
+const MCP_ENTRY_PATH = join(import.meta.dir, "..", "packages", "mcp", "src", "index.ts");
+
+// The steering skill source that ships in the repo. Installed verbatim into the
+// user skills dir; a leading ~ in the source is never used, so no expansion.
+const STEERING_SOURCE_DIR = join(import.meta.dir, "..", "config", "steering", "standup");
+
+/**
+ * A skill shipped under config/steering and installed into each harness's
+ * skills dir. `marker` is text our SKILL.md is guaranteed to contain but an
+ * unrelated user skill sharing the name would not, so install/remove never
+ * clobbers a user's own skill.
+ */
+export interface BundledSkill {
+  name: string;
+  sourceDir: string;
+  marker: string;
+}
+
+export const BUNDLED_SKILLS: readonly BundledSkill[] = [
+  // The steering skill documents the self-fix tool by name.
+  { name: STEERING_SKILL_NAME, sourceDir: STEERING_SOURCE_DIR, marker: "propose_standup_improvement" },
+];
+
+const HOOK_EVENTS = STANDUP_HOOK_EVENTS;
+
+export { HOOK_CLIENT_TIMEOUT_SECONDS };
+
+/** Our hook definition for `event`. */
+export function standupHookDefinition(event: string): HookDefinition {
+  const timeout = HOOK_CLIENT_TIMEOUT_SECONDS[event];
+  return { type: "http", url: HOOK_URL, ...(timeout !== undefined ? { timeout } : {}) };
+}
+
+// ============================================================================
+// Path resolution — every write target is derived from a single home dir, so
+// the whole installer can be pointed at a temp HOME in tests without ever
+// touching the real ~/.claude.
+// ============================================================================
+
+export interface StandupPaths {
+  home: string;
+  claudeDir: string;
+  settingsPath: string;
+  claudeJsonPath: string;
+  skillsDir: string;
+  skillDir: string;
+  claudeMdPath: string;
+  // Codex targets, mirroring the Claude ones under ~/.codex.
+  codexDir: string;
+  codexConfigPath: string;
+  codexAgentsMdPath: string;
+  codexSkillsDir: string;
+  codexSkillDir: string;
+}
+
+export function resolvePaths(home: string = homedir()): StandupPaths {
+  const steering = steeringInstallPaths(home);
+  const { claudeDir, codexDir } = steering;
+  return {
+    home,
+    claudeDir,
+    settingsPath: join(claudeDir, "settings.json"),
+    claudeJsonPath: join(home, ".claude.json"),
+    skillsDir: join(claudeDir, "skills"),
+    skillDir: steering.skillDir,
+    claudeMdPath: steering.claudeMdPath,
+    codexDir,
+    codexConfigPath: join(codexDir, "config.toml"),
+    codexAgentsMdPath: steering.codexAgentsMdPath,
+    codexSkillsDir: join(codexDir, "skills"),
+    codexSkillDir: steering.codexSkillDir,
+  };
+}
+
+// ============================================================================
+// Hooks (~/.claude/settings.json)
+// ============================================================================
+
+interface HookDefinition {
+  type: string;
+  command?: string;
+  url?: string;
+  [key: string]: unknown;
+}
+
+interface HookMatcherEntry {
+  matcher?: string;
+  hooks?: HookDefinition[];
+  [key: string]: unknown;
+}
+
+interface Settings {
+  hooks?: {
+    [event: string]: HookMatcherEntry[];
+  };
+  [key: string]: unknown;
+}
+
+function isOurLegacyEntry(entry: HookMatcherEntry): boolean {
+  // An earlier version of this script wrote the hook definition flat, at the
+  // matcher-entry level, instead of nested under `hooks`. That shape fails
+  // Claude Code's settings validation ("Expected array, but received
+  // undefined" for the missing `hooks` field). Detect and drop those so
+  // re-running this script repairs what it previously broke.
+  return (
+    !Array.isArray(entry.hooks) &&
+    (entry as unknown as HookDefinition).type === "http" &&
+    (entry as unknown as HookDefinition).url === HOOK_URL
+  );
+}
+
+function hasOurHook(entry: HookMatcherEntry): boolean {
+  return (
+    Array.isArray(entry.hooks) &&
+    entry.hooks.some((h) => h.type === "http" && h.url === HOOK_URL)
+  );
+}
+
+export function setupHooks(paths: StandupPaths): void {
+  console.log(`\n--- Hooks (${paths.settingsPath}) ---`);
+
+  if (!existsSync(paths.claudeDir)) {
+    mkdirSync(paths.claudeDir, { recursive: true });
+    console.log(`Created ${paths.claudeDir}`);
+  }
+
+  let settings: Settings = {};
+  if (existsSync(paths.settingsPath)) {
+    try {
+      settings = JSON.parse(readFileSync(paths.settingsPath, "utf-8"));
+    } catch (err) {
+      console.error(`Failed to parse ${paths.settingsPath}, creating backup...`);
+      writeFileSync(`${paths.settingsPath}.backup`, readFileSync(paths.settingsPath));
+      settings = {};
+    }
+  }
+
+  if (!settings.hooks) settings.hooks = {};
+
+  let added = 0;
+  let repaired = 0;
+
+  for (const event of HOOK_EVENTS) {
+    let entries = settings.hooks[event] ?? [];
+
+    const beforeCount = entries.length;
+    entries = entries.filter((e) => !isOurLegacyEntry(e));
+    if (entries.length < beforeCount) {
+      repaired++;
+      console.log(`Repaired malformed entry for ${event}`);
+    }
+
+    const desired = standupHookDefinition(event);
+    if (!entries.some(hasOurHook)) {
+      entries.push({ hooks: [desired] });
+      added++;
+      console.log(`Added hook for ${event}`);
+    } else {
+      // Bring our existing definition to the desired timeout, leaving any
+      // other field the user set on it alone.
+      let changed = false;
+      entries = entries.map((entry) => {
+        if (!hasOurHook(entry)) return entry;
+        return {
+          ...entry,
+          hooks: entry.hooks!.map((h) => {
+            if (h.type !== "http" || h.url !== HOOK_URL || h.timeout === desired.timeout) return h;
+            changed = true;
+            const { timeout: _dropped, ...rest } = h;
+            return desired.timeout === undefined ? rest : { ...rest, timeout: desired.timeout };
+          }),
+        };
+      });
+      if (changed) {
+        repaired++;
+        console.log(`Updated hook timeout for ${event}`);
+      } else {
+        console.log(`Hook for ${event} already configured`);
+      }
+    }
+
+    settings.hooks[event] = entries;
+  }
+
+  writeFileSync(paths.settingsPath, JSON.stringify(settings, null, 2));
+
+  if (repaired > 0) console.log(`Repaired ${repaired} malformed entr${repaired === 1 ? "y" : "ies"}`);
+  if (added > 0) console.log(`Added ${added} hook${added === 1 ? "" : "s"}`);
+  if (repaired === 0 && added === 0) console.log(`All hooks already configured`);
+}
+
+// ============================================================================
+// MCP server (~/.claude.json)
+// ============================================================================
+
+interface McpServerConfig {
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+interface ClaudeJson {
+  mcpServers?: Record<string, McpServerConfig>;
+  [key: string]: unknown;
+}
+
+export function setupMcp(paths: StandupPaths): void {
+  console.log(`\n--- MCP server (${paths.claudeJsonPath}) ---`);
+
+  let claudeJson: ClaudeJson = {};
+  if (existsSync(paths.claudeJsonPath)) {
+    try {
+      claudeJson = JSON.parse(readFileSync(paths.claudeJsonPath, "utf-8"));
+    } catch (err) {
+      console.error(`Failed to parse ${paths.claudeJsonPath}, creating backup...`);
+      writeFileSync(`${paths.claudeJsonPath}.backup`, readFileSync(paths.claudeJsonPath));
+      claudeJson = {};
+    }
+  }
+
+  if (!claudeJson.mcpServers) claudeJson.mcpServers = {};
+
+  const desired: McpServerConfig = {
+    command: "bun",
+    args: ["run", MCP_ENTRY_PATH],
+    env: { COLLECTOR_URL: COLLECTOR_BASE_URL },
+  };
+
+  const current = claudeJson.mcpServers.standup;
+  const alreadyCorrect =
+    !!current &&
+    current.command === desired.command &&
+    JSON.stringify(current.args) === JSON.stringify(desired.args) &&
+    JSON.stringify(current.env) === JSON.stringify(desired.env);
+
+  if (alreadyCorrect) {
+    console.log(`MCP server "standup" already configured`);
+    return;
+  }
+
+  claudeJson.mcpServers.standup = desired;
+  writeFileSync(paths.claudeJsonPath, JSON.stringify(claudeJson, null, 2));
+  console.log(`${current ? "Updated" : "Added"} MCP server "standup" -> ${MCP_ENTRY_PATH}`);
+}
+
+// ============================================================================
+// Steering — the standup skill + a managed block in the global CLAUDE.md.
+//
+// The block is delimited by markers so it can be added, updated in place, or
+// removed on later runs WITHOUT duplicating itself and WITHOUT touching a
+// single byte of the user's own CLAUDE.md content outside the delimiters.
+// ============================================================================
+
+// The block text, its delimiters and builder live in @standup/shared/steering,
+// where the collector reads them to tell an out-of-date install.
+export { SKILL_REFERENCE, STEERING_BEGIN, STEERING_BODY, STEERING_END, steeringBlock };
+
+/**
+ * Adds or updates the steering block in place, bound to the STEERING
+ * delimiters. A thin wrapper over the shared, delimiter-agnostic splice so this
+ * installer and the knowledge write-back share one implementation; the 2-arg
+ * shape the callers here expect is preserved.
+ */
+export function upsertManagedBlock(existing: string, block: string): string {
+  return spliceManagedBlock(existing, block, STEERING_BEGIN, STEERING_END);
+}
+
+/** Removes the steering block, bound to the STEERING delimiters. */
+export function stripManagedBlock(existing: string): string {
+  return removeManagedBlock(existing, STEERING_BEGIN, STEERING_END);
+}
+
+/**
+ * Returns `existing` with the steering block as the FIRST thing in the file,
+ * followed by a blank line and the rest of the content. A block found anywhere
+ * else is moved to the top; one already at the top with the same body leaves
+ * the text byte-identical, so a re-run is a no-op. Placed first because a long
+ * CLAUDE.md / AGENTS.md buries a trailing block where the model gives it the
+ * least weight. Pure.
+ */
+export function placeManagedBlockFirst(existing: string, block: string): string {
+  const rest = stripManagedBlock(existing).replace(/^\s+/, "").replace(/\s+$/, "");
+  return rest ? `${block}\n\n${rest}\n` : `${block}\n`;
+}
+
+function isOurSkill(skillDir: string, skill: BundledSkill): boolean {
+  const md = join(skillDir, "SKILL.md");
+  try {
+    return existsSync(md) && readFileSync(md, "utf-8").includes(skill.marker);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Installs one bundled skill into `skillsDir/<name>`, replacing OUR dir cleanly
+ * (no stale files) but never overwriting a differently-owned skill that happens
+ * to share the name.
+ */
+export function installSkill(skillsDir: string, skill: BundledSkill): void {
+  const skillDir = join(skillsDir, skill.name);
+  if (!existsSync(skill.sourceDir)) {
+    console.error(`Skill source not found at ${skill.sourceDir} — skipping "${skill.name}" install`);
+    return;
+  }
+  if (existsSync(skillDir) && !isOurSkill(skillDir, skill)) {
+    console.error(
+      `A non-Standup skill already occupies ${skillDir} — skipping to avoid clobbering it`
+    );
+    return;
+  }
+  mkdirSync(skillsDir, { recursive: true });
+  rmSync(skillDir, { recursive: true, force: true }); // clean replace
+  cpSync(skill.sourceDir, skillDir, { recursive: true });
+  console.log(`Installed skill "${skill.name}" -> ${skillDir}`);
+}
+
+/**
+ * Removes one installed skill dir — ONLY if it is ours, so an uninstall never
+ * deletes a user's own skill that happens to share the name.
+ */
+export function removeSkill(skillsDir: string, skill: BundledSkill): void {
+  const skillDir = join(skillsDir, skill.name);
+  if (!existsSync(skillDir)) return;
+  if (isOurSkill(skillDir, skill)) {
+    rmSync(skillDir, { recursive: true, force: true });
+    console.log(`Removed skill "${skill.name}" from ${skillDir}`);
+  } else {
+    console.log(`Skill at ${skillDir} isn't Standup's — leaving it untouched`);
+  }
+}
+
+/** Installs every bundled skill. Shared by the Claude and Codex steering paths
+ *  so both apply the identical ownership guard. */
+function installBundledSkills(skillsDir: string): void {
+  for (const skill of BUNDLED_SKILLS) installSkill(skillsDir, skill);
+}
+
+/** Removes every bundled skill that is ours. Shared by both removal paths. */
+function removeBundledSkills(skillsDir: string): void {
+  for (const skill of BUNDLED_SKILLS) removeSkill(skillsDir, skill);
+}
+
+export function setupSteering(paths: StandupPaths): void {
+  console.log(`\n--- Steering (skill + ${paths.claudeMdPath}) ---`);
+
+  if (!existsSync(paths.claudeDir)) {
+    mkdirSync(paths.claudeDir, { recursive: true });
+    console.log(`Created ${paths.claudeDir}`);
+  }
+
+  // 1. Install the skills, guarded so a user's own skill is never clobbered.
+  installBundledSkills(paths.skillsDir);
+
+  // 2. Add / update the managed CLAUDE.md block at the top of the file.
+  const existing = existsSync(paths.claudeMdPath)
+    ? readFileSync(paths.claudeMdPath, "utf-8")
+    : "";
+  const hadBlock = existing.includes(STEERING_BEGIN);
+  const next = placeManagedBlockFirst(existing, steeringBlock());
+
+  if (next === existing) {
+    console.log(`CLAUDE.md steering block already up to date`);
+    return;
+  }
+
+  writeFileSync(paths.claudeMdPath, next);
+  console.log(`${hadBlock ? "Updated" : "Added"} steering block in ${paths.claudeMdPath}`);
+}
+
+export function removeSteering(paths: StandupPaths): void {
+  console.log(`\n--- Removing steering ---`);
+
+  // 1. Strip the managed CLAUDE.md block, leaving the user's own content intact.
+  if (existsSync(paths.claudeMdPath)) {
+    const existing = readFileSync(paths.claudeMdPath, "utf-8");
+    if (existing.includes(STEERING_BEGIN)) {
+      writeFileSync(paths.claudeMdPath, stripManagedBlock(existing));
+      console.log(`Removed steering block from ${paths.claudeMdPath}`);
+    } else {
+      console.log(`No steering block in ${paths.claudeMdPath}`);
+    }
+  }
+
+  // 2. Remove the installed skill dirs — ONLY those that are ours.
+  removeBundledSkills(paths.skillsDir);
+}
+
+// ============================================================================
+// Codex wiring (~/.codex) — the SAME write + steer split as Claude, opt-in.
+//
+// Codex reads global agent guidance from ~/.codex/AGENTS.md, registers MCP
+// servers as [mcp_servers.<name>] tables in ~/.codex/config.toml, and discovers
+// skills as SKILL.md files under ~/.codex/skills (alongside its built-in
+// ~/.codex/skills/.system set). So the wiring mirrors Claude's three seams:
+//   - MCP:   an [mcp_servers.standup] table in config.toml — the tool seam.
+//   - Steer: a managed block in ~/.codex/AGENTS.md — the steering seam, written
+//            with the SAME own-line splice machinery as Claude's CLAUDE.md.
+//   - Skill: the standup skill installed at ~/.codex/skills/standup (parallel to
+//            Claude, same ownership guard so a user's own skill is never
+//            clobbered). Codex auto-loads it by name, so the AGENTS.md block
+//            references it by name exactly as CLAUDE.md does.
+// The MCP table is upserted by its [mcp_servers.standup] key structurally — any
+// prior standup registration, including a nested [mcp_servers.standup.env]
+// subtable, is reclaimed first — so a re-run never appends a duplicate table or
+// a duplicate `env` key (either of which would make the ENTIRE config.toml
+// unparseable), mirroring how the Claude path upserts by the `standup` JSON key.
+// Codex needs no settings.json hooks — the collector observes its event log
+// directly.
+// ============================================================================
+
+// TOML comment markers fencing the managed [mcp_servers.standup] table. A `#`
+// line is a valid TOML comment, so the delimiters survive a round trip through
+// a TOML reader while bounding the block for the common in-place update. They
+// are an optimization only — the installer never trusts them ALONE to find a
+// prior registration (a formatter can move or drop comments, and a user may
+// have hand-added an unmarked table), so it also reclaims the table by key.
+export const CODEX_MCP_BEGIN = "# BEGIN STANDUP MCP";
+export const CODEX_MCP_END = "# END STANDUP MCP";
+
+/**
+ * The managed [mcp_servers.standup] table, delimiters included. Registers the
+ * standup MCP server with Codex over stdio using the same command / args / env
+ * as the Claude .claude.json entry, so a Codex session gets the identical
+ * checkpoint / ask_human / search_knowledge / get_knowledge_doc /
+ * propose_knowledge / ripgrep / propose_standup_improvement tools. Kept pure so it is unit-testable.
+ */
+export function codexMcpBlock(): string {
+  const args = JSON.stringify(["run", MCP_ENTRY_PATH]);
+  const collectorUrl = JSON.stringify(COLLECTOR_BASE_URL);
+  return [
+    CODEX_MCP_BEGIN,
+    "[mcp_servers.standup]",
+    `command = "bun"`,
+    `args = ${args}`,
+    `env = { COLLECTOR_URL = ${collectorUrl} }`,
+    CODEX_MCP_END,
+  ].join("\n");
+}
+
+// The [mcp_servers.standup] table header OR any of its nested subtable headers
+// — e.g. [mcp_servers.standup.env], the shape `codex mcp add standup --env K=V`
+// serializes env into — including the [[...]] array-of-tables form. Anchored to
+// the start of the line so a value that merely mentions the name is never read
+// as a header. `standup` must be followed by `]` (the flat table) or `.` (a
+// nested subkey like `.env`) — a DELIMITER, not merely a word boundary — so a
+// distinct sibling server whose name only starts with `standup` is never read as
+// standup's: neither [mcp_servers.standup-mcp] / [mcp_servers.standup_mcp] (a `\b`
+// wrongly treats the hyphen as a boundary and matches) nor [mcp_servers.standupother].
+const CODEX_STANDUP_SECTION_RE = /^\s*\[\[?\s*mcp_servers\.standup\s*[.\]]/;
+
+// The [mcp_servers] PARENT table header exactly — not a [mcp_servers.<name>]
+// subtable and not a [mcp_servers-foo] sibling — so we can spot an inline
+// `standup = {...}` (or dotted `standup.command = ...`) key nested under it.
+const CODEX_MCP_SERVERS_PARENT_RE = /^\s*\[\s*mcp_servers\s*\]/;
+
+// A key line, under a [mcp_servers] parent, that defines the standup server as
+// an inline table (`standup = { ... }`) or via dotted keys (`standup.command =
+// ...`) — the bare or quoted `standup` key followed by `.` or `=`. That trailing
+// delimiter is again what keeps a sibling `standup-mcp = {...}` from matching.
+const CODEX_INLINE_STANDUP_KEY_RE = /^\s*(?:standup|"standup"|'standup')\s*[.=]/;
+
+// Any TOML table / array-of-tables header — a line whose first non-blank
+// character is `[`. Bounds where one table's body ends and the next begins.
+const TOML_TABLE_HEADER_RE = /^\s*\[/;
+
+/** True when `toml` already carries a standup registration in ANY form — our
+ *  managed block, a bare/foreign [mcp_servers.standup] (sub)table (including its
+ *  [mcp_servers.standup.env] subtable), or an inline `standup = {...}` key under
+ *  a [mcp_servers] parent. Detected by whether the structural reclaim removes
+ *  anything, so the install verb and the remove path recognize every shape the
+ *  reclaim handles. */
+function hasStandupRegistration(toml: string): boolean {
+  return toml.includes(CODEX_MCP_BEGIN) || stripUnmanagedStandupTable(toml) !== toml;
+}
+
+/**
+ * Removes an UNMANAGED standup registration from raw TOML in every shape Codex
+ * or a hand-editor can write it:
+ *   - the [mcp_servers.standup] table AND every nested subtable it owns —
+ *     notably [mcp_servers.standup.env], the shape `codex mcp add standup
+ *     --env K=V` serializes env into — each with its key/value body;
+ *   - an inline `standup = {...}` (or dotted `standup.command = ...`) key under
+ *     a [mcp_servers] parent table, the style that groups all servers under one
+ *     table header;
+ *   - any orphaned marker-comment lines.
+ * Every OTHER table, sibling server, and top-level key is left byte-for-byte
+ * intact. This reclaims a standup entry our managed markers do NOT bound — a
+ * hand-written `codex mcp add standup` table, or our own table stranded after a
+ * TOML formatter dropped the comment markers. Reclaiming the WHOLE section (not
+ * just the flat header), and the inline form too, is what keeps a re-run
+ * idempotent: any surviving standup definition collides with the managed
+ * [mcp_servers.standup] table we write on top, and that duplicate key makes the
+ * ENTIRE config.toml unparseable (Codex's TOML reader rejects "Cannot redefine
+ * key"), which the write guard turns into a throw that aborts the whole Codex
+ * wiring.
+ */
+function stripUnmanagedStandupTable(toml: string): string {
+  // Walk table by table. Inside the standup (sub)table drop every line until the
+  // next UNRELATED header; keying on each header (not just the first) reclaims
+  // the flat table together with its [mcp_servers.standup.env] subtable in one
+  // pass. Inside the [mcp_servers] parent, also drop an inline/dotted `standup`
+  // key while keeping the header and every sibling server.
+  const kept: string[] = [];
+  let inStandupSection = false;
+  let inMcpServersParent = false;
+  for (const line of toml.split("\n")) {
+    if (TOML_TABLE_HEADER_RE.test(line)) {
+      inStandupSection = CODEX_STANDUP_SECTION_RE.test(line);
+      inMcpServersParent = CODEX_MCP_SERVERS_PARENT_RE.test(line);
+      if (inStandupSection) continue; // drop the standup (sub)table header
+      kept.push(line); // keep [mcp_servers] and every unrelated header
+      continue;
+    }
+    if (inStandupSection) continue; // drop the standup section body
+    if (inMcpServersParent && CODEX_INLINE_STANDUP_KEY_RE.test(line)) continue;
+    kept.push(line);
+  }
+  return kept
+    .filter((line) => {
+      const trimmed = line.trim();
+      return trimmed !== CODEX_MCP_BEGIN && trimmed !== CODEX_MCP_END;
+    })
+    .join("\n");
+}
+
+/**
+ * The config.toml text with EVERY standup registration removed — our managed
+ * block AND a table stranded after a formatter dropped the comment markers —
+ * keyed off the [mcp_servers.standup] table STRUCTURALLY, not by trusting the
+ * comment markers alone. Every other table and top-level key is preserved
+ * byte-for-byte. Shared by the install path (which re-adds the table on top,
+ * so a re-run never accumulates a duplicate) and the remove path (which stops
+ * here), so uninstall reclaims a marker-lost table exactly as install does.
+ * Pure, so the reclaim is unit-testable.
+ */
+export function codexConfigWithoutStandup(existing: string): string {
+  const withoutManaged = removeManagedBlock(existing, CODEX_MCP_BEGIN, CODEX_MCP_END);
+  return stripUnmanagedStandupTable(withoutManaged);
+}
+
+/**
+ * The config.toml text the installer wants: exactly ONE managed
+ * [mcp_servers.standup] table, with every other table and top-level key
+ * preserved. Any prior standup registration — our own managed block OR an
+ * unmanaged/foreign table — is stripped FIRST, so a re-run (or a run over a
+ * hand-added table) never accumulates a duplicate. This keys off the table
+ * STRUCTURALLY, mirroring the Claude path's upsert-by-`standup`-JSON-key,
+ * rather than trusting text markers alone. Pure, so the reclaim + idempotency
+ * are unit-testable.
+ */
+export function codexConfigWithStandup(existing: string): string {
+  const reclaimed = codexConfigWithoutStandup(existing);
+  return spliceManagedBlock(reclaimed, codexMcpBlock(), CODEX_MCP_BEGIN, CODEX_MCP_END);
+}
+
+// Bun exposes a TOML string parser at runtime that the bundled @types/bun does
+// not yet declare; narrow the access here so the config validation stays typed.
+const bunToml = (Bun as unknown as { TOML: { parse(text: string): unknown } }).TOML;
+
+/**
+ * Guards against ever WRITING a config.toml Codex cannot parse — a broken write
+ * here silently disables every MCP server and setting in the file, not just
+ * standup, while the installer would otherwise report success. Re-parses the
+ * exact bytes about to be written and confirms the standup table round-trips;
+ * throws (leaving the existing file untouched) if not.
+ */
+function assertValidCodexConfig(toml: string, path: string): void {
+  let parsed: { mcp_servers?: { standup?: { command?: unknown } } };
+  try {
+    parsed = bunToml.parse(toml) as typeof parsed;
+  } catch (err) {
+    throw new Error(
+      `Refusing to write ${path}: result is not valid TOML (${(err as Error).message}); left it untouched`
+    );
+  }
+  if (parsed?.mcp_servers?.standup?.command !== "bun") {
+    throw new Error(`Refusing to write ${path}: the standup MCP table did not round-trip`);
+  }
+}
+
+export function setupCodexMcp(paths: StandupPaths): void {
+  console.log(`\n--- Codex MCP server (${paths.codexConfigPath}) ---`);
+
+  if (!existsSync(paths.codexDir)) {
+    mkdirSync(paths.codexDir, { recursive: true });
+    console.log(`Created ${paths.codexDir}`);
+  }
+
+  const existing = existsSync(paths.codexConfigPath)
+    ? readFileSync(paths.codexConfigPath, "utf-8")
+    : "";
+  const next = codexConfigWithStandup(existing);
+
+  if (next === existing) {
+    console.log(`Codex MCP server "standup" already configured`);
+    return;
+  }
+
+  // Backstop: never leave the user with an unparseable config.toml.
+  assertValidCodexConfig(next, paths.codexConfigPath);
+
+  const verb = hasStandupRegistration(existing) ? "Updated" : "Added";
+  writeFileSync(paths.codexConfigPath, next);
+  console.log(`${verb} Codex MCP server "standup" -> ${MCP_ENTRY_PATH}`);
+}
+
+export function setupCodexSteering(paths: StandupPaths): void {
+  console.log(`\n--- Codex steering (skill + ${paths.codexAgentsMdPath}) ---`);
+
+  if (!existsSync(paths.codexDir)) {
+    mkdirSync(paths.codexDir, { recursive: true });
+    console.log(`Created ${paths.codexDir}`);
+  }
+
+  // 1. Install the bundled skills under the Codex skills dir, guarded by the
+  //    same ownership markers so a user's own skill is never clobbered. Codex
+  //    discovers SKILL.md files here and auto-loads each skill by name, parallel
+  //    to Claude's ~/.claude/skills.
+  installBundledSkills(paths.codexSkillsDir);
+
+  // 2. Add / update the managed AGENTS.md steering block at the top of the
+  //    file — the same delimiters, body and placement as the Claude CLAUDE.md
+  //    steering. Codex auto-loads the installed skill by name, so the block
+  //    reuses the identical bare-name cross-reference rather than inventing a
+  //    divergent one.
+  const existing = existsSync(paths.codexAgentsMdPath)
+    ? readFileSync(paths.codexAgentsMdPath, "utf-8")
+    : "";
+  const hadBlock = existing.includes(STEERING_BEGIN);
+  const next = placeManagedBlockFirst(existing, steeringBlock());
+
+  if (next === existing) {
+    console.log(`AGENTS.md steering block already up to date`);
+    return;
+  }
+
+  writeFileSync(paths.codexAgentsMdPath, next);
+  console.log(`${hadBlock ? "Updated" : "Added"} steering block in ${paths.codexAgentsMdPath}`);
+}
+
+export function removeCodex(paths: StandupPaths): void {
+  console.log(`\n--- Removing Codex wiring ---`);
+
+  // 1. Strip the standup MCP registration in ANY form — the managed block AND a
+  //    table stranded after a formatter dropped the comment markers — keyed off
+  //    the [mcp_servers.standup] table STRUCTURALLY, mirroring how the install
+  //    path reclaims by key rather than trusting the comment markers alone.
+  //    Every other server and unrelated config is left byte-for-byte intact.
+  if (existsSync(paths.codexConfigPath)) {
+    const existing = readFileSync(paths.codexConfigPath, "utf-8");
+    if (hasStandupRegistration(existing)) {
+      writeFileSync(paths.codexConfigPath, codexConfigWithoutStandup(existing));
+      console.log(`Removed Codex MCP server "standup" from ${paths.codexConfigPath}`);
+    } else {
+      console.log(`No Standup MCP registration in ${paths.codexConfigPath}`);
+    }
+  }
+
+  // 2. Strip the AGENTS.md steering block, leaving the user's own content intact.
+  if (existsSync(paths.codexAgentsMdPath)) {
+    const existing = readFileSync(paths.codexAgentsMdPath, "utf-8");
+    if (existing.includes(STEERING_BEGIN)) {
+      writeFileSync(paths.codexAgentsMdPath, stripManagedBlock(existing));
+      console.log(`Removed steering block from ${paths.codexAgentsMdPath}`);
+    } else {
+      console.log(`No steering block in ${paths.codexAgentsMdPath}`);
+    }
+  }
+
+  // 3. Remove the installed skill dirs — ONLY those that are ours.
+  removeBundledSkills(paths.codexSkillsDir);
+}
+
+// ============================================================================
+
+export interface SetupOptions {
+  home?: string;
+  hooks?: boolean;
+  mcp?: boolean;
+  steering?: boolean;
+  removeSteering?: boolean;
+  // Codex is additive and opt-in; Claude Code stays the default harness.
+  codex?: boolean; // also wire Codex alongside Claude
+  codexOnly?: boolean; // wire ONLY Codex, leaving the Claude paths untouched
+  removeCodex?: boolean; // uninstall the Codex wiring
+}
+
+export function runSetup(options: SetupOptions = {}): void {
+  const paths = resolvePaths(options.home);
+
+  if (options.removeSteering || options.removeCodex) {
+    if (options.removeSteering) removeSteering(paths);
+    if (options.removeCodex) removeCodex(paths);
+    return;
+  }
+
+  if (!options.codexOnly) {
+    if (options.hooks !== false) setupHooks(paths);
+    if (options.mcp !== false) setupMcp(paths);
+    if (options.steering !== false) setupSteering(paths);
+  }
+
+  if (options.codex || options.codexOnly) {
+    setupCodexMcp(paths);
+    setupCodexSteering(paths);
+  }
+}
+
+// ============================================================================
+// Redeploy git hook (opt-in, --git-hooks) — the versioned template
+// scripts/git-hooks/standup-redeploy, copied into the repository's common git
+// dir so every merge in the primary checkout on main redeploys Standup.
+// ============================================================================
+
+/** The versioned redeploy hook. */
+export const REDEPLOY_HOOK_TEMPLATE = join(import.meta.dir, "git-hooks", "standup-redeploy");
+/** Text every copy of the template carries: a hook with it is ours to replace, one without is the user's own. */
+export const REDEPLOY_HOOK_MARKER = "standup-redeploy git hook";
+/**
+ * Where the template is installed in the hooks dir: as itself (so a hook of
+ * the user's own can call `"$(dirname "$0")/standup-redeploy" post-merge`)
+ * and as the post-merge hook.
+ */
+export const REDEPLOY_HOOK_FILES = ["standup-redeploy", "post-merge"] as const;
+
+/**
+ * Lines that together identify the hand-written redeploy hook that predates the
+ * template: it restarts the standup.service unit outright on every merge to main.
+ */
+export const LEGACY_REDEPLOY_HOOK_SIGNATURE = [
+  "# Restarts the standup.service user unit",
+  "systemctl --user restart --no-block standup.service",
+] as const;
+
+/**
+ * The command lines a post-merge hook may consist of when all it does is hand
+ * off to the standup-redeploy hook beside it.
+ */
+const DELEGATING_POST_MERGE_LINE =
+  /^(exec\s+)?("?)\$\((git rev-parse --git-common-dir|dirname "?\$0"?)\)(\/hooks)?\/standup-redeploy\2(\s+post-merge)?(\s+"\$@")?$/;
+
+/**
+ * Whether `text`, found at hooks/`name`, is a Standup redeploy hook that
+ * predates the template's marker and so is Standup's to replace: the legacy
+ * standup-redeploy (it carries every LEGACY_REDEPLOY_HOOK_SIGNATURE line), or
+ * a post-merge whose only command delegates to standup-redeploy.
+ */
+export function isLegacyRedeployHook(name: string, text: string): boolean {
+  if (name === "standup-redeploy") return LEGACY_REDEPLOY_HOOK_SIGNATURE.every((line) => text.includes(line));
+  if (name !== "post-merge") return false;
+  const commands = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#") && line !== "set -u" && line !== "set -e" && line !== "set -eu");
+  return commands.length === 1 && DELEGATING_POST_MERGE_LINE.test(commands[0]!);
+}
+
+/** A filesystem-safe UTC timestamp, e.g. 20261008T120000Z. */
+function backupStamp(now: Date): string {
+  return now.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+}
+
+export interface GitHooksResult {
+  hooksDir: string;
+  installed: string[];
+  /** Legacy Standup hooks that were replaced, with where each was backed up first. */
+  replaced: Array<{ name: string; backup: string }>;
+  /** Hooks left alone: a file of that name exists that isn't ours. */
+  skipped: Array<{ name: string; reason: string }>;
+  /** core.hooksPath is set, so git runs hooks from there, not hooksDir. */
+  hooksPathOverride?: string;
+}
+
+/** Runs git in `cwd` without the variables of any hook this runs under; stdout trimmed, or null when it fails. */
+function git(cwd: string, args: string[]): string | null {
+  const env = { ...process.env };
+  for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX", "GIT_COMMON_DIR"]) delete env[name];
+  const r = Bun.spawnSync(["git", "-C", cwd, ...args], { env, stdout: "pipe", stderr: "pipe" });
+  return r.exitCode === 0 ? r.stdout.toString().trim() : null;
+}
+
+/**
+ * Copies the redeploy hook template into `<common git dir>/hooks` of the
+ * repository at `repoDir` (REDEPLOY_HOOK_FILES, mode 0755). A file of the
+ * same name that carries REDEPLOY_HOOK_MARKER is ours and is replaced; a
+ * legacy Standup redeploy hook (isLegacyRedeployHook) is copied to
+ * `<name>.pre-standup-<timestamp>` and then replaced; any other is the user's
+ * own and is left alone (reported in `skipped`).
+ */
+export function installGitHooks(repoDir: string, opts: { template?: string; now?: Date } = {}): GitHooksResult {
+  const common = git(repoDir, ["rev-parse", "--git-common-dir"]);
+  if (!common) throw new Error(`${repoDir} is not inside a git repository`);
+  // git prints it relative to repoDir unless it is elsewhere.
+  const hooksDir = join(realpathSync(resolve(repoDir, common)), "hooks");
+  const body = readFileSync(opts.template ?? REDEPLOY_HOOK_TEMPLATE, "utf8");
+  if (!body.includes(REDEPLOY_HOOK_MARKER)) throw new Error(`the hook template does not carry its marker (${REDEPLOY_HOOK_MARKER})`);
+  mkdirSync(hooksDir, { recursive: true });
+  const installed: string[] = [];
+  const replaced: GitHooksResult["replaced"] = [];
+  const skipped: GitHooksResult["skipped"] = [];
+  const stamp = backupStamp(opts.now ?? new Date());
+  for (const name of REDEPLOY_HOOK_FILES) {
+    const target = join(hooksDir, name);
+    if (existsSync(target)) {
+      const existing = readFileSync(target, "utf8");
+      if (!existing.includes(REDEPLOY_HOOK_MARKER)) {
+        if (!isLegacyRedeployHook(name, existing)) {
+          skipped.push({ name, reason: `${target} is not Standup's; call "$(dirname "$0")/standup-redeploy" ${name} from it instead` });
+          continue;
+        }
+        const backup = `${target}.pre-standup-${stamp}`;
+        copyFileSync(target, backup);
+        replaced.push({ name, backup });
+      }
+    }
+    writeFileSync(target, body, { mode: 0o755 });
+    chmodSync(target, 0o755);
+    installed.push(name);
+  }
+  const hooksPath = git(repoDir, ["config", "--get", "core.hooksPath"]);
+  return { hooksDir, installed, replaced, skipped, ...(hooksPath ? { hooksPathOverride: hooksPath } : {}) };
+}
+
+function main(): void {
+  const args = process.argv.slice(2);
+  if (args.includes("--git-hooks")) {
+    const result = installGitHooks(join(import.meta.dir, ".."));
+    console.log(`\n--- Redeploy git hook (${result.hooksDir}) ---`);
+    for (const name of result.installed) console.log(`  installed ${name}`);
+    for (const { name, backup } of result.replaced) console.log(`  replaced the earlier Standup ${name} (backed up to ${backup})`);
+    for (const { name, reason } of result.skipped) console.log(`  skipped ${name}: ${reason}`);
+    if (result.hooksPathOverride) console.log(`  note: core.hooksPath is ${result.hooksPathOverride}, so git runs hooks from there, not ${result.hooksDir}`);
+    return;
+  }
+  const removeSteeringFlag = args.includes("--remove-steering");
+  const removeCodexFlag = args.includes("--remove-codex");
+  const steeringOnly = args.includes("--steering-only");
+  const noSteering = args.includes("--no-steering");
+  const codex = args.includes("--codex");
+  const codexOnly = args.includes("--codex-only");
+
+  if (removeSteeringFlag || removeCodexFlag) {
+    runSetup({ removeSteering: removeSteeringFlag, removeCodex: removeCodexFlag });
+    if (removeSteeringFlag)
+      console.log(`\nStandup steering removed. Start a fresh Claude Code session for it to take effect.`);
+    if (removeCodexFlag)
+      console.log(`\nStandup Codex wiring removed. Start a fresh Codex session for it to take effect.`);
+    return;
+  }
+
+  runSetup({
+    hooks: !steeringOnly,
+    mcp: !steeringOnly,
+    steering: !noSteering,
+    codex,
+    codexOnly,
+  });
+
+  if (!codexOnly) {
+    console.log(`\nStandup is wired up globally — every Claude Code session on this machine will:`);
+    if (!steeringOnly) {
+      console.log(`  - report to the collector at ${COLLECTOR_BASE_URL}`);
+      console.log(`  - get the checkpoint / ask_human / search_knowledge / get_knowledge_doc /`);
+      console.log(`    propose_knowledge / ripgrep / propose_standup_improvement tools`);
+    }
+    if (!noSteering) {
+      console.log(`  - be steered to consult the shared knowledge base before implementing,`);
+      console.log(`    contribute learnings back, and offer to fire a self-fix against Standup`);
+    }
+  }
+  if (codex || codexOnly) {
+    console.log(`\nCodex is wired up under ~/.codex — the standup MCP server, an AGENTS.md`);
+    console.log(`steering block, and the standup skill are installed there, so every Codex`);
+    console.log(`session gets the same tools and steering as Claude.`);
+  }
+  console.log(`\nMake sure the collector is running (bun run dev), then start a new`);
+  console.log(`session — hooks, MCP servers, skills, and CLAUDE.md/AGENTS.md are all`);
+  console.log(`read at session start, so sessions already running won't pick this up.`);
+}
+
+// Only run the installer when executed directly (`bun run scripts/setup-hooks.ts`).
+// Guarded so importing this module in a test NEVER writes to the real ~/.claude.
+if (import.meta.main) {
+  main();
+}
